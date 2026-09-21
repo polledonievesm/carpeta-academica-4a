@@ -77,8 +77,35 @@
         <div id="projectsGrid" class="project-grid"></div>
       </section>
 
-      <section id="daily" class="view empty-view">
-        <div class="empty-icon">▣</div><h1>Registro diario</h1><p>Este será el siguiente módulo: fecha, horario, materia, actividad, tarea, conducta y participación en un solo flujo.</p><span class="badge">Próxima fase</span>
+      <section id="project-detail" class="view">
+        <button class="back-button" data-action="back-projects">← Volver a proyectos</button>
+        <div class="project-hero panel">
+          <div><p class="eyebrow">PROYECTO</p><h1 id="projectDetailName">Proyecto</h1><p id="projectDetailMeta" class="muted"></p></div>
+          <div class="button-row"><button class="btn" data-action="edit-current-project">Editar proyecto</button><button class="btn primary" data-action="new-class">+ Registrar actividad</button></div>
+        </div>
+        <div id="projectDetailInfo" class="project-info-grid"></div>
+        <article class="panel project-history">
+          <div class="section-head"><div><h2>Actividades registradas</h2><p class="muted">Tareas, conducta y participación del proyecto.</p></div><span id="projectActivityCount" class="badge">0 actividades</span></div>
+          <div id="projectActivities" class="activity-history"></div>
+        </article>
+      </section>
+
+      <section id="daily" class="view">
+        <form id="classForm">
+          <input type="hidden" name="id">
+          <div class="page-head"><div><p class="eyebrow">REGISTRO ACADÉMICO</p><h1 id="classFormTitle">Registrar actividad</h1><p class="muted">Registra en una sola pantalla la tarea, conducta y participación.</p></div><div class="button-row"><button type="button" class="btn" data-action="cancel-class">Cancelar</button><button type="submit" class="btn primary">Guardar registro</button></div></div>
+          <article class="panel class-data-panel">
+            <div class="form-grid two"><label>Proyecto<select id="classProject" name="proyectoId" required></select></label><label>Campo formativo o materia<select id="classSubject" name="materia" required></select></label></div>
+            <div class="form-grid three"><label>Fecha<input id="classDate" type="date" name="fecha" required></label><label>Hora de inicio<input type="time" name="horaInicio" value="13:00" required></label><label>Hora de término<input type="time" name="horaFin" value="14:00" required></label></div>
+            <div class="form-grid two"><label>Nombre de la actividad<input name="actividad" placeholder="Ej. Identificamos los órganos del aparato digestivo" required></label><label>Cuaderno, libro o material<select name="material" required><option value="">Selecciona</option><optgroup label="Cuadernos"><option>Lenguajes</option><option>Saberes y Pensamiento Matemático</option><option>Saberes y Pensamiento Científico</option><option>Ética, Naturaleza y Sociedades</option><option>De lo Humano y lo Comunitario</option><option>Dibujo</option><option>Ortografía</option></optgroup><optgroup label="Libros"><option>Libro de Texto Gratuito (LTG)</option><option>La Guía Escolar</option><option>PRACMATICA</option><option>C.A.P. (Comprender, Aprender y Practicar)</option></optgroup><option>Hoja de trabajo</option><option>Otro material</option></select></label></div>
+          </article>
+          <article class="panel evaluation-panel">
+            <div class="section-head evaluation-heading"><div><h2>Evaluación del grupo</h2><p class="muted">Debes registrar a todos los alumnos antes de guardar.</p></div><div class="button-row"><button type="button" class="btn small" data-action="all-complete">Todos entregaron</button><button type="button" class="btn small" data-action="all-adequate">Conducta adecuada</button></div></div>
+            <div class="evaluation-legend"><span><b>Trabajo:</b> completo, incompleto o no trabajó</span><span><b>Participación:</b> alta, media o nula</span></div>
+            <div id="evaluationList" class="evaluation-list"></div>
+          </article>
+          <div class="sticky-save"><span id="evaluationProgress">0 de 35 alumnos</span><button type="submit" class="btn primary">Guardar actividad y evaluaciones</button></div>
+        </form>
       </section>
       <section id="attendance" class="view">
         <div class="page-head"><div><p class="eyebrow">CONTROL DEL GRUPO</p><h1>Pase de lista</h1><p class="muted">Registra asistencia, falta, retardo o justificación sin perder el historial.</p></div><div class="button-row"><button class="btn" data-action="attendance-report">Reporte individual</button><button class="btn primary" data-action="save-attendance">Guardar asistencia</button></div></div>
@@ -100,6 +127,13 @@
         </div>
       </section>
       <section id="reports" class="view">
+        <div class="page-head"><div><p class="eyebrow">SEGUIMIENTO POR ALUMNO</p><h1>Reporte individual</h1><p class="muted">Consulta todas las materias, actividades, conducta, participación y asistencia.</p></div><button class="btn" data-action="print-academic-report">Imprimir reporte</button></div>
+        <article class="panel academic-report-controls">
+          <div class="form-grid three"><label>Alumno<select id="academicStudent"><option value="">Selecciona un alumno</option></select></label><label>Periodo<select id="academicReportType"><option value="weekly">Semanal</option><option value="monthly">Mensual</option></select></label><label id="academicWeekControl">Semana que contiene la fecha<input id="academicReportDate" type="date"></label><label id="academicMonthControl" class="hidden-control">Mes<input id="academicReportMonth" type="month"></label></div>
+          <button class="btn primary" data-action="academic-report">Generar reporte individual</button>
+        </article>
+        <div id="academicReport" class="panel academic-report-empty">Selecciona un alumno y un periodo para generar su reporte.</div>
+        <hr class="report-divider">
         <div class="page-head"><div><p class="eyebrow">RESULTADOS DE LA JORNADA</p><h1>Reporte del día</h1><p class="muted">Jornada escolar de 1:00 p. m. a 5:00 p. m.</p></div><div class="button-row"><input id="dailyReportDate" type="date"><button class="btn primary" data-action="daily-report">Generar reporte</button></div></div>
         <div id="dailyReportEmpty" class="panel">Selecciona una fecha para consultar quiénes completaron las actividades, quiénes trabajaron parcialmente y quiénes requieren seguimiento.</div>
         <div id="dailyReportContent" class="daily-report hidden-control">
