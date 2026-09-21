@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b315d">
+  <title>Carpeta Académica</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><span class="brand-mark">▣</span><span>Carpeta<br>Académica</span></div>
+      <nav class="nav" aria-label="Navegación principal">
+        <button class="nav-item active" data-view="dashboard">⌂ <span>Inicio</span></button>
+        <button class="nav-item" data-view="students">♟ <span>Alumnos</span></button>
+        <button class="nav-item" data-view="styles">◉ <span>Estilos de aprendizaje</span></button>
+        <button class="nav-item" data-view="projects">▰ <span>Proyectos</span></button>
+        <button class="nav-item" data-view="daily">▣ <span>Registro diario</span></button>
+        <button class="nav-item" data-view="attendance">✓ <span>Asistencia</span></button>
+        <button class="nav-item" data-view="reports">▥ <span>Reportes</span></button>
+        <button class="nav-item" data-view="settings">⚙ <span>Configuración</span></button>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button id="menuButton" class="icon-button mobile-only" aria-label="Abrir menú">☰</button>
+        <div><strong id="schoolName">Carpeta Académica</strong><span id="groupName" class="top-meta"></span></div>
+        <div class="teacher"><span id="teacherName">Docente</span><button class="avatar" data-action="logout" title="Cerrar sesión">M</button></div>
+      </header>
+
+      <div id="loading" class="loading">Preparando tu carpeta académica…</div>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+      <section id="dashboard" class="view active">
+        <div class="welcome">
+          <div><p class="eyebrow">PANEL PRINCIPAL</p><h1 id="welcomeGreeting">¡Hola, Prof. Michel!</h1><p>Organiza el trabajo del grupo y registra los avances del día.</p></div>
+          <div class="button-row"><button class="btn primary" data-action="go-daily">Registrar clase</button><button class="btn" data-action="new-project">+ Añadir proyecto</button></div>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="dashboard-grid">
+          <article class="panel">
+            <div class="section-head"><h2>Materias de la semana</h2><span class="muted">Todas aparecerán en el reporte semanal</span></div>
+            <div id="subjectGrid" class="subject-grid"></div>
+          </article>
+          <article class="panel quick-panel">
+            <h2>Accesos rápidos</h2>
+            <button data-action="go-daily">Registrar clase <span>›</span></button>
+            <button data-action="weekly-report">Reporte semanal por alumno <span>›</span></button>
+            <button data-action="individual-report">Reporte individual <span>›</span></button>
+            <button data-action="daily-report">Reporte del día <span>›</span></button>
+            <button data-action="new-student">Añadir alumno <span>›</span></button>
+            <button data-action="new-project">Añadir proyecto <span>›</span></button>
+          </article>
+          <article class="panel wide">
+            <div class="section-head"><h2>Proyectos activos</h2><button class="link-button" data-view-link="projects">Ver todos</button></div>
+            <div id="activeProjects" class="project-grid"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="students" class="view">
+        <div class="page-head"><div><p class="eyebrow">GRUPO</p><h1>Alumnos</h1><p class="muted">Administra los datos del alumno y el acceso de su tutor.</p></div><button class="btn primary" data-action="new-student">+ Añadir alumno</button></div>
+        <div class="toolbar"><input id="studentSearch" class="input" placeholder="Buscar alumno"><span id="studentCount" class="muted"></span></div>
+        <div class="panel table-wrap"><table><thead><tr><th>Alumno</th><th>Edad</th><th>Tutor</th><th>Estilo</th><th></th></tr></thead><tbody id="studentsTable"></tbody></table></div>
+      </section>
+
+      <section id="styles" class="view">
+        <div class="page-head"><div><p class="eyebrow">VAK</p><h1>Estilos de aprendizaje</h1><p class="muted">Resultados individuales vinculados al test en línea.</p></div></div>
+        <div id="stylesGrid" class="student-cards"></div>
+      </section>
+
+      <section id="projects" class="view">
+        <div class="page-head"><div><p class="eyebrow">PLANEACIÓN</p><h1>Proyectos</h1><p class="muted">Crea proyectos y organiza sus elementos curriculares.</p></div><button class="btn primary" data-action="new-project">+ Nuevo proyecto</button></div>
+        <div class="toolbar"><input id="projectSearch" class="input" placeholder="Buscar proyecto"><select id="projectStatus" class="input"><option value="">Todos</option><option>Activo</option><option>Archivado</option></select></div>
+        <div id="projectsGrid" class="project-grid"></div>
+      </section>
+
+      <section id="daily" class="view empty-view">
+        <div class="empty-icon">▣</div><h1>Registro diario</h1><p>Este será el siguiente módulo: fecha, horario, materia, actividad, tarea, conducta y participación en un solo flujo.</p><span class="badge">Próxima fase</span>
+      </section>
+      <section id="attendance" class="view">
+        <div class="page-head"><div><p class="eyebrow">CONTROL DEL GRUPO</p><h1>Pase de lista</h1><p class="muted">Registra asistencia, falta, retardo o justificación sin perder el historial.</p></div><div class="button-row"><button class="btn" data-action="attendance-report">Reporte individual</button><button class="btn primary" data-action="save-attendance">Guardar asistencia</button></div></div>
+        <div class="attendance-layout">
+          <article class="panel">
+            <div class="attendance-date"><label>Fecha<input id="attendanceDate" type="date"></label><div><strong id="attendanceDisplayDate">Selecciona una fecha</strong><p id="attendanceNotice" class="muted"></p></div></div>
+            <div class="button-row attendance-tools"><button class="btn" data-action="all-present">Marcar todos A</button><button class="btn" data-action="no-class">Registrar día sin clases</button><span class="attendance-legend"><b>A</b> Asistencia · <b>F</b> Falta · <b>R</b> Retardo · <b>J</b> Justificada</span></div>
+            <div id="attendanceList" class="attendance-list"></div>
+          </article>
+          <article class="panel attendance-report-panel">
+            <h2>Reporte individual de asistencia</h2>
+            <label>Alumno<select id="attendanceStudent"><option value="">Selecciona un alumno</option></select></label>
+            <label>Tipo de reporte<select id="attendanceReportType"><option value="weekly">Semanal</option><option value="monthly">Mensual</option></select></label>
+            <label id="attendanceWeekControl">Semana que contiene la fecha<input id="attendanceReportDate" type="date"></label>
+            <label id="attendanceMonthControl" class="hidden-control">Mes<select id="attendancePeriod"></select></label>
+            <button class="btn primary" data-action="attendance-report">Consultar reporte</button>
+            <div id="attendanceReport" class="attendance-report-empty">Selecciona un alumno para consultar su asistencia.</div>
+          </article>
+        </div>
+      </section>
+      <section id="reports" class="view">
+        <div class="page-head"><div><p class="eyebrow">RESULTADOS DE LA JORNADA</p><h1>Reporte del día</h1><p class="muted">Jornada escolar de 1:00 p. m. a 5:00 p. m.</p></div><div class="button-row"><input id="dailyReportDate" type="date"><button class="btn primary" data-action="daily-report">Generar reporte</button></div></div>
+        <div id="dailyReportEmpty" class="panel">Selecciona una fecha para consultar quiénes completaron las actividades, quiénes trabajaron parcialmente y quiénes requieren seguimiento.</div>
+        <div id="dailyReportContent" class="daily-report hidden-control">
+          <div id="dailyReportSummary" class="stats"></div>
+          <div class="daily-report-grid">
+            <article class="report-group success"><div class="report-group-head"><h2>Trabajaron y entregaron todo</h2><span id="dailyCompleteCount" class="report-count">0</span></div><div id="dailyComplete" class="name-list"></div></article>
+            <article class="report-group warning"><div class="report-group-head"><h2>Entregaron, pero les faltaron actividades</h2><span id="dailyPartialCount" class="report-count">0</span></div><div id="dailyPartial" class="name-list"></div></article>
+            <article class="report-group danger"><div class="report-group-head"><h2>No realizaron actividades</h2><span id="dailyNoneCount" class="report-count">0</span></div><div id="dailyNone" class="name-list"></div></article>
+            <article class="report-group conduct"><div class="report-group-head"><h2>Conducta que requiere atención</h2><span id="dailyConductCount" class="report-count">0</span></div><div id="dailyConduct" class="name-list"></div></article>
+          </div>
+          <article class="panel daily-activities"><h2>Actividades registradas</h2><div id="dailyActivities"></div></article>
+        </div>
+      </section>
+      <section id="settings" class="view empty-view">
+        <div class="empty-icon">⚙</div><h1>Configuración</h1><p>Ciclo escolar, grupo, catálogos, rúbricas y parámetros del sistema.</p><span class="badge">Base instalada</span>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="studentDialog" class="modal">
+    <form id="studentForm" method="dialog">
+      <div class="modal-head"><div><p class="eyebrow">EXPEDIENTE</p><h2 id="studentModalTitle">Nuevo alumno</h2></div><button type="button" class="icon-button" data-close="studentDialog">×</button></div>
+      <input type="hidden" name="id">
+      <div class="form-grid three"><label>Apellido paterno<input name="apellidoPaterno" required></label><label>Apellido materno<input name="apellidoMaterno"></label><label>Nombre(s)<input name="nombres" required></label></div>
+      <div class="form-grid two"><label>Fecha de nacimiento<input type="date" name="fechaNacimiento"></label><label>Edad<input type="number" name="edad" min="0" max="25"></label></div>
+      <h3>Datos del tutor</h3>
+      <div class="form-grid three"><label>Nombre del tutor<input name="tutorNombre"></label><label>Parentesco<select name="tutorParentesco"><option value="">Selecciona</option><option>Madre</option><option>Padre</option><option>Tutor</option><option>Otro</option></select></label><label>Teléfono<input name="tutorTelefono" inputmode="tel"></label></div>
+      <div class="modal-actions"><button type="button" class="btn" data-close="studentDialog">Cancelar</button><button type="submit" class="btn primary">Guardar alumno</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="projectDialog" class="modal large">
+    <form id="projectForm" method="dialog">
+      <div class="modal-head"><div><p class="eyebrow">PLANEACIÓN</p><h2>Nuevo proyecto</h2></div><button type="button" class="icon-button" data-close="projectDialog">×</button></div>
+      <input type="hidden" name="id">
+      <div class="form-grid two"><label>Nombre del proyecto<input name="nombre" required></label><label>Campo formativo<select name="campoFormativo" required><option value="">Selecciona</option><option>Lenguajes</option><option>Saberes y Pensamiento Matemático</option><option>Saberes y Pensamiento Científico</option><option>Ética, Naturaleza y Sociedades</option><option>De lo Humano y lo Comunitario</option></select></label></div>
+      <div class="form-grid three"><label>Fecha de inicio<input type="date" name="fechaInicio"></label><label>Fecha de término<input type="date" name="fechaFin"></label><label>Temporalidad<select name="temporalidad"><option>1 semana</option><option>2 semanas</option><option>3 semanas</option><option>4 semanas</option><option>1 mes</option></select></label></div>
+      <div class="form-grid three"><label>Plan del periodo<select name="planPeriodo"><option>Primer periodo</option><option>Segundo periodo</option><option>Tercer periodo</option></select></label><label>Metodología<select name="metodologia"><option>Aprendizaje Basado en Proyectos</option><option>Aprendizaje Basado en Problemas</option><option>Aprendizaje Servicio</option><option>Indagación STEAM</option></select></label><label>Escenario<select name="escenario"><option>Aula</option><option>Escuela</option><option>Comunidad</option></select></label></div>
+      <label>Ejes articuladores<input name="ejes" placeholder="Ej. Pensamiento crítico, inclusión, vida saludable"></label>
+      <div class="form-grid two"><label>Contenidos<textarea name="contenidos" rows="3"></textarea></label><label>PDA<textarea name="pda" rows="3"></textarea></label></div>
+      <div class="form-grid two"><label>Propósito del proyecto<textarea name="proposito" rows="3"></textarea></label><label>Producto final<textarea name="productoFinal" rows="3"></textarea></label></div>
+      <label class="check"><input type="checkbox" name="sinProductoFinal"> Este proyecto no requiere producto final</label>
+      <div class="modal-actions"><button type="button" class="btn" data-close="projectDialog">Cancelar</button><button type="submit" class="btn primary">Guardar proyecto</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="loginDialog" class="modal login-modal">
+    <form id="loginForm">
+      <div class="login-brand"><span class="brand-mark">▣</span><div><strong>Carpeta Académica</strong><small>Acceso privado del docente</small></div></div>
+      <label>Usuario<input name="username" autocomplete="username" required></label>
+      <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
+      <p id="loginError" class="login-error" role="alert"></p>
+      <button type="submit" class="btn primary login-button">Entrar</button>
+      <p class="login-note">Los datos académicos se consultan de forma segura desde Google Sheets.</p>
+    </form>
+  </dialog>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
