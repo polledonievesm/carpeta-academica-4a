@@ -1,4 +1,4 @@
-const state={config:{},subjects:[],rubrics:[],students:[],projects:[],stats:{},attendance:null,attendanceDay:null,attendanceRecords:{}};
+const state={config:{},subjects:[],rubrics:[],students:[],projects:[],stats:{},attendance:null,attendanceDay:null,attendanceRecords:{},currentProject:null,projectWorkspace:null,classEvaluations:{}};
 const $=(s,r=document)=>r.querySelector(s);const $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const API_SOURCE='pase-lista-4a-api';
 const API_URL=String(window.CARPETA_ACADEMICA_CONFIG?.apiUrl||'').trim();
@@ -49,19 +49,33 @@ function bindUI(){
   $('#attendanceStudent').addEventListener('change',()=>{if($('#attendanceStudent').value)loadAttendanceReport()});
   $('#attendanceReportDate').addEventListener('change',()=>{if($('#attendanceStudent').value&&$('#attendanceReportType').value==='weekly')loadAttendanceReport()});
   $('#attendancePeriod').addEventListener('change',()=>{if($('#attendanceStudent').value&&$('#attendanceReportType').value==='monthly')loadAttendanceReport()});
+  $('#academicReportType').addEventListener('change',toggleAcademicReportMode);
   $('#attendanceList').addEventListener('click',selectAttendanceStatus);
   $('#attendanceList').addEventListener('input',updateAttendanceNote);
   $('#studentForm').addEventListener('submit',saveStudentForm);
   $('#projectForm').addEventListener('submit',saveProjectForm);
+  $('#classForm').addEventListener('submit',saveClassForm);
+  $('#evaluationList').addEventListener('change',updateClassEvaluation);
+  $('#evaluationList').addEventListener('input',updateClassEvaluation);
   $('#loginForm').addEventListener('submit',login);
 }
 const actions={
   'logout':()=>logout(),
   'new-student':()=>openStudent(),
   'new-project':()=>openProject(),
-  'go-daily':()=>showView('daily'),
-  'weekly-report':()=>{showView('reports');toast('El reporte semanal se habilitará en la siguiente fase.')},
-  'individual-report':()=>{showView('reports');toast('El reporte individual se habilitará en la siguiente fase.')},
+  'go-daily':()=>openClassForm(),
+  'open-project':btn=>openProjectWorkspace(btn.dataset.id),
+  'back-projects':()=>showView('projects'),
+  'edit-current-project':()=>state.currentProject&&openProject(state.currentProject),
+  'new-class':()=>openClassForm(state.currentProject?.id),
+  'edit-class':btn=>openClassForm(state.currentProject?.id,btn.dataset.id),
+  'cancel-class':()=>state.currentProject?showView('project-detail'):showView('dashboard'),
+  'all-complete':()=>setAllEvaluations('trabajo','Completo'),
+  'all-adequate':()=>setAllEvaluations('conducta','Adecuada'),
+  'weekly-report':()=>openAcademicReports('weekly'),
+  'individual-report':()=>openAcademicReports('monthly'),
+  'academic-report':loadAcademicReport,
+  'print-academic-report':()=>window.print(),
   'daily-report':loadDailyReport,
   'all-present':()=>{(state.attendance?.students||[]).forEach(s=>state.attendanceRecords[s.id]={status:'A',note:''});renderAttendanceList()},
   'save-attendance':saveAttendanceDay,
@@ -78,16 +92,75 @@ function renderAll(){
   $('#teacherName').textContent=state.config.docente||'Docente';
   renderGreeting();
   if(!$('#dailyReportDate').value)$('#dailyReportDate').value=state.attendance?.today||new Date().toISOString().slice(0,10);
-  renderStats();renderSubjects();renderStudents();renderStyles();renderProjects();renderActiveProjects();renderAttendance();
+  renderStats();renderSubjects();renderStudents();renderStyles();renderProjects();renderActiveProjects();renderClassOptions();renderAttendance();renderAcademicOptions();
 }
-function renderGreeting(){const hour=new Date().getHours();const greeting=hour<12?'Buenos días':hour<19?'Buenas tardes':'Buenas noches';const teacher=String(state.config.docente||'Prof. Michel').replace(/^Prof\.\s*/i,'').split(/\s+/)[0]||'Michel';$('#welcomeGreeting').textContent=`¡${greeting}, Prof. ${teacher}!`}
+function cancunHour(){try{return Number(new Intl.DateTimeFormat('en-US',{hour:'2-digit',hour12:false,timeZone:'America/Cancun'}).format(new Date()))%24}catch(e){return new Date().getHours()}}
+function todayCancun(){try{const parts=new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'America/Cancun'}).formatToParts(new Date()).reduce((a,p)=>(a[p.type]=p.value,a),{});return `${parts.year}-${parts.month}-${parts.day}`}catch(e){return new Date().toISOString().slice(0,10)}}
+function renderGreeting(){const hour=cancunHour();const greeting=hour>=6&&hour<12?'Buenos días':hour>=12&&hour<19?'Buenas tardes':'Buenas noches';const teacher=String(state.config.docente||'Prof. Michel').replace(/^Prof\.\s*/i,'').split(/\s+/)[0]||'Michel';$('#welcomeGreeting').textContent=`¡${greeting}, Prof. ${teacher}!`}
 function renderStats(){const s=state.stats;$('#stats').innerHTML=[['Alumnos',s.students||0],['Proyectos activos',s.projects||0],['Clases registradas',s.activities||0],['Requieren seguimiento',s.followUp||0]].map(([l,v])=>`<div class="stat"><b>${v}</b><span>${escapeHtml(l)}</span></div>`).join('')}
 function renderSubjects(){$('#subjectGrid').innerHTML=state.subjects.map((x,i)=>`<div class="subject"><b>${escapeHtml(x.nombre)}</b><p class="muted">${i<5?'Campo formativo':'Complementaria'}</p></div>`).join('')}
 function renderStudents(){const q=$('#studentSearch').value.toLowerCase();const rows=state.students.filter(s=>fullName(s).toLowerCase().includes(q));$('#studentCount').textContent=`${rows.length} alumnos`;$('#studentsTable').innerHTML=rows.length?rows.map(s=>`<tr><td><span class="student-name">${escapeHtml(fullName(s))}</span><br><span class="muted">${escapeHtml(s.tutorUsuario||'Sin acceso')}</span></td><td>${s.edad||'—'}</td><td>${escapeHtml(s.tutorNombre||'Sin registrar')}</td><td><span class="badge">${escapeHtml(s.estilo||'Sin evaluar')}</span></td><td><button class="link-button" data-action="edit-student" data-id="${s.id}">Editar</button> <button class="link-button" data-action="delete-student" data-id="${s.id}">Baja</button></td></tr>`).join(''):'<tr><td colspan="5" class="muted">No hay alumnos registrados.</td></tr>'}
 function renderStyles(){$('#stylesGrid').innerHTML=state.students.length?state.students.map(s=>`<div class="student-card"><h3>${escapeHtml(fullName(s))}</h3><span class="badge">${escapeHtml(s.estilo||'Sin evaluar')}</span><p class="muted">El resultado se actualizará desde el test VAK.</p></div>`).join(''):'<div class="panel">Primero añade alumnos al grupo.</div>'}
 function renderProjects(){const q=$('#projectSearch').value.toLowerCase();const status=$('#projectStatus').value;const rows=state.projects.filter(p=>(!q||p.nombre.toLowerCase().includes(q))&&(!status||p.estado===status));$('#projectsGrid').innerHTML=rows.length?rows.map(projectCard).join(''):'<div class="panel">No hay proyectos registrados.</div>'}
 function renderActiveProjects(){const rows=state.projects.filter(p=>p.estado==='Activo').slice(0,3);$('#activeProjects').innerHTML=rows.length?rows.map(projectCard).join(''):'<div class="muted">Añade tu primer proyecto para comenzar.</div>'}
-function projectCard(p){return `<article class="project-card"><span class="badge">${escapeHtml(p.estado||'Activo')}</span><h3>${escapeHtml(p.nombre)}</h3><p>${escapeHtml(p.campoFormativo)} · ${escapeHtml(p.temporalidad||'Sin temporalidad')}</p><div class="project-actions"><button class="btn">Abrir</button>${p.estado==='Activo'?`<button class="btn" data-action="archive-project" data-id="${p.id}">Archivar</button>`:''}</div></article>`}
+function projectCard(p){return `<article class="project-card"><span class="badge">${escapeHtml(p.estado||'Activo')}</span><h3>${escapeHtml(p.nombre)}</h3><p>${escapeHtml(p.campoFormativo)} · ${escapeHtml(p.temporalidad||'Sin temporalidad')}</p><div class="project-actions"><button class="btn primary" data-action="open-project" data-id="${p.id}">Abrir</button>${p.estado==='Activo'?`<button class="btn" data-action="archive-project" data-id="${p.id}">Archivar</button>`:''}</div></article>`}
+function renderClassOptions(){
+  const projectSelect=$('#classProject'),subjectSelect=$('#classSubject');
+  projectSelect.innerHTML='<option value="">Selecciona un proyecto</option>'+state.projects.filter(p=>p.estado==='Activo').map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.nombre)}</option>`).join('');
+  subjectSelect.innerHTML='<option value="">Selecciona</option>'+state.subjects.map(s=>`<option>${escapeHtml(s.nombre)}</option>`).join('');
+}
+async function openProjectWorkspace(projectId){
+  await runAction(async()=>{
+    state.projectWorkspace=await server('getProjectWorkspace',projectId);
+    state.currentProject=state.projectWorkspace.project;
+    renderProjectWorkspace();
+    showView('project-detail');
+  });
+}
+function renderProjectWorkspace(){
+  const p=state.currentProject||{},workspace=state.projectWorkspace||{activities:[]};
+  $('#projectDetailName').textContent=p.nombre||'Proyecto';
+  $('#projectDetailMeta').textContent=[p.campoFormativo,p.temporalidad,[p.fechaInicio,p.fechaFin].filter(Boolean).join(' a ')].filter(Boolean).join(' · ');
+  const info=[['Metodología',p.metodologia],['Escenario',p.escenario],['Ejes articuladores',p.ejes],['Propósito',p.proposito],['Producto final',p.sinProductoFinal?'Sin producto final':p.productoFinal],['Contenidos y PDA',[p.contenidos,p.pda].filter(Boolean).join(' · ')]];
+  $('#projectDetailInfo').innerHTML=info.filter(x=>x[1]).map(([label,value])=>`<article class="panel project-info"><span>${escapeHtml(label)}</span><p>${escapeHtml(value)}</p></article>`).join('')||'<article class="panel"><p class="muted">Puedes editar el proyecto para completar sus datos curriculares.</p></article>';
+  const activities=workspace.activities||[];
+  $('#projectActivityCount').textContent=`${activities.length} ${activities.length===1?'actividad':'actividades'}`;
+  $('#projectActivities').innerHTML=activities.length?activities.map(a=>`<article class="history-card"><div class="history-main"><span class="history-date">${escapeHtml(formatDateShort(a.fecha))} · ${escapeHtml(formatTime(a.horaInicio))}–${escapeHtml(formatTime(a.horaFin))}</span><h3>${escapeHtml(a.actividad)}</h3><p>${escapeHtml(a.materia)} · ${escapeHtml(a.material)}</p></div><div class="history-results"><span class="result complete"><b>${a.totals.complete}</b> completas</span><span class="result partial"><b>${a.totals.partial}</b> incompletas</span><span class="result none"><b>${a.totals.none}</b> no trabajaron</span><span class="result conduct"><b>${a.totals.conduct}</b> conducta</span></div><button class="btn" data-action="edit-class" data-id="${a.id}">Ver o editar</button></article>`).join(''):'<div class="empty-history"><strong>Aún no hay actividades</strong><p>Presiona “Registrar actividad” para evaluar al grupo.</p></div>';
+}
+async function openClassForm(projectId='',classId=''){
+  renderClassOptions();
+  const form=$('#classForm');form.reset();form.elements.id.value='';form.elements.fecha.value=todayCancun();form.elements.horaInicio.value='13:00';form.elements.horaFin.value='14:00';
+  const selected=projectId||state.currentProject?.id||state.projects.find(p=>p.estado==='Activo')?.id||'';
+  form.elements.proyectoId.value=selected;
+  const project=state.projects.find(p=>String(p.id)===String(selected));
+  if(project&&[...form.elements.materia.options].some(o=>o.value===project.campoFormativo))form.elements.materia.value=project.campoFormativo;
+  state.classEvaluations={};
+  state.students.forEach(student=>state.classEvaluations[student.id]={alumnoId:student.id,trabajo:'Completo',conducta:'Adecuada',participacion:'Media',desempeno:'',observacionLibre:''});
+  if(classId){
+    await runAction(async()=>{
+      const data=await server('getClassRecord',classId);Object.entries(data.classRecord).forEach(([key,value])=>{if(form.elements[key])form.elements[key].value=value??''});
+      data.evaluations.forEach(row=>state.classEvaluations[row.alumnoId]={alumnoId:row.alumnoId,trabajo:row.trabajo||'Completo',conducta:row.conducta||'Adecuada',participacion:row.participacion||'Media',desempeno:row.desempeno||'',observacionLibre:row.observacionLibre||''});
+    });
+  }
+  $('#classFormTitle').textContent=classId?'Editar actividad':'Registrar actividad';renderEvaluationList();showView('daily');
+}
+function rubricOptions(selected){
+  const grouped={};state.rubrics.forEach(r=>{if(!grouped[r.categoria])grouped[r.categoria]=[];grouped[r.categoria].push(r)});
+  return '<option value="">Sin observación predeterminada</option>'+Object.entries(grouped).map(([category,rows])=>`<optgroup label="${escapeHtml(category)}">${rows.map(r=>`<option value="${escapeHtml(r.mensaje)}" ${selected===r.mensaje?'selected':''}>${escapeHtml(r.nivel)}: ${escapeHtml(r.mensaje)}</option>`).join('')}</optgroup>`).join('');
+}
+function renderEvaluationList(){
+  $('#evaluationList').innerHTML=state.students.map((student,index)=>{const r=state.classEvaluations[student.id];return `<article class="evaluation-row" data-student="${student.id}"><div class="evaluation-student"><span>${index+1}</span><strong>${escapeHtml(fullName(student))}</strong></div><label>Trabajo<select data-field="trabajo"><option ${r.trabajo==='Completo'?'selected':''}>Completo</option><option ${r.trabajo==='Incompleto'?'selected':''}>Incompleto</option><option ${r.trabajo==='No trabajó'?'selected':''}>No trabajó</option></select></label><label>Conducta<select data-field="conducta"><option ${r.conducta==='Excelente'?'selected':''}>Excelente</option><option ${r.conducta==='Adecuada'?'selected':''}>Adecuada</option><option ${r.conducta==='Requiere apoyo'?'selected':''}>Requiere apoyo</option></select></label><label>Participación<select data-field="participacion"><option ${r.participacion==='Alta'?'selected':''}>Alta</option><option ${r.participacion==='Media'?'selected':''}>Media</option><option ${r.participacion==='Nula'?'selected':''}>Nula</option></select></label><label class="rubric-field">Observación predeterminada<select data-field="desempeno">${rubricOptions(r.desempeno)}</select></label><label class="note-field">Observación adicional<input data-field="observacionLibre" value="${escapeHtml(r.observacionLibre)}" placeholder="Opcional"></label></article>`}).join('');
+  $('#evaluationProgress').textContent=`${state.students.length} de ${state.students.length} alumnos preparados`;
+}
+function updateClassEvaluation(e){const row=e.target.closest('[data-student]'),field=e.target.dataset.field;if(!row||!field)return;state.classEvaluations[row.dataset.student][field]=e.target.value}
+function setAllEvaluations(field,value){Object.values(state.classEvaluations).forEach(row=>row[field]=value);renderEvaluationList()}
+async function saveClassForm(e){
+  e.preventDefault();const payload=formData(e.currentTarget);payload.evaluaciones=state.students.map(s=>state.classEvaluations[s.id]);
+  if(!confirm(`¿Guardar la actividad y la evaluación de ${payload.evaluaciones.length} alumnos?`))return;
+  await runAction(async()=>{const result=await server('saveClassRecord',payload);state.stats.activities=Number(state.stats.activities||0)+(payload.id?0:1);state.stats.followUp=result.followUp;state.projectWorkspace=await server('getProjectWorkspace',payload.proyectoId);state.currentProject=state.projectWorkspace.project;renderProjectWorkspace();renderStats();showView('project-detail');toast(result.message)});
+}
+function formatDateShort(value){if(!value)return 'Sin fecha';const [y,m,d]=String(value).split('-');return `${d}/${m}/${y}`}
+function formatTime(value){if(!value)return '';const [h,m]=String(value).split(':').map(Number);return `${h%12||12}:${String(m||0).padStart(2,'0')} ${h<12?'a. m.':'p. m.'}`}
 function renderAttendance(){
   if(!state.attendance)return;
   $('#attendanceDate').value=state.attendance.today;
@@ -115,6 +188,26 @@ async function loadAttendanceReport(){const studentId=$('#attendanceStudent').va
 function attendanceKpis(r){return `<div class="attendance-kpis"><div class="attendance-kpi"><b>${r.percentage}%</b><span>Asistencia</span></div><div class="attendance-kpi"><b>${r.attended}</b><span>A + R</span></div><div class="attendance-kpi"><b>${r.absent}</b><span>F + J</span></div><div class="attendance-kpi"><b>${r.counts.R}</b><span>Retardos</span></div></div>`}
 function renderWeeklyAttendanceReport(r){$('#attendanceReport').innerHTML=`<h3>${escapeHtml(r.student.name)}</h3><p class="muted">Semana del ${escapeHtml(r.period)}</p>${attendanceKpis(r)}<div class="weekly-days">${r.days.map(d=>`<div class="weekly-day"><strong>${escapeHtml(d.label)}</strong><span>${escapeHtml(d.displayDate)}</span><span class="day-status status-${(d.status||'none').toLowerCase()}">${escapeHtml(d.statusLabel)}</span>${d.note?`<span class="day-note">${escapeHtml(d.note)}</span>`:''}</div>`).join('')}</div>`}
 function renderMonthlyAttendanceReport(r){$('#attendanceReport').innerHTML=`<h3>${escapeHtml(r.student.name)}</h3><p class="muted">${escapeHtml(r.period)} · ${r.totalDays} días registrados</p>${attendanceKpis(r)}<ul class="attendance-details">${r.details.length?r.details.map(d=>`<li>${escapeHtml(d.displayDate)} · ${escapeHtml(d.statusLabel)}${d.note?' · '+escapeHtml(d.note):''}</li>`).join(''):'<li>Sin incidencias en el mes.</li>'}</ul>`}
+function renderAcademicOptions(){
+  const select=$('#academicStudent'),previous=select.value;select.innerHTML='<option value="">Selecciona un alumno</option>'+state.students.map(s=>`<option value="${s.id}">${escapeHtml(fullName(s))}</option>`).join('');if([...select.options].some(o=>o.value===previous))select.value=previous;
+  if(!$('#academicReportDate').value)$('#academicReportDate').value=todayCancun();
+  if(!$('#academicReportMonth').value)$('#academicReportMonth').value=todayCancun().slice(0,7);
+  toggleAcademicReportMode();
+}
+function openAcademicReports(type){$('#academicReportType').value=type;toggleAcademicReportMode();showView('reports');window.scrollTo(0,0);toast(type==='weekly'?'Selecciona un alumno para consultar su semana.':'Selecciona un alumno para consultar su mes.')}
+function toggleAcademicReportMode(){const weekly=$('#academicReportType').value==='weekly';$('#academicWeekControl').classList.toggle('hidden-control',!weekly);$('#academicMonthControl').classList.toggle('hidden-control',weekly)}
+async function loadAcademicReport(){
+  const studentId=$('#academicStudent').value,type=$('#academicReportType').value,reference=type==='weekly'?$('#academicReportDate').value:$('#academicReportMonth').value;
+  if(!studentId)return toast('Selecciona un alumno.',true);if(!reference)return toast('Selecciona el periodo.',true);
+  await runAction(async()=>renderAcademicReport(await server('getStudentAcademicReport',studentId,type,reference)));
+}
+function renderAcademicReport(r){
+  const a=r.attendance,s=r.summary;
+  const subjectCards=r.subjects.map(x=>`<article class="subject-report ${x.activities?'has-data':''}"><h3>${escapeHtml(x.name)}</h3><strong>${x.activities}</strong><span>actividades</span><p><b>${x.complete}</b> completas · <b>${x.partial}</b> incompletas · <b>${x.none}</b> sin realizar</p></article>`).join('');
+  const activities=r.activities.length?r.activities.map(x=>`<article class="academic-activity"><div><span>${escapeHtml(formatDateShort(x.date))} · ${escapeHtml(x.subject)}</span><h3>${escapeHtml(x.activity)}</h3><p>${escapeHtml(x.material)}</p></div><div class="academic-tags"><span class="badge">${escapeHtml(x.work)}</span><span>Conducta: <b>${escapeHtml(x.conduct)}</b></span><span>Participación: <b>${escapeHtml(x.participation)}</b></span></div>${x.rubric||x.observation?`<p class="academic-note">${escapeHtml([x.rubric,x.observation].filter(Boolean).join(' · '))}</p>`:''}</article>`).join(''):'<p class="muted">No hay actividades registradas en este periodo.</p>';
+  $('#academicReport').className='panel academic-report';
+  $('#academicReport').innerHTML=`<div class="academic-report-head"><div><p class="eyebrow">REPORTE ${r.type==='weekly'?'SEMANAL':'MENSUAL'}</p><h2>${escapeHtml(r.student.name)}</h2><p>${escapeHtml(r.period)}</p></div><div class="attendance-circle"><b>${a.percentage}%</b><span>asistencia</span></div></div><div class="academic-kpis"><div><b>${s.activities}</b><span>Actividades</span></div><div><b>${s.complete}</b><span>Completas</span></div><div><b>${s.partial}</b><span>Incompletas</span></div><div><b>${s.none}</b><span>No realizadas</span></div><div><b>${s.conductAttention}</b><span>Conducta por atender</span></div><div><b>${s.noParticipation}</b><span>Participación nula</span></div></div><h3>Resultados de todas las materias</h3><div class="subject-report-grid">${subjectCards}</div><div class="attendance-summary"><h3>Asistencia del periodo</h3><span>A: <b>${a.counts.A}</b></span><span>F: <b>${a.counts.F}</b></span><span>R: <b>${a.counts.R}</b></span><span>J: <b>${a.counts.J}</b></span></div><h3>Detalle de actividades</h3><div class="academic-activities">${activities}</div>`;
+}
 async function loadDailyReport(){showView('reports');const date=$('#dailyReportDate').value;if(!date)return toast('Selecciona la fecha del reporte.',true);await runAction(async()=>{const report=await server('getDailyAcademicReport',date);renderDailyReport(report)})}
 function renderDailyReport(r){
   const empty=$('#dailyReportEmpty'),content=$('#dailyReportContent');
