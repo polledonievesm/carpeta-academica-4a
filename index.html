@@ -19,6 +19,7 @@
         <button class="nav-item" data-view="daily">▣ <span>Registro diario</span></button>
         <button class="nav-item" data-view="attendance">✓ <span>Asistencia</span></button>
         <button class="nav-item" data-view="reports">▥ <span>Reportes</span></button>
+        <button class="nav-item" data-view="payments">$ <span>Control de pagos</span></button>
         <button class="nav-item" data-view="settings">⚙ <span>Configuración</span></button>
       </nav>
     </aside>
@@ -52,6 +53,7 @@
             <button data-action="daily-report">Reporte del día <span>›</span></button>
             <button data-action="new-student">Añadir alumno <span>›</span></button>
             <button data-action="new-project">Añadir proyecto <span>›</span></button>
+            <button data-action="open-payments">Control de pagos <span>›</span></button>
           </article>
           <article class="panel wide">
             <div class="section-head"><h2>Proyectos activos</h2><button class="link-button" data-view-link="projects">Ver todos</button></div>
@@ -67,13 +69,14 @@
       </section>
 
       <section id="styles" class="view">
-        <div class="page-head"><div><p class="eyebrow">VAK</p><h1>Estilos de aprendizaje</h1><p class="muted">Resultados individuales vinculados al test en línea.</p></div></div>
+        <div class="page-head"><div><p class="eyebrow">VAK</p><h1>Estilos de aprendizaje</h1><p class="muted">Resultados individuales vinculados al test en línea.</p></div><button class="btn primary" data-action="sync-styles">Actualizar resultados</button></div>
+        <div id="stylesLinkStatus" class="integration-note"></div>
         <div id="stylesGrid" class="student-cards"></div>
       </section>
 
       <section id="projects" class="view">
         <div class="page-head"><div><p class="eyebrow">PLANEACIÓN</p><h1>Proyectos</h1><p class="muted">Crea proyectos y organiza sus elementos curriculares.</p></div><button class="btn primary" data-action="new-project">+ Nuevo proyecto</button></div>
-        <div class="toolbar"><input id="projectSearch" class="input" placeholder="Buscar proyecto"><select id="projectStatus" class="input"><option value="">Todos</option><option>Activo</option><option>Archivado</option></select></div>
+        <div class="toolbar"><input id="projectSearch" class="input" placeholder="Buscar proyecto"><select id="projectStatus" class="input"><option value="">Todos</option><option>Activo</option></select></div>
         <div id="projectsGrid" class="project-grid"></div>
       </section>
 
@@ -97,10 +100,11 @@
           <article class="panel class-data-panel">
             <div class="form-grid two"><label>Proyecto<select id="classProject" name="proyectoId" required></select></label><label>Campo formativo o materia<select id="classSubject" name="materia" required></select></label></div>
             <div class="form-grid three"><label>Fecha<input id="classDate" type="date" name="fecha" required></label><label>Hora de inicio<input type="time" name="horaInicio" value="13:00" required></label><label>Hora de término<input type="time" name="horaFin" value="14:00" required></label></div>
+            <div id="classAttendanceNotice" class="class-attendance-notice">Selecciona una fecha para cargar a los alumnos presentes.</div>
             <div class="form-grid two"><label>Nombre de la actividad<input name="actividad" placeholder="Ej. Identificamos los órganos del aparato digestivo" required></label><label>Cuaderno, libro o material<select name="material" required><option value="">Selecciona</option><optgroup label="Cuadernos"><option>Lenguajes</option><option>Saberes y Pensamiento Matemático</option><option>Saberes y Pensamiento Científico</option><option>Ética, Naturaleza y Sociedades</option><option>De lo Humano y lo Comunitario</option><option>Dibujo</option><option>Ortografía</option></optgroup><optgroup label="Libros"><option>Libro de Texto Gratuito (LTG)</option><option>La Guía Escolar</option><option>PRACMATICA</option><option>C.A.P. (Comprender, Aprender y Practicar)</option></optgroup><option>Hoja de trabajo</option><option>Otro material</option></select></label></div>
           </article>
           <article class="panel evaluation-panel">
-            <div class="section-head evaluation-heading"><div><h2>Evaluación del grupo</h2><p class="muted">Debes registrar a todos los alumnos antes de guardar.</p></div><div class="button-row"><button type="button" class="btn small" data-action="all-complete">Todos entregaron</button><button type="button" class="btn small" data-action="all-adequate">Conducta adecuada</button></div></div>
+            <div class="section-head evaluation-heading"><div><h2>Evaluación del grupo</h2><p class="muted">Solo aparecen los alumnos con asistencia o retardo en la fecha seleccionada.</p></div><div class="button-row"><button type="button" class="btn small" data-action="all-complete">Todos entregaron</button><button type="button" class="btn small" data-action="all-adequate">Conducta adecuada</button></div></div>
             <div class="evaluation-legend"><span><b>Trabajo:</b> completo, incompleto o no trabajó</span><span><b>Participación:</b> alta, media o nula</span></div>
             <div id="evaluationList" class="evaluation-list"></div>
           </article>
@@ -113,6 +117,7 @@
           <article class="panel">
             <div class="attendance-date"><label>Fecha<input id="attendanceDate" type="date"></label><div><strong id="attendanceDisplayDate">Selecciona una fecha</strong><p id="attendanceNotice" class="muted"></p></div></div>
             <div class="button-row attendance-tools"><button class="btn" data-action="all-present">Marcar todos A</button><button class="btn" data-action="no-class">Registrar día sin clases</button><span class="attendance-legend"><b>A</b> Asistencia · <b>F</b> Falta · <b>R</b> Retardo · <b>J</b> Justificada</span></div>
+            <div id="attendanceSavedSummary" class="attendance-saved-summary hidden-control"></div>
             <div id="attendanceList" class="attendance-list"></div>
           </article>
           <article class="panel attendance-report-panel">
@@ -146,6 +151,16 @@
           </div>
           <article class="panel daily-activities"><h2>Actividades registradas</h2><div id="dailyActivities"></div></article>
         </div>
+      </section>
+      <section id="payments" class="view">
+        <div class="page-head"><div><p class="eyebrow">ADMINISTRACIÓN</p><h1>Control de pagos</h1><p class="muted">Accede desde la Carpeta Académica al proyecto de pagos que ya tienes publicado.</p></div><button class="btn primary" data-action="open-payments">Abrir control de pagos</button></div>
+        <article class="panel payment-panel">
+          <h2>Vincular el sitio de pagos</h2>
+          <p class="muted">Pega una sola vez la dirección pública de GitHub Pages de tu control de pagos. Se abrirá en una pestaña nueva para conservar su funcionamiento y sus datos.</p>
+          <label>Dirección HTTPS del control de pagos<input id="paymentControlUrl" type="url" placeholder="https://usuario.github.io/control-pagos/"></label>
+          <div class="button-row"><button class="btn primary" data-action="save-payments-url">Guardar dirección</button><button class="btn" data-action="open-payments">Probar acceso</button></div>
+          <div id="paymentStatus" class="integration-note"></div>
+        </article>
       </section>
       <section id="settings" class="view empty-view">
         <div class="empty-icon">⚙</div><h1>Configuración</h1><p>Ciclo escolar, grupo, catálogos, rúbricas y parámetros del sistema.</p><span class="badge">Base instalada</span>
