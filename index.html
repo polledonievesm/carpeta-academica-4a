@@ -153,14 +153,40 @@
         </div>
       </section>
       <section id="payments" class="view">
-        <div class="page-head"><div><p class="eyebrow">ADMINISTRACIÓN</p><h1>Control de pagos</h1><p class="muted">Accede desde la Carpeta Académica al proyecto de pagos que ya tienes publicado.</p></div><button class="btn primary" data-action="open-payments">Abrir control de pagos</button></div>
-        <article class="panel payment-panel">
-          <h2>Vincular el sitio de pagos</h2>
-          <p class="muted">Pega una sola vez la dirección pública de GitHub Pages de tu control de pagos. Se abrirá en una pestaña nueva para conservar su funcionamiento y sus datos.</p>
-          <label>Dirección HTTPS del control de pagos<input id="paymentControlUrl" type="url" placeholder="https://usuario.github.io/control-pagos/"></label>
-          <div class="button-row"><button class="btn primary" data-action="save-payments-url">Guardar dirección</button><button class="btn" data-action="open-payments">Probar acceso</button></div>
-          <div id="paymentStatus" class="integration-note"></div>
-        </article>
+        <div id="paymentsHome">
+          <div class="page-head"><div><p class="eyebrow">ADMINISTRACIÓN</p><h1>Control de pagos</h1><p class="muted">Eventos, pagos, abonos, cortes y movimientos dentro de Carpeta Académica.</p></div><div class="button-row"><button class="btn" data-action="sync-payment-students">Sincronizar alumnos</button><button class="btn" data-action="refresh-payments">Actualizar</button><button class="btn primary" data-action="toggle-payment-event-form">+ Crear evento</button></div></div>
+          <div id="paymentLinkStatus" class="integration-note"></div>
+          <div id="paymentOverview" class="stats"></div>
+          <article id="paymentEventFormPanel" class="panel payment-event-form hidden-control">
+            <div class="section-head"><div><h2>Nuevo evento</h2><p class="muted">El evento se asignará a todos los alumnos activos.</p></div><button class="icon-button" data-action="toggle-payment-event-form" type="button">×</button></div>
+            <form id="paymentEventForm">
+              <div class="form-grid two"><label>Nombre del evento<input name="name" required placeholder="Ej. Excursión escolar"></label><label>Descripción<input name="description" placeholder="Opcional"></label></div>
+              <div class="form-grid three"><label>Fecha del evento<input type="date" name="date" required></label><label>Hora<input type="time" name="time" required></label><label>Cobro por alumno<input type="number" name="charge" min="0.01" step="0.01" required></label></div>
+              <div class="form-grid three"><label>Entrega por alumno<input type="number" name="delivery" min="0" step="0.01" value="0" required></label><label>Inicio de cobro<input type="date" name="collectionStart"></label><label>Fin de cobro<input type="date" name="collectionEnd"></label></div>
+              <div class="modal-actions"><button type="button" class="btn" data-action="toggle-payment-event-form">Cancelar</button><button class="btn primary" type="submit">Crear evento</button></div>
+            </form>
+          </article>
+          <article class="panel payment-events-panel"><div class="section-head"><h2>Eventos activos</h2><span id="paymentEventCount" class="badge">0 eventos</span></div><div id="paymentEventsGrid" class="payment-event-grid"></div></article>
+          <article class="panel payment-events-panel"><div class="section-head"><h2>Eventos archivados</h2></div><div id="paymentArchivedGrid" class="payment-event-grid compact"></div></article>
+        </div>
+
+        <div id="paymentEventDetail" class="hidden-control">
+          <button class="back-button" data-action="back-payment-events">← Volver a eventos</button>
+          <div class="project-hero panel"><div><p class="eyebrow">EVENTO DE PAGO</p><h1 id="paymentDetailTitle">Evento</h1><p id="paymentDetailMeta" class="muted"></p></div><button class="btn danger" data-action="archive-current-payment-event">Archivar evento</button></div>
+          <div id="paymentDetailStats" class="stats payment-stats"></div>
+          <div class="payment-detail-grid">
+            <article class="panel payment-students-panel">
+              <div class="section-head"><div><h2>Pagos por alumno</h2><p class="muted">Registra un pago completo o un abono.</p></div><select id="paymentStudentFilter"><option value="TODOS">Todos</option><option value="PAGADO">Pagaron</option><option value="ABONO">Abonaron</option><option value="PENDIENTE">No pagaron</option></select></div>
+              <input id="paymentStudentSearch" class="input" placeholder="Buscar alumno">
+              <div id="paymentStudentList" class="payment-student-list"></div>
+            </article>
+            <div class="payment-side-column">
+              <article class="panel"><h2>Corte de dinero</h2><form id="paymentCutForm"><label>Fecha<input type="date" name="date" required></label><label>Monto entregado<input type="number" name="amount" min="0.01" step="0.01" required></label><label>Recibió o descripción<input name="description"></label><button class="btn primary" type="submit">Guardar corte</button></form><div id="paymentCutsList" class="payment-ledger"></div></article>
+              <article class="panel"><h2>Retiro o reposición</h2><form id="paymentMovementForm"><label>Tipo<select name="type"><option value="RETIRO">Dinero tomado</option><option value="REPOSICION">Dinero repuesto</option></select></label><label>Fecha<input type="date" name="date" required></label><label>Monto<input type="number" name="amount" min="0.01" step="0.01" required></label><label>Descripción<input name="description" required></label><button class="btn primary" type="submit">Guardar movimiento</button></form><div id="paymentMovementsList" class="payment-ledger"></div></article>
+            </div>
+          </div>
+          <article class="panel payment-financial-panel"><h2>Resumen financiero</h2><div id="paymentFinancialSummary" class="payment-financial-grid"></div><h3>Historial de pagos</h3><div id="paymentHistoryList" class="payment-ledger"></div></article>
+        </div>
       </section>
       <section id="settings" class="view empty-view">
         <div class="empty-icon">⚙</div><h1>Configuración</h1><p>Ciclo escolar, grupo, catálogos, rúbricas y parámetros del sistema.</p><span class="badge">Base instalada</span>
@@ -192,6 +218,20 @@
       <div class="form-grid two"><label>Propósito del proyecto<textarea name="proposito" rows="3"></textarea></label><label>Producto final<textarea name="productoFinal" rows="3"></textarea></label></div>
       <label class="check"><input type="checkbox" name="sinProductoFinal"> Este proyecto no requiere producto final</label>
       <div class="modal-actions"><button type="button" class="btn" data-close="projectDialog">Cancelar</button><button type="submit" class="btn primary">Guardar proyecto</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="paymentDialog" class="modal">
+    <form id="studentPaymentForm" method="dialog">
+      <div class="modal-head"><div><p class="eyebrow">CONTROL DE PAGOS</p><h2 id="paymentDialogTitle">Registrar pago</h2></div><button type="button" class="icon-button" data-close="paymentDialog">×</button></div>
+      <input type="hidden" name="studentId">
+      <input type="hidden" name="type">
+      <h3 id="paymentDialogStudent"></h3>
+      <p id="paymentDialogBalance" class="muted"></p>
+      <label id="paymentAmountField">Cantidad del abono<input type="number" name="amount" min="0.01" step="0.01"></label>
+      <label>Fecha del pago<input type="date" name="date" required></label>
+      <label>Nota<input name="note" placeholder="Opcional"></label>
+      <div class="modal-actions"><button type="button" class="btn" data-close="paymentDialog">Cancelar</button><button type="submit" class="btn primary">Guardar pago</button></div>
     </form>
   </dialog>
 
