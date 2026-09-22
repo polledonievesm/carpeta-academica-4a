@@ -1,10 +1,14 @@
-const state={config:{},subjects:[],rubrics:[],students:[],projects:[],stats:{},attendance:null,attendanceDay:null,attendanceRecords:{},attendanceSummary:null,currentProject:null,projectWorkspace:null,classEvaluations:{},classStudents:[],classAttendanceDay:null,paymentsInitial:null,paymentDetail:null};
+const state={config:{},subjects:[],rubrics:[],students:[],projects:[],stats:{},attendance:null,attendanceDay:null,attendanceRecords:{},attendanceSummary:null,currentProject:null,projectWorkspace:null,classEvaluations:{},classStudents:[],classAttendanceDay:null,paymentsInitial:null,paymentDetail:null,directory:null};
 const $=(s,r=document)=>r.querySelector(s);const $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const API_SOURCE='pase-lista-4a-api';
 const API_URL=String(window.CARPETA_ACADEMICA_CONFIG?.apiUrl||'').trim();
 const SESSION_KEY='carpeta_academica_session_v1';
+const FAMILY_SESSION_KEY='carpeta_academica_family_session_v1';
 const pendingRequests=new Map();
 let sessionToken=localStorage.getItem(SESSION_KEY)||'';
+let familySessionToken=localStorage.getItem(FAMILY_SESSION_KEY)||'';
+let familyInvitationToken='';
+let familyResetToken='';
 document.addEventListener('DOMContentLoaded',()=>{bindUI();startApp()});
 window.addEventListener('message',receiveApiMessage);
 
@@ -29,14 +33,16 @@ function apiRequest(action,args=[],token=sessionToken){
   });
 }
 function server(name,...args){return apiRequest(name,args)}
-async function startApp(){if(sessionToken)await loadApp();else{setLoading(false);showLogin()}}
+function familyServer(name,...args){return apiRequest(name,args,familySessionToken)}
+function siteBaseUrl(){return location.origin+location.pathname}
+async function startApp(){const params=new URLSearchParams(location.search);familyInvitationToken=params.get('familia')||'';familyResetToken=params.get('recuperar')||'';if(familyInvitationToken||familyResetToken)return startFamilyPortal();if(sessionToken)await loadApp();else{setLoading(false);showLogin()}}
 function showLogin(message=''){$('#loginError').textContent=message;const dialog=$('#loginDialog');if(!dialog.open)dialog.showModal();setTimeout(()=>$('#loginForm').elements.username.focus(),50)}
 async function login(e){e.preventDefault();const form=e.currentTarget;$('#loginError').textContent='';setLoading(true);try{const r=await apiRequest('login',[form.elements.username.value,form.elements.password.value],'');sessionToken=r.token;localStorage.setItem(SESSION_KEY,sessionToken);form.elements.password.value='';$('#loginDialog').close();await loadApp()}catch(error){showLogin(error.message)}finally{setLoading(false)}}
 function logout(confirmFirst=true){if(confirmFirst&&!confirm('¿Cerrar la sesión de Carpeta Académica?'))return;sessionToken='';localStorage.removeItem(SESSION_KEY);location.reload()}
 function isSessionError(message){return /sesión|sesion|inicia sesión|inicia sesion|venció|vencio/i.test(String(message||''))}
 async function loadApp(){setLoading(true);try{Object.assign(state,await server('getBootstrapData'));renderAll()}catch(e){if(isSessionError(e.message)){sessionToken='';localStorage.removeItem(SESSION_KEY);showLogin(e.message)}else toast(e.message,true)}finally{setLoading(false)}}
 function bindUI(){
-  $$('.nav-item').forEach(b=>b.addEventListener('click',()=>b.dataset.view==='payments'?openPayments():showView(b.dataset.view)));
+  $$('.nav-item').forEach(b=>b.addEventListener('click',()=>b.dataset.view==='payments'?openPayments():b.dataset.view==='directory'?openDirectory():showView(b.dataset.view)));
   $$('[data-view-link]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.viewLink)));
   document.addEventListener('click',e=>{const a=e.target.closest('[data-action]');if(!a)return;actions[a.dataset.action]?.(a)});
   $$('[data-close]').forEach(b=>b.addEventListener('click',()=>$('#'+b.dataset.close).close()));
@@ -65,6 +71,14 @@ function bindUI(){
   $('#paymentMovementForm').addEventListener('submit',savePaymentMovement);
   $('#paymentStudentSearch').addEventListener('input',renderPaymentStudents);
   $('#paymentStudentFilter').addEventListener('change',renderPaymentStudents);
+  $('#directorySearch').addEventListener('input',renderDirectory);
+  $('#directoryStatus').addEventListener('change',renderDirectory);
+  $('#directoryForm').addEventListener('submit',saveDirectoryForm);
+  $('#familyRegisterForm').addEventListener('submit',registerFamilyAccount);
+  $('#familyLoginForm').addEventListener('submit',familyLogin);
+  $('#familyForgotForm').addEventListener('submit',requestFamilyReset);
+  $('#familyResetForm').addEventListener('submit',saveFamilyReset);
+  $('#familyProfileForm').addEventListener('submit',saveFamilyProfile);
 }
 const actions={
   'logout':()=>logout(),
@@ -102,7 +116,28 @@ const actions={
   'reactivate-payment-event':btn=>setPaymentEventActive(btn.dataset.id,true),
   'archive-current-payment-event':()=>state.paymentDetail&&setPaymentEventActive(state.paymentDetail.event.id,false),
   'payment-abono':btn=>openStudentPayment(btn.dataset.id,'ABONO'),
-  'payment-total':btn=>openStudentPayment(btn.dataset.id,'TOTAL')
+  'payment-total':btn=>openStudentPayment(btn.dataset.id,'TOTAL'),
+  'open-directory':openDirectory,
+  'refresh-directory':loadDirectory,
+  'toggle-directory-report':toggleDirectoryReport,
+  'edit-directory':btn=>openDirectoryForm(btn.dataset.id),
+  'generate-family-invite':btn=>generateFamilyInvitation(btn.dataset.id),
+  'revoke-family-invite':btn=>revokeFamilyInvitation(btn.dataset.id),
+  'generate-family-reset':btn=>generateFamilyReset(btn.dataset.id),
+  'toggle-family-account':btn=>setFamilyAccountActive(btn.dataset.id,btn.dataset.active==='true'),
+  'delete-family-access':btn=>deleteFamilyAccess(btn.dataset.id),
+  'directory-delete-student':btn=>deleteDirectoryStudent(btn.dataset.id),
+  'copy-directory-link':copyDirectoryLink,
+  'select-all-directory':()=>setDirectorySelection(true),
+  'clear-directory-selection':()=>setDirectorySelection(false),
+  'preview-directory-report':previewDirectoryReport,
+  'print-directory-report':printDirectoryReport,
+  'print-directory-profile':btn=>printDirectoryProfile(btn.dataset.id),
+  'open-family-login':()=>{location.href=siteBaseUrl()+'?familia=acceso'},
+  'show-family-forgot':()=>showFamilyPanel('familyForgotPanel'),
+  'show-family-login':()=>showFamilyPanel('familyLoginPanel'),
+  'back-teacher-login':()=>{location.href=siteBaseUrl()},
+  'family-logout':familyLogout
 };
 function showView(id){$$('.view').forEach(v=>v.classList.toggle('active',v.id===id));$$('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===id));$('#sidebar').classList.remove('open');window.scrollTo(0,0)}
 function renderAll(){
@@ -266,6 +301,75 @@ function renderDailyReport(r){
 }
 function renderDailyPeople(containerId,countId,items,type){$('#'+countId).textContent=items.length;$('#'+containerId).innerHTML=items.length?items.map(item=>`<div class="report-person"><div><strong>${escapeHtml(item.name)}</strong><small>${type==='complete'?'Entregó todas las actividades':type==='partial'?`Entregó ${item.delivered} de ${item.total}`:'No entregó actividades'} · Conducta: ${escapeHtml(item.conduct)}</small></div><span class="badge">${escapeHtml(item.attendance)}</span></div>`).join(''):'<p class="muted">No hay alumnos en este apartado.</p>'}
 async function syncLearningStyles(){await runAction(async()=>{const r=await server('syncLearningStyles');state.students=r.students;state.config.estilosSpreadsheetId=state.config.estilosSpreadsheetId||'vinculado';renderStudents();renderStyles();renderAcademicOptions();toast(`${r.matched} resultado(s) VAK actualizados${r.unmatched.length?` · ${r.unmatched.length} sin coincidencia`:''}.`)})}
+function openDirectory(){showView('directory');loadDirectory()}
+async function loadDirectory(){await runAction(async()=>{await server('saveDirectorySiteUrl',siteBaseUrl());state.directory=await server('getDirectoryAdminData');renderDirectory();renderDirectoryBuilder();$('#directoryNotice').innerHTML='<strong>Directorio protegido.</strong> Las familias solo pueden consultar la ficha de su propio alumno mediante su cuenta.'})}
+function directoryRowMatches(row,query,status){
+  const p=row.profile||{},account=row.account,invitation=row.invitation;
+  const text=[row.student.name,p.tutorApellidoPaterno,p.tutorApellidoMaterno,p.tutorNombres,p.tutorTelefono,account?.email].join(' ').toLowerCase();
+  if(query&&!text.includes(query))return false;
+  if(status==='COMPLETO'&&!row.complete)return false;if(status==='PENDIENTE'&&row.complete)return false;
+  if(status==='SIN_CUENTA'&&account)return false;if(status==='ACTIVA'&&(!account||!account.active))return false;if(status==='BLOQUEADA'&&(!account||account.active))return false;
+  if(status==='INVITACION'&&invitation?.status!=='PENDIENTE')return false;if(status==='VENCIDA'&&invitation?.status!=='VENCIDA')return false;
+  return true;
+}
+function renderDirectory(){
+  if(!state.directory)return;const rows=state.directory.rows||[],query=$('#directorySearch').value.trim().toLowerCase(),status=$('#directoryStatus').value;
+  const filtered=rows.filter(row=>directoryRowMatches(row,query,status));
+  const complete=rows.filter(row=>row.complete).length,accounts=rows.filter(row=>row.account).length,pendingInvites=rows.filter(row=>row.invitation?.status==='PENDIENTE').length;
+  $('#directoryStats').innerHTML=[['Alumnos',rows.length],['Fichas completas',complete],['Cuentas familiares',accounts],['Invitaciones vigentes',pendingInvites]].map(([label,value])=>`<div class="stat"><b>${value}</b><span>${escapeHtml(label)}</span></div>`).join('');
+  $('#directoryList').innerHTML=filtered.length?filtered.map(directoryAdminCard).join(''):'<div class="panel empty-history"><strong>No hay resultados</strong><p>Cambia la búsqueda o el filtro.</p></div>';
+}
+function directoryAdminCard(row){
+  const p=row.profile||{},account=row.account,invite=row.invitation;const tutor=[p.tutorApellidoPaterno,p.tutorApellidoMaterno,p.tutorNombres].filter(Boolean).join(' ')||'Tutor sin registrar';
+  const accountBadge=account?`<span class="directory-state ${account.active?'success':'danger'}">${account.active?'Cuenta activa':'Cuenta bloqueada'}</span>`:`<span class="directory-state muted-state">Sin cuenta</span>`;
+  const formBadge=`<span class="directory-state ${row.complete?'success':'warning'}">${row.complete?'Ficha completa':'Ficha pendiente'}</span>`;
+  const inviteText=invite?invite.status==='PENDIENTE'?`Invitación vigente hasta ${escapeHtml(new Date(invite.expiresAt).toLocaleString('es-MX'))}`:`Invitación ${escapeHtml(invite.status.toLowerCase())}`:'Sin invitación';
+  const accessActions=account?`<button class="btn small" data-action="generate-family-reset" data-id="${row.student.id}">Restablecer acceso</button><button class="btn small" data-action="toggle-family-account" data-id="${row.student.id}" data-active="${!account.active}">${account.active?'Bloquear cuenta':'Desbloquear cuenta'}</button>`:`<button class="btn primary small" data-action="generate-family-invite" data-id="${row.student.id}">Generar invitación</button>${invite?.status==='PENDIENTE'?`<button class="btn small" data-action="revoke-family-invite" data-id="${row.student.id}">Cancelar invitación</button>`:''}`;
+  return `<article class="directory-card"><div class="directory-card-main"><div class="directory-card-number">${escapeHtml(row.student.apellidoPaterno?.slice(0,1)||'A')}</div><div><h3>${escapeHtml(row.student.name)}</h3><p>${escapeHtml(tutor)}${p.tutorTelefono?' · '+escapeHtml(p.tutorTelefono):''}</p><small>${escapeHtml(inviteText)}</small></div></div><div class="directory-badges">${formBadge}${accountBadge}</div><div class="directory-actions"><button class="btn small" data-action="edit-directory" data-id="${row.student.id}">Ver o editar</button><button class="btn small" data-action="print-directory-profile" data-id="${row.student.id}">Imprimir ficha</button>${accessActions}<button class="btn danger small" data-action="delete-family-access" data-id="${row.student.id}">Borrar datos familiares</button><button class="btn danger small" data-action="directory-delete-student" data-id="${row.student.id}">Eliminar alumno</button></div></article>`;
+}
+function directoryOption(value,current){return `<option ${String(value)===String(current)?'selected':''}>${escapeHtml(value)}</option>`}
+function directoryFieldsHtml(data,family=false){
+  const p=data.profile||{},contacts=data.contacts||[];const contact=(index)=>{const c=contacts[index]||{};return `<fieldset class="directory-contact"><legend>Persona de confianza ${index+1}${index?' (opcional)':''}</legend><input type="hidden" name="contact${index}Id" value="${escapeHtml(c.id||'')}"><div class="form-grid three"><label>Apellido paterno<input name="contact${index}ApellidoPaterno" value="${escapeHtml(c.apellidoPaterno||'')}"></label><label>Apellido materno<input name="contact${index}ApellidoMaterno" value="${escapeHtml(c.apellidoMaterno||'')}"></label><label>Nombre(s)<input name="contact${index}Nombres" value="${escapeHtml(c.nombres||'')}"></label></div><div class="form-grid two"><label>Parentesco<input name="contact${index}Parentesco" value="${escapeHtml(c.parentesco||'')}"></label><label>Teléfono<input name="contact${index}Telefono" inputmode="tel" value="${escapeHtml(c.telefono||'')}"></label></div></fieldset>`};
+  return `<div class="directory-student-banner"><span>Datos del alumno</span><div class="form-grid three"><label>Apellido paterno<input name="alumnoApellidoPaterno" value="${escapeHtml(p.alumnoApellidoPaterno||'')}" required></label><label>Apellido materno<input name="alumnoApellidoMaterno" value="${escapeHtml(p.alumnoApellidoMaterno||'')}"></label><label>Nombre(s)<input name="alumnoNombres" value="${escapeHtml(p.alumnoNombres||'')}" required></label></div><small>Las correcciones se aplican al directorio; la lista académica conserva el nombre oficial.</small></div><h3>Tutor principal</h3><div class="form-grid three"><label>Apellido paterno<input name="tutorApellidoPaterno" value="${escapeHtml(p.tutorApellidoPaterno||'')}" required></label><label>Apellido materno<input name="tutorApellidoMaterno" value="${escapeHtml(p.tutorApellidoMaterno||'')}"></label><label>Nombre(s)<input name="tutorNombres" value="${escapeHtml(p.tutorNombres||'')}" required></label></div><div class="form-grid three"><label>Parentesco<select name="tutorParentesco" required><option value="">Selecciona</option>${['Madre','Padre','Abuela','Abuelo','Hermana','Hermano','Tutora','Tutor','Otro'].map(value=>directoryOption(value,p.tutorParentesco)).join('')}</select></label><label>Teléfono principal<input name="tutorTelefono" inputmode="tel" value="${escapeHtml(p.tutorTelefono||'')}" required></label><label>Teléfono alterno<input name="tutorTelefonoAlterno" inputmode="tel" value="${escapeHtml(p.tutorTelefonoAlterno||'')}"></label></div><h3>Domicilio</h3><div class="form-grid three"><label>Calle<input name="calle" value="${escapeHtml(p.calle||'')}"></label><label>Número exterior<input name="numeroExterior" value="${escapeHtml(p.numeroExterior||'')}"></label><label>Número interior<input name="numeroInterior" value="${escapeHtml(p.numeroInterior||'')}"></label></div><div class="form-grid three"><label>Entre calles<input name="entreCalles" value="${escapeHtml(p.entreCalles||'')}"></label><label>Fraccionamiento o colonia<input name="colonia" value="${escapeHtml(p.colonia||'')}"></label><label>Región o Supermanzana<input name="region" value="${escapeHtml(p.region||'')}"></label></div><div class="form-grid two"><label>Código postal<input name="codigoPostal" inputmode="numeric" value="${escapeHtml(p.codigoPostal||'')}"></label><label>Referencias del domicilio<input name="referencias" value="${escapeHtml(p.referencias||'')}"></label></div><h3>Personas autorizadas o de confianza</h3>${contact(0)+contact(1)+contact(2)}${family?'<div class="family-save"><button class="btn primary" type="submit">Guardar información</button></div>':''}`;
+}
+function directoryPayloadFromForm(form){const data=formData(form);data.contacts=[0,1,2].map(index=>({id:data[`contact${index}Id`]||'',apellidoPaterno:data[`contact${index}ApellidoPaterno`]||'',apellidoMaterno:data[`contact${index}ApellidoMaterno`]||'',nombres:data[`contact${index}Nombres`]||'',parentesco:data[`contact${index}Parentesco`]||'',telefono:data[`contact${index}Telefono`]||''}));return data}
+function openDirectoryForm(studentId){const row=state.directory?.rows.find(item=>String(item.student.id)===String(studentId));if(!row)return;const form=$('#directoryForm');form.elements.studentId.value=row.student.id;$('#directoryDialogTitle').textContent=row.student.name;$('#directoryFormFields').innerHTML=directoryFieldsHtml(row);$('#directoryDialog').showModal()}
+async function saveDirectoryForm(e){e.preventDefault();const payload=directoryPayloadFromForm(e.currentTarget);await runAction(async()=>{const result=await server('saveDirectoryProfile',payload);$('#directoryDialog').close();state.directory=await server('getDirectoryAdminData');renderDirectory();renderDirectoryBuilder();toast(result.message)})}
+async function generateFamilyInvitation(studentId){await runAction(async()=>{const result=await server('generateFamilyInvitation',studentId);const link=siteBaseUrl()+'?familia='+encodeURIComponent(result.token);showDirectoryLink('Invitación familiar',result.studentName+' · El enlace vence en 36 horas y solo puede utilizarse una vez.',link);state.directory=await server('getDirectoryAdminData');renderDirectory()})}
+async function revokeFamilyInvitation(studentId){if(!confirm('¿Cancelar la invitación vigente?'))return;await runAction(async()=>{const result=await server('revokeFamilyInvitation',studentId);state.directory=await server('getDirectoryAdminData');renderDirectory();toast(result.message)})}
+async function generateFamilyReset(studentId){await runAction(async()=>{const result=await server('generateFamilyReset',studentId);showDirectoryLink('Restablecer contraseña','El enlace vence en 30 minutos y solo puede utilizarse una vez.',siteBaseUrl()+'?recuperar='+encodeURIComponent(result.token))})}
+function showDirectoryLink(title,description,link){$('#directoryLinkTitle').textContent=title;$('#directoryLinkDescription').textContent=description;$('#directoryLinkValue').value=link;$('#directoryLinkDialog').showModal()}
+async function copyDirectoryLink(){const input=$('#directoryLinkValue');try{await navigator.clipboard.writeText(input.value);toast('Enlace copiado.')}catch(e){input.select();document.execCommand('copy');toast('Enlace copiado.')}}
+async function setFamilyAccountActive(studentId,active){if(!confirm(active?'¿Desbloquear esta cuenta familiar?':'¿Bloquear esta cuenta familiar?'))return;await runAction(async()=>{const result=await server('setFamilyAccountActive',studentId,active);state.directory=await server('getDirectoryAdminData');renderDirectory();toast(result.message)})}
+async function deleteFamilyAccess(studentId){if(!confirm('¿Borrar la cuenta y toda la ficha familiar? El alumno permanecerá en el grupo.'))return;await runAction(async()=>{const result=await server('deleteFamilyAccess',studentId);state.directory=await server('getDirectoryAdminData');renderDirectory();renderDirectoryBuilder();toast(result.message)})}
+async function deleteDirectoryStudent(studentId){if(!confirm('¿Eliminar definitivamente al alumno, su directorio, asistencia y evaluaciones? Esta acción no se puede deshacer.'))return;await runAction(async()=>{const result=await server('deleteStudent',studentId);Object.assign(state,await server('getBootstrapData'));state.directory=await server('getDirectoryAdminData');renderAll();renderDirectory();renderDirectoryBuilder();showView('directory');toast(result.message)})}
+function toggleDirectoryReport(){$('#directoryReportBuilder').classList.toggle('hidden-control')}
+function renderDirectoryBuilder(){if(!state.directory)return;$('#directoryStudentChecks').innerHTML=state.directory.rows.map(row=>`<label><input type="checkbox" data-directory-student value="${row.student.id}" checked> ${escapeHtml(row.student.name)}</label>`).join('')}
+function setDirectorySelection(checked){$$('[data-directory-student]').forEach(input=>input.checked=checked)}
+function directoryAddress(profile){return [profile.calle,profile.numeroExterior&&'Núm. '+profile.numeroExterior,profile.numeroInterior&&'Int. '+profile.numeroInterior,profile.entreCalles&&'entre '+profile.entreCalles,profile.colonia,profile.region&&'Región/SM '+profile.region,profile.codigoPostal&&'C.P. '+profile.codigoPostal,profile.referencias].filter(Boolean).join(', ')}
+function directoryContactValue(contact){return contact?[[contact.apellidoPaterno,contact.apellidoMaterno,contact.nombres].filter(Boolean).join(' '),contact.parentesco,contact.telefono].filter(Boolean).join(' · '):'—'}
+function selectedDirectoryRows(){const selected=new Set($$('[data-directory-student]:checked').map(input=>input.value));return (state.directory?.rows||[]).filter(row=>selected.has(String(row.student.id)))}
+function selectedDirectoryFields(){return new Set($$('#directoryFieldChecks input:checked').map(input=>input.value))}
+function directoryReportHtml(rows,fields){
+  const columns=[];if(fields.has('student'))columns.push(['Alumno',row=>row.student.name]);if(fields.has('tutor'))columns.push(['Tutor',row=>[row.profile.tutorApellidoPaterno,row.profile.tutorApellidoMaterno,row.profile.tutorNombres].filter(Boolean).join(' ')||'—']);if(fields.has('relation'))columns.push(['Parentesco',row=>row.profile.tutorParentesco||'—']);if(fields.has('phone'))columns.push(['Teléfono',row=>row.profile.tutorTelefono||'—']);if(fields.has('alternatePhone'))columns.push(['Teléfono alterno',row=>row.profile.tutorTelefonoAlterno||'—']);if(fields.has('address'))columns.push(['Domicilio',row=>directoryAddress(row.profile)||'—']);[1,2,3].forEach(number=>{if(fields.has('contact'+number))columns.push(['Persona de confianza '+number,row=>directoryContactValue(row.contacts[number-1])])});
+  if(!columns.length)return '<p>Selecciona por lo menos un dato.</p>';return `<div class="directory-print-head"><h1>Directorio familiar 4°A</h1><p>Escuela Primaria Francisco Hoil Torres T.V. · Ciclo 2026-2027</p></div><table class="directory-print-table"><thead><tr><th>Núm.</th>${columns.map(column=>`<th>${escapeHtml(column[0])}</th>`).join('')}</tr></thead><tbody>${rows.map((row,index)=>`<tr><td>${index+1}</td>${columns.map(column=>`<td>${escapeHtml(column[1](row))}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+}
+function previewDirectoryReport(){const rows=selectedDirectoryRows();if(!rows.length)return toast('Selecciona por lo menos un alumno.',true);const preview=$('#directoryReportPreview');preview.innerHTML=directoryReportHtml(rows,selectedDirectoryFields());preview.classList.remove('hidden-control');preview.scrollIntoView({behavior:'smooth'})}
+function printHtmlDocument(content,orientation='portrait'){const popup=window.open('','_blank');if(!popup)return toast('Permite las ventanas emergentes para imprimir.',true);popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Directorio familiar</title><style>@page{size:letter ${orientation};margin:12mm}body{font-family:Arial,sans-serif;color:#102a43;font-size:10px}h1{font-size:20px;margin:0 0 4px}p{margin:0 0 14px;color:#65798b}table{border-collapse:collapse;width:100%}th,td{border:1px solid #9fb1bd;padding:6px;vertical-align:top}th{background:#0b315d;color:#fff}.profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.profile-box{border:1px solid #c6d4dd;border-radius:8px;padding:10px}.profile-box h2{font-size:13px;margin:0 0 6px}.profile-box p{margin:3px 0;color:#102a43}</style></head><body>${content}</body></html>`);popup.document.close();popup.focus();setTimeout(()=>popup.print(),300)}
+function printDirectoryReport(){const rows=selectedDirectoryRows();if(!rows.length)return toast('Selecciona por lo menos un alumno.',true);printHtmlDocument(directoryReportHtml(rows,selectedDirectoryFields()),$('#directoryOrientation').value)}
+function directoryProfilePrintHtml(row){const p=row.profile;const tutor=[p.tutorApellidoPaterno,p.tutorApellidoMaterno,p.tutorNombres].filter(Boolean).join(' ')||'Sin registrar';return `<h1>Ficha familiar</h1><p>${escapeHtml(row.student.name)} · 4°A · Ciclo 2026-2027</p><div class="profile-grid"><div class="profile-box"><h2>Tutor principal</h2><p><b>Nombre:</b> ${escapeHtml(tutor)}</p><p><b>Parentesco:</b> ${escapeHtml(p.tutorParentesco||'—')}</p><p><b>Teléfono:</b> ${escapeHtml(p.tutorTelefono||'—')}</p><p><b>Teléfono alterno:</b> ${escapeHtml(p.tutorTelefonoAlterno||'—')}</p></div><div class="profile-box"><h2>Domicilio</h2><p>${escapeHtml(directoryAddress(p)||'Sin registrar')}</p></div>${[0,1,2].map(index=>`<div class="profile-box"><h2>Persona de confianza ${index+1}</h2><p>${escapeHtml(directoryContactValue(row.contacts[index]))}</p></div>`).join('')}</div>`}
+function printDirectoryProfile(studentId){const row=state.directory?.rows.find(item=>String(item.student.id)===String(studentId));if(row)printHtmlDocument(directoryProfilePrintHtml(row),'portrait')}
+
+function showFamilyPanel(id){['familyInvitationPanel','familyLoginPanel','familyForgotPanel','familyResetPanel','familyProfilePanel'].forEach(panel=>$('#'+panel).classList.toggle('hidden-control',panel!==id));$('#familyMessage').classList.add('hidden-control')}
+function familyMessage(message,error=false){const box=$('#familyMessage');box.textContent=message;box.classList.remove('hidden-control');box.classList.toggle('family-error',error)}
+async function startFamilyPortal(){document.body.classList.add('family-mode');$('#app').classList.add('hidden-control');$('#familyPortal').classList.remove('hidden-control');setLoading(false);try{if(familyResetToken){const result=await apiRequest('validateFamilyReset',[familyResetToken],'');$('#familyResetStudent').textContent='Cuenta de '+result.studentName;showFamilyPanel('familyResetPanel');return}if(familyInvitationToken&&familyInvitationToken!=='acceso'){const result=await apiRequest('validateFamilyInvitation',[familyInvitationToken],'');$('#familyInvitationStudent').textContent='Crearás el acceso para '+result.student.name+'. La invitación vence el '+new Date(result.expiresAt).toLocaleString('es-MX')+'.';showFamilyPanel('familyInvitationPanel');return}if(familySessionToken){await loadFamilyProfile();return}showFamilyPanel('familyLoginPanel')}catch(error){familyMessage(error.message,true);showFamilyPanel('familyLoginPanel');familyMessage(error.message,true)}}
+async function registerFamilyAccount(e){e.preventDefault();const payload=formData(e.currentTarget);payload.invitationToken=familyInvitationToken;familyMessage('Creando la cuenta…');try{const result=await apiRequest('registerFamilyAccount',[payload],'');familySessionToken=result.token;localStorage.setItem(FAMILY_SESSION_KEY,familySessionToken);familyInvitationToken='';history.replaceState({},'',siteBaseUrl()+'?familia=acceso');await loadFamilyProfile()}catch(error){familyMessage(error.message,true)}}
+async function familyLogin(e){e.preventDefault();const data=formData(e.currentTarget);familyMessage('Comprobando el acceso…');try{const result=await apiRequest('familyLogin',[data.email,data.password],'');familySessionToken=result.token;localStorage.setItem(FAMILY_SESSION_KEY,familySessionToken);await loadFamilyProfile()}catch(error){familyMessage(error.message,true)}}
+async function requestFamilyReset(e){e.preventDefault();const data=formData(e.currentTarget);familyMessage('Enviando el enlace…');try{const result=await apiRequest('requestFamilyPasswordReset',[data.email],'');familyMessage(result.message);showFamilyPanel('familyLoginPanel');familyMessage(result.message)}catch(error){familyMessage(error.message,true)}}
+async function saveFamilyReset(e){e.preventDefault();const payload=formData(e.currentTarget);payload.resetToken=familyResetToken;familyMessage('Guardando la contraseña…');try{const result=await apiRequest('resetFamilyPassword',[payload],'');familyResetToken='';history.replaceState({},'',siteBaseUrl()+'?familia=acceso');showFamilyPanel('familyLoginPanel');familyMessage(result.message)}catch(error){familyMessage(error.message,true)}}
+async function loadFamilyProfile(){try{const data=await familyServer('getFamilyProfile');$('#familyProfileStudent').textContent=data.student.name;$('#familyProfileForm').innerHTML=directoryFieldsHtml(data,true);showFamilyPanel('familyProfilePanel')}catch(error){familySessionToken='';localStorage.removeItem(FAMILY_SESSION_KEY);showFamilyPanel('familyLoginPanel');familyMessage(error.message,true)}}
+async function saveFamilyProfile(e){e.preventDefault();familyMessage('Guardando la información…');try{const result=await familyServer('saveFamilyProfile',directoryPayloadFromForm(e.currentTarget));familyMessage(result.message);await loadFamilyProfile();familyMessage(result.message)}catch(error){familyMessage(error.message,true)}}
+function familyLogout(){familySessionToken='';localStorage.removeItem(FAMILY_SESSION_KEY);location.href=siteBaseUrl()+'?familia=acceso'}
 function paymentMoney(value){return new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(value)||0)}
 function openPayments(){showView('payments');loadPayments()}
 async function loadPayments(){

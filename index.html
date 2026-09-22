@@ -19,6 +19,7 @@
         <button class="nav-item" data-view="daily">▣ <span>Registro diario</span></button>
         <button class="nav-item" data-view="attendance">✓ <span>Asistencia</span></button>
         <button class="nav-item" data-view="reports">▥ <span>Reportes</span></button>
+        <button class="nav-item" data-view="directory">☷ <span>Directorio familiar</span></button>
         <button class="nav-item" data-view="payments">$ <span>Control de pagos</span></button>
         <button class="nav-item" data-view="settings">⚙ <span>Configuración</span></button>
       </nav>
@@ -54,6 +55,7 @@
             <button data-action="new-student">Añadir alumno <span>›</span></button>
             <button data-action="new-project">Añadir proyecto <span>›</span></button>
             <button data-action="open-payments">Control de pagos <span>›</span></button>
+            <button data-action="open-directory">Directorio familiar <span>›</span></button>
           </article>
           <article class="panel wide">
             <div class="section-head"><h2>Proyectos activos</h2><button class="link-button" data-view-link="projects">Ver todos</button></div>
@@ -188,9 +190,38 @@
           <article class="panel payment-financial-panel"><h2>Resumen financiero</h2><div id="paymentFinancialSummary" class="payment-financial-grid"></div><h3>Historial de pagos</h3><div id="paymentHistoryList" class="payment-ledger"></div></article>
         </div>
       </section>
+      <section id="directory" class="view">
+        <div class="page-head"><div><p class="eyebrow">DATOS DE LAS FAMILIAS</p><h1>Directorio familiar</h1><p class="muted">Administra fichas, cuentas, invitaciones y formatos imprimibles.</p></div><div class="button-row"><button class="btn" data-action="refresh-directory">Actualizar</button><button class="btn primary" data-action="toggle-directory-report">Crear directorio</button></div></div>
+        <div id="directoryNotice" class="integration-note">Abre este módulo para consultar la información familiar.</div>
+        <div id="directoryStats" class="stats"></div>
+        <article class="panel directory-controls"><input id="directorySearch" class="input" placeholder="Buscar alumno, tutor o teléfono"><select id="directoryStatus"><option value="TODOS">Todos</option><option value="COMPLETO">Formulario completo</option><option value="PENDIENTE">Formulario pendiente</option><option value="SIN_CUENTA">Sin cuenta</option><option value="ACTIVA">Cuenta activa</option><option value="BLOQUEADA">Cuenta bloqueada</option><option value="INVITACION">Invitación vigente</option><option value="VENCIDA">Invitación vencida</option></select></article>
+        <article id="directoryReportBuilder" class="panel directory-report-builder hidden-control">
+          <div class="section-head"><div><h2>Crear directorio personalizado</h2><p class="muted">Selecciona alumnos, datos y orientación antes de imprimir.</p></div><button class="icon-button" data-action="toggle-directory-report">×</button></div>
+          <div class="directory-builder-grid">
+            <div><h3>Alumnos</h3><div class="button-row"><button class="btn small" data-action="select-all-directory">Seleccionar todos</button><button class="btn small" data-action="clear-directory-selection">Quitar selección</button></div><div id="directoryStudentChecks" class="directory-check-list"></div></div>
+            <div><h3>Información</h3><div id="directoryFieldChecks" class="directory-field-checks">
+              <label><input type="checkbox" value="student" checked> Alumno</label><label><input type="checkbox" value="tutor" checked> Tutor</label><label><input type="checkbox" value="relation"> Parentesco</label><label><input type="checkbox" value="phone" checked> Teléfono</label><label><input type="checkbox" value="alternatePhone"> Teléfono alterno</label><label><input type="checkbox" value="address"> Domicilio</label><label><input type="checkbox" value="contact1"> Persona de confianza 1</label><label><input type="checkbox" value="contact2"> Persona de confianza 2</label><label><input type="checkbox" value="contact3"> Persona de confianza 3</label>
+            </div><label>Orientación<select id="directoryOrientation"><option value="portrait">Vertical</option><option value="landscape">Horizontal</option></select></label><div class="button-row"><button class="btn primary" data-action="preview-directory-report">Vista previa</button><button class="btn" data-action="print-directory-report">Imprimir / PDF</button></div></div>
+          </div>
+        </article>
+        <div id="directoryList" class="directory-list"></div>
+        <article id="directoryReportPreview" class="panel directory-report-preview hidden-control"></article>
+      </section>
       <section id="settings" class="view empty-view">
         <div class="empty-icon">⚙</div><h1>Configuración</h1><p>Ciclo escolar, grupo, catálogos, rúbricas y parámetros del sistema.</p><span class="badge">Base instalada</span>
       </section>
+    </main>
+  </div>
+
+  <div id="familyPortal" class="family-portal hidden-control">
+    <header class="family-header"><div class="brand"><span class="brand-mark">▣</span><span>Carpeta Académica</span></div><span>Portal familiar</span></header>
+    <main class="family-main">
+      <div id="familyMessage" class="integration-note">Preparando el acceso familiar…</div>
+      <section id="familyInvitationPanel" class="family-card hidden-control"><p class="eyebrow">PRIMER ACCESO</p><h1>Crear cuenta familiar</h1><p id="familyInvitationStudent" class="muted"></p><form id="familyRegisterForm"><label>Correo electrónico<input type="email" name="email" autocomplete="email" required></label><label>Contraseña<input type="password" name="password" minlength="10" autocomplete="new-password" required></label><label>Confirmar contraseña<input type="password" name="passwordConfirmation" minlength="10" autocomplete="new-password" required></label><p class="muted">Utiliza al menos 10 caracteres con letras y números.</p><button class="btn primary full-button" type="submit">Crear cuenta y continuar</button></form></section>
+      <section id="familyLoginPanel" class="family-card hidden-control"><p class="eyebrow">ACCESO PARA FAMILIAS</p><h1>Consultar o actualizar información</h1><form id="familyLoginForm"><label>Correo electrónico<input type="email" name="email" autocomplete="email" required></label><label>Contraseña<input type="password" name="password" autocomplete="current-password" required></label><button class="btn primary full-button" type="submit">Entrar</button></form><button class="link-button family-link" data-action="show-family-forgot">Olvidé mi contraseña</button><button class="link-button family-link" data-action="back-teacher-login">Acceso del maestro</button></section>
+      <section id="familyForgotPanel" class="family-card hidden-control"><p class="eyebrow">RECUPERAR ACCESO</p><h1>Recuperar contraseña</h1><p class="muted">Recibirás un enlace válido durante 30 minutos.</p><form id="familyForgotForm"><label>Correo registrado<input type="email" name="email" required></label><button class="btn primary full-button" type="submit">Enviar enlace</button></form><button class="link-button family-link" data-action="show-family-login">Volver al acceso</button></section>
+      <section id="familyResetPanel" class="family-card hidden-control"><p class="eyebrow">NUEVA CONTRASEÑA</p><h1>Restablecer acceso</h1><p id="familyResetStudent" class="muted"></p><form id="familyResetForm"><label>Nueva contraseña<input type="password" name="password" minlength="10" required></label><label>Confirmar contraseña<input type="password" name="passwordConfirmation" minlength="10" required></label><button class="btn primary full-button" type="submit">Guardar contraseña</button></form></section>
+      <section id="familyProfilePanel" class="family-card family-profile-card hidden-control"><div class="section-head"><div><p class="eyebrow">INFORMACIÓN FAMILIAR</p><h1 id="familyProfileStudent">Alumno</h1></div><button class="btn" data-action="family-logout">Cerrar sesión</button></div><form id="familyProfileForm"></form></section>
     </main>
   </div>
 
@@ -235,6 +266,14 @@
     </form>
   </dialog>
 
+  <dialog id="directoryDialog" class="modal large">
+    <form id="directoryForm" method="dialog"><div class="modal-head"><div><p class="eyebrow">FICHA FAMILIAR</p><h2 id="directoryDialogTitle">Alumno</h2></div><button type="button" class="icon-button" data-close="directoryDialog">×</button></div><input type="hidden" name="studentId"><div id="directoryFormFields"></div><div class="modal-actions"><button type="button" class="btn" data-close="directoryDialog">Cancelar</button><button type="submit" class="btn primary">Guardar ficha</button></div></form>
+  </dialog>
+
+  <dialog id="directoryLinkDialog" class="modal">
+    <form method="dialog"><div class="modal-head"><div><p class="eyebrow">ENLACE PRIVADO</p><h2 id="directoryLinkTitle">Invitación familiar</h2></div><button type="button" class="icon-button" data-close="directoryLinkDialog">×</button></div><p id="directoryLinkDescription" class="muted"></p><label>Enlace<input id="directoryLinkValue" readonly></label><div class="modal-actions"><button type="button" class="btn" data-close="directoryLinkDialog">Cerrar</button><button type="button" class="btn primary" data-action="copy-directory-link">Copiar enlace</button></div></form>
+  </dialog>
+
   <dialog id="loginDialog" class="modal login-modal">
     <form id="loginForm">
       <div class="login-brand"><span class="brand-mark">▣</span><div><strong>Carpeta Académica</strong><small>Acceso privado del docente</small></div></div>
@@ -242,6 +281,7 @@
       <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
       <p id="loginError" class="login-error" role="alert"></p>
       <button type="submit" class="btn primary login-button">Entrar</button>
+      <button type="button" class="link-button family-link" data-action="open-family-login">Acceso para madres, padres o tutores</button>
       <p class="login-note">Los datos académicos se consultan de forma segura desde Google Sheets.</p>
     </form>
   </dialog>
