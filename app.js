@@ -1,4 +1,4 @@
-const state={config:{},subjects:[],rubrics:[],students:[],projects:[],stats:{},attendance:null,attendanceDay:null,attendanceRecords:{},attendanceSummary:null,currentProject:null,projectWorkspace:null,classEvaluations:{},classStudents:[],classAttendanceDay:null};
+const state={config:{},subjects:[],rubrics:[],students:[],projects:[],stats:{},attendance:null,attendanceDay:null,attendanceRecords:{},attendanceSummary:null,currentProject:null,projectWorkspace:null,classEvaluations:{},classStudents:[],classAttendanceDay:null,paymentsInitial:null,paymentDetail:null};
 const $=(s,r=document)=>r.querySelector(s);const $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const API_SOURCE='pase-lista-4a-api';
 const API_URL=String(window.CARPETA_ACADEMICA_CONFIG?.apiUrl||'').trim();
@@ -36,7 +36,7 @@ function logout(confirmFirst=true){if(confirmFirst&&!confirm('¿Cerrar la sesió
 function isSessionError(message){return /sesión|sesion|inicia sesión|inicia sesion|venció|vencio/i.test(String(message||''))}
 async function loadApp(){setLoading(true);try{Object.assign(state,await server('getBootstrapData'));renderAll()}catch(e){if(isSessionError(e.message)){sessionToken='';localStorage.removeItem(SESSION_KEY);showLogin(e.message)}else toast(e.message,true)}finally{setLoading(false)}}
 function bindUI(){
-  $$('.nav-item').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));
+  $$('.nav-item').forEach(b=>b.addEventListener('click',()=>b.dataset.view==='payments'?openPayments():showView(b.dataset.view)));
   $$('[data-view-link]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.viewLink)));
   document.addEventListener('click',e=>{const a=e.target.closest('[data-action]');if(!a)return;actions[a.dataset.action]?.(a)});
   $$('[data-close]').forEach(b=>b.addEventListener('click',()=>$('#'+b.dataset.close).close()));
@@ -59,6 +59,12 @@ function bindUI(){
   $('#evaluationList').addEventListener('change',updateClassEvaluation);
   $('#evaluationList').addEventListener('input',updateClassEvaluation);
   $('#loginForm').addEventListener('submit',login);
+  $('#paymentEventForm').addEventListener('submit',createPaymentEvent);
+  $('#studentPaymentForm').addEventListener('submit',saveStudentPayment);
+  $('#paymentCutForm').addEventListener('submit',savePaymentCut);
+  $('#paymentMovementForm').addEventListener('submit',savePaymentMovement);
+  $('#paymentStudentSearch').addEventListener('input',renderPaymentStudents);
+  $('#paymentStudentFilter').addEventListener('change',renderPaymentStudents);
 }
 const actions={
   'logout':()=>logout(),
@@ -87,7 +93,16 @@ const actions={
   'delete-project':async btn=>{if(!confirm('¿Eliminar definitivamente este proyecto, sus actividades y evaluaciones? Esta acción no se puede deshacer.'))return;await runAction(async()=>{const r=await server('deleteProject',btn.dataset.id);Object.assign(state,await server('getBootstrapData'));renderAll();showView('projects');toast(r.message)})},
   'sync-styles':syncLearningStyles,
   'open-payments':openPayments,
-  'save-payments-url':savePaymentsUrl
+  'refresh-payments':loadPayments,
+  'sync-payment-students':syncPaymentStudents,
+  'toggle-payment-event-form':togglePaymentEventForm,
+  'open-payment-event':btn=>openPaymentEvent(btn.dataset.id),
+  'back-payment-events':backPaymentEvents,
+  'archive-payment-event':btn=>setPaymentEventActive(btn.dataset.id,false),
+  'reactivate-payment-event':btn=>setPaymentEventActive(btn.dataset.id,true),
+  'archive-current-payment-event':()=>state.paymentDetail&&setPaymentEventActive(state.paymentDetail.event.id,false),
+  'payment-abono':btn=>openStudentPayment(btn.dataset.id,'ABONO'),
+  'payment-total':btn=>openStudentPayment(btn.dataset.id,'TOTAL')
 };
 function showView(id){$$('.view').forEach(v=>v.classList.toggle('active',v.id===id));$$('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===id));$('#sidebar').classList.remove('open');window.scrollTo(0,0)}
 function renderAll(){
@@ -96,7 +111,7 @@ function renderAll(){
   $('#teacherName').textContent=state.config.docente||'Docente';
   renderGreeting();
   if(!$('#dailyReportDate').value)$('#dailyReportDate').value=state.attendance?.today||new Date().toISOString().slice(0,10);
-  renderStats();renderSubjects();renderStudents();renderStyles();renderProjects();renderActiveProjects();renderClassOptions();renderAttendance();renderAcademicOptions();renderPayments();
+  renderStats();renderSubjects();renderStudents();renderStyles();renderProjects();renderActiveProjects();renderClassOptions();renderAttendance();renderAcademicOptions();renderPaymentsHome();
 }
 function cancunHour(){try{return Number(new Intl.DateTimeFormat('en-US',{hour:'2-digit',hour12:false,timeZone:'America/Cancun'}).format(new Date()))%24}catch(e){return new Date().getHours()}}
 function todayCancun(){try{const parts=new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'America/Cancun'}).formatToParts(new Date()).reduce((a,p)=>(a[p.type]=p.value,a),{});return `${parts.year}-${parts.month}-${parts.day}`}catch(e){return new Date().toISOString().slice(0,10)}}
@@ -251,9 +266,66 @@ function renderDailyReport(r){
 }
 function renderDailyPeople(containerId,countId,items,type){$('#'+countId).textContent=items.length;$('#'+containerId).innerHTML=items.length?items.map(item=>`<div class="report-person"><div><strong>${escapeHtml(item.name)}</strong><small>${type==='complete'?'Entregó todas las actividades':type==='partial'?`Entregó ${item.delivered} de ${item.total}`:'No entregó actividades'} · Conducta: ${escapeHtml(item.conduct)}</small></div><span class="badge">${escapeHtml(item.attendance)}</span></div>`).join(''):'<p class="muted">No hay alumnos en este apartado.</p>'}
 async function syncLearningStyles(){await runAction(async()=>{const r=await server('syncLearningStyles');state.students=r.students;state.config.estilosSpreadsheetId=state.config.estilosSpreadsheetId||'vinculado';renderStudents();renderStyles();renderAcademicOptions();toast(`${r.matched} resultado(s) VAK actualizados${r.unmatched.length?` · ${r.unmatched.length} sin coincidencia`:''}.`)})}
-function renderPayments(){const url=String(state.config.controlPagosUrl||'');$('#paymentControlUrl').value=url;$('#paymentStatus').textContent=url?'Control de pagos vinculado: '+url:'Aún no se ha guardado la dirección del control de pagos.'}
-function openPayments(){const url=String(state.config.controlPagosUrl||'').trim();if(!url){showView('payments');return toast('Primero guarda la dirección pública de tu control de pagos.',true)}window.open(url,'_blank','noopener,noreferrer')}
-async function savePaymentsUrl(){const url=$('#paymentControlUrl').value.trim();await runAction(async()=>{const r=await server('savePaymentControlUrl',url);state.config.controlPagosUrl=r.url;renderPayments();toast(r.message)})}
+function paymentMoney(value){return new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(value)||0)}
+function openPayments(){showView('payments');loadPayments()}
+async function loadPayments(){
+  $('#paymentsHome').classList.remove('hidden-control');$('#paymentEventDetail').classList.add('hidden-control');
+  $('#paymentLinkStatus').textContent='Consultando la hoja de Control de pagos…';setLoading(true);
+  try{state.paymentsInitial=await server('getPaymentsInitialData');renderPaymentsHome()}
+  catch(e){$('#paymentLinkStatus').innerHTML='<strong>Falta vincular la hoja de pagos.</strong> En tu Google Sheets abre Carpeta Académica → Vincular hoja de Control de pagos y pega la dirección de la hoja que contiene las pestañas Alumnos, Eventos, Participantes, Pagos, Cortes de dinero y Retiros y reposiciones.';if(isSessionError(e.message)){sessionToken='';localStorage.removeItem(SESSION_KEY);showLogin(e.message)}else toast(e.message,true)}
+  finally{setLoading(false)}
+}
+function renderPaymentsHome(){
+  const data=state.paymentsInitial;if(!data){$('#paymentLinkStatus').textContent='Abre este módulo para consultar el Control de pagos vinculado.';return}
+  $('#paymentLinkStatus').innerHTML='<strong>Control de pagos integrado.</strong> Los movimientos se guardan directamente en tu hoja de cálculo de pagos.';
+  const active=data.events||[],archived=data.archivedEvents||[],students=data.students||[];
+  $('#paymentOverview').innerHTML=[['Eventos activos',active.length],['Archivados',archived.length],['Alumnos en pagos',students.length],['Cobro potencial',paymentMoney(active.reduce((sum,event)=>sum+event.charge*students.length,0))]].map(([label,value])=>`<div class="stat"><b>${escapeHtml(value)}</b><span>${escapeHtml(label)}</span></div>`).join('');
+  $('#paymentEventCount').textContent=`${active.length} ${active.length===1?'evento':'eventos'}`;
+  $('#paymentEventsGrid').innerHTML=active.length?active.map(paymentEventCard).join(''):'<div class="empty-history"><strong>No hay eventos activos</strong><p>Crea el primero para registrar pagos del grupo.</p></div>';
+  $('#paymentArchivedGrid').innerHTML=archived.length?archived.map(paymentEventCard).join(''):'<p class="muted">No hay eventos archivados.</p>';
+}
+function paymentEventCard(event){
+  const action=event.active?`<button class="btn danger" data-action="archive-payment-event" data-id="${escapeHtml(event.id)}">Archivar</button>`:`<button class="btn" data-action="reactivate-payment-event" data-id="${escapeHtml(event.id)}">Reactivar</button>`;
+  return `<article class="payment-event-card"><div><span class="badge">${event.active?'Activo':'Archivado'}</span><h3>${escapeHtml(event.name)}</h3><p>${escapeHtml(formatDateShort(event.date))}${event.time?' · '+escapeHtml(formatTime(event.time)):''}</p></div><div class="payment-values"><span>Cobro <b>${paymentMoney(event.charge)}</b></span><span>Entrega <b>${paymentMoney(event.delivery)}</b></span><span>Margen <b>${paymentMoney(event.margin)}</b></span></div><div class="button-row"><button class="btn primary" data-action="open-payment-event" data-id="${escapeHtml(event.id)}">Abrir</button>${action}</div></article>`
+}
+function togglePaymentEventForm(){
+  const panel=$('#paymentEventFormPanel'),opening=panel.classList.contains('hidden-control');panel.classList.toggle('hidden-control');
+  if(opening){const form=$('#paymentEventForm');form.reset();form.elements.date.value=todayCancun();form.elements.time.value='13:00';form.elements.delivery.value='0';form.elements.name.focus()}
+}
+async function createPaymentEvent(e){e.preventDefault();const payload=formData(e.currentTarget);await runAction(async()=>{const result=await server('createPaymentEvent',payload);$('#paymentEventFormPanel').classList.add('hidden-control');state.paymentsInitial=await server('getPaymentsInitialData');renderPaymentsHome();toast(result.message);await openPaymentEvent(result.eventId)})}
+async function openPaymentEvent(eventId){await runAction(async()=>{state.paymentDetail=await server('getPaymentEventDetail',eventId);renderPaymentDetail();$('#paymentsHome').classList.add('hidden-control');$('#paymentEventDetail').classList.remove('hidden-control');window.scrollTo(0,0)})}
+function backPaymentEvents(){state.paymentDetail=null;$('#paymentEventDetail').classList.add('hidden-control');$('#paymentsHome').classList.remove('hidden-control');renderPaymentsHome();window.scrollTo(0,0)}
+function renderPaymentDetail(){
+  const detail=state.paymentDetail;if(!detail)return;const event=detail.event,summary=detail.summary;
+  $('#paymentDetailTitle').textContent=event.name;$('#paymentDetailMeta').textContent=[event.description,formatDateShort(event.date),formatTime(event.time),`Cobro ${paymentMoney(event.charge)} por alumno`].filter(Boolean).join(' · ');
+  const archiveButton=$('[data-action="archive-current-payment-event"]');archiveButton.classList.toggle('hidden-control',!event.active);
+  $('#paymentDetailStats').innerHTML=[['Pagaron',summary.paidCount],['Abonaron',summary.partialCount],['Pendientes',summary.pendingCount],['Efectivo disponible',paymentMoney(summary.cashAvailable)]].map(([label,value])=>`<div class="stat"><b>${escapeHtml(value)}</b><span>${escapeHtml(label)}</span></div>`).join('');
+  const today=todayCancun();$('#paymentCutForm').elements.date.value=today;$('#paymentMovementForm').elements.date.value=today;
+  renderPaymentStudents();renderPaymentLedgers();renderPaymentFinancial();
+}
+function renderPaymentStudents(){
+  const detail=state.paymentDetail;if(!detail)return;const query=$('#paymentStudentSearch').value.trim().toLowerCase(),filter=$('#paymentStudentFilter').value;
+  const students=detail.students.filter(student=>(filter==='TODOS'||student.status===filter)&&student.name.toLowerCase().includes(query));
+  $('#paymentStudentList').innerHTML=students.length?students.map((student,index)=>`<article class="payment-student-row"><span class="payment-student-number">${index+1}</span><div><strong>${escapeHtml(student.name)}</strong><p>Pagado: ${paymentMoney(student.paid)} · Falta: ${paymentMoney(student.remaining)}</p></div><span class="payment-status ${student.status.toLowerCase()}">${student.status==='PAGADO'?'Pagado':student.status==='ABONO'?'Abono':'Pendiente'}</span><div class="payment-row-actions">${student.remaining>0?`<button class="btn small" data-action="payment-abono" data-id="${escapeHtml(student.id)}">Abono</button><button class="btn primary small" data-action="payment-total" data-id="${escapeHtml(student.id)}">Pagar total</button>`:'<span class="paid-check">✓ Liquidado</span>'}</div></article>`).join(''):'<div class="empty-history"><strong>Sin resultados</strong><p>Cambia el filtro o la búsqueda.</p></div>';
+}
+function openStudentPayment(studentId,type){
+  const student=state.paymentDetail?.students.find(item=>String(item.id)===String(studentId));if(!student)return;
+  const form=$('#studentPaymentForm');form.reset();form.elements.studentId.value=student.id;form.elements.type.value=type;form.elements.date.value=todayCancun();
+  $('#paymentDialogTitle').textContent=type==='TOTAL'?'Registrar pago completo':'Registrar abono';$('#paymentDialogStudent').textContent=student.name;$('#paymentDialogBalance').textContent=`Pagado: ${paymentMoney(student.paid)} · Saldo pendiente: ${paymentMoney(student.remaining)}`;
+  $('#paymentAmountField').classList.toggle('hidden-control',type==='TOTAL');form.elements.amount.required=type!=='TOTAL';if(type!=='TOTAL')form.elements.amount.max=student.remaining;
+  $('#paymentDialog').showModal();
+}
+async function saveStudentPayment(e){e.preventDefault();const payload=formData(e.currentTarget);payload.eventId=state.paymentDetail.event.id;await runAction(async()=>{const result=await server('saveStudentPayment',payload);state.paymentDetail=result.detail;$('#paymentDialog').close();renderPaymentDetail();toast(result.message)})}
+async function savePaymentCut(e){e.preventDefault();const payload=formData(e.currentTarget);payload.eventId=state.paymentDetail.event.id;if(!confirm(`¿Registrar un corte por ${paymentMoney(payload.amount)}?`))return;await runAction(async()=>{const result=await server('savePaymentCut',payload);state.paymentDetail=result.detail;e.currentTarget.reset();renderPaymentDetail();toast(result.message)})}
+async function savePaymentMovement(e){e.preventDefault();const payload=formData(e.currentTarget);payload.eventId=state.paymentDetail.event.id;if(!confirm(`¿Registrar ${payload.type.toLowerCase()} por ${paymentMoney(payload.amount)}?`))return;await runAction(async()=>{const result=await server('savePaymentMovement',payload);state.paymentDetail=result.detail;e.currentTarget.reset();renderPaymentDetail();toast(result.message)})}
+function renderPaymentLedgers(){
+  const detail=state.paymentDetail;const ledger=(rows,kind)=>rows.length?rows.slice().reverse().map(item=>`<div class="payment-ledger-row"><div><strong>${kind==='cut'?'Corte':item.type==='RETIRO'?'Retiro':'Reposición'}</strong><small>${escapeHtml(formatDateShort(item.date))}${item.description?' · '+escapeHtml(item.description):''}</small></div><b>${paymentMoney(item.amount)}</b></div>`).join(''):'<p class="muted">Sin movimientos.</p>';
+  $('#paymentCutsList').innerHTML=ledger(detail.cuts,'cut');$('#paymentMovementsList').innerHTML=ledger(detail.movements,'movement');
+  $('#paymentHistoryList').innerHTML=detail.payments.length?detail.payments.slice().reverse().map(item=>`<div class="payment-ledger-row"><div><strong>${escapeHtml(item.studentName)}</strong><small>${escapeHtml(item.type)} · ${escapeHtml(formatDateShort(item.date))}${item.note?' · '+escapeHtml(item.note):''}</small></div><b>${paymentMoney(item.amount)}</b></div>`).join(''):'<p class="muted">Todavía no hay pagos registrados.</p>';
+}
+function renderPaymentFinancial(){const s=state.paymentDetail.summary;const rows=[['Total esperado',s.expectedTotal],['Cobrado',s.collected],['Saldo por cobrar',s.outstanding],['Entrega esperada',s.expectedDelivery],['Margen esperado',s.expectedMargin],['Entrega acumulada',s.accruedDelivery],['Margen acumulado',s.accruedMargin],['Cortes entregados',s.cutsTotal],['Deuda por retiros',s.debt],['Efectivo disponible',s.cashAvailable]];$('#paymentFinancialSummary').innerHTML=rows.map(([label,value])=>`<div class="payment-money-box"><span>${escapeHtml(label)}</span><b>${paymentMoney(value)}</b></div>`).join('')}
+async function setPaymentEventActive(eventId,active){if(!confirm(active?'¿Reactivar este evento?':'¿Archivar este evento? Su historial se conservará.'))return;await runAction(async()=>{const result=await server('setPaymentEventActive',eventId,active);state.paymentsInitial=await server('getPaymentsInitialData');backPaymentEvents();toast(result.message)})}
+async function syncPaymentStudents(){if(!confirm('¿Sincronizar la lista actual de alumnos con el Control de pagos? El historial anterior se conservará.'))return;await runAction(async()=>{const result=await server('syncPaymentStudents');state.paymentsInitial=result.initialData;renderPaymentsHome();toast(result.message)})}
 function openStudent(s={}){const f=$('#studentForm');f.reset();Object.entries(s).forEach(([k,v])=>{if(f.elements[k])f.elements[k].value=v??''});$('#studentModalTitle').textContent=s.id?'Editar alumno':'Nuevo alumno';$('#studentDialog').showModal()}
 function openProject(p={}){const f=$('#projectForm');f.reset();Object.entries(p).forEach(([k,v])=>{if(!f.elements[k])return;if(f.elements[k].type==='checkbox')f.elements[k].checked=Boolean(v);else f.elements[k].value=v??''});$('#projectDialog').showModal()}
 async function saveStudentForm(e){e.preventDefault();const payload=formData(e.target);await runAction(async()=>{const r=await server('saveStudent',payload);Object.assign(state,await server('getBootstrapData'));e.target.closest('dialog').close();renderAll();toast(r.temporaryPassword?`Alumno guardado. Usuario: ${r.student.tutorUsuario} · Contraseña inicial: ${r.temporaryPassword}`:'Alumno actualizado.')})}
