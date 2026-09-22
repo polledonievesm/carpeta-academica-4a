@@ -282,7 +282,14 @@
     <form id="directoryForm" method="dialog"><div class="modal-head"><div><p class="eyebrow">FICHA FAMILIAR</p><h2 id="directoryDialogTitle">Alumno</h2></div><button type="button" class="icon-button" data-close="directoryDialog">×</button></div><input type="hidden" name="studentId"><div id="directoryFormFields"></div><div class="modal-actions"><button type="button" class="btn" data-close="directoryDialog">Cancelar</button><button type="submit" class="btn primary">Guardar ficha</button></div></form>
   </dialog>
 
-  <dialog id="directoryViewDialog" class="modal large"><div class="modal-head"><div><p class="eyebrow">CONSULTA</p><h2 id="directoryViewTitle">Información familiar</h2></div><button type="button" class="icon-button" data-close="directoryViewDialog">×</button></div><div id="directoryViewContent"></div><div class="modal-actions"><button type="button" class="btn" data-close="directoryViewDialog">Cerrar</button></div></dialog>
+  <dialog id="directoryViewDialog" class="modal large directory-profile-dialog">
+    <div id="directoryViewContent"></div>
+    <div class="directory-view-actions">
+      <button type="button" class="btn" data-close="directoryViewDialog">Cerrar</button>
+      <button type="button" class="btn primary" id="directoryViewPrint" data-action="print-directory-profile">▣ Imprimir ficha</button>
+      <button type="button" class="btn directory-edit-button" id="directoryViewEdit" data-action="edit-directory">✎ Editar información</button>
+    </div>
+  </dialog>
 
   <dialog id="subjectDialog" class="modal"><form id="subjectForm" method="dialog"><div class="modal-head"><div><p class="eyebrow">CATÁLOGO</p><h2>Campo formativo</h2></div><button type="button" class="icon-button" data-close="subjectDialog">×</button></div><input type="hidden" name="id"><label>Nombre<input name="nombre" required></label><div class="modal-actions"><button type="button" class="btn" data-close="subjectDialog">Cancelar</button><button type="submit" class="btn primary">Guardar</button></div></form></dialog>
 
