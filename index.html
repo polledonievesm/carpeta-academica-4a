@@ -10,21 +10,14 @@
 <body>
   <div id="app" class="app-shell">
     <aside class="sidebar" id="sidebar">
-      <div class="brand"><span class="brand-mark">▣</span><span>Carpeta<br>Académica</span></div>
+      <div class="brand"><span class="brand-mark">▣</span><span class="brand-text">Carpeta<br>Académica</span><button id="sidebarCollapse" class="sidebar-collapse" type="button" aria-label="Contraer menú">‹</button></div>
       <nav class="nav" aria-label="Navegación principal">
         <button class="nav-item active" data-view="dashboard">⌂ <span>Inicio</span></button>
-        <button class="nav-item" data-view="students">♟ <span>Alumnos</span></button>
-        <button class="nav-item" data-view="enrollment-admin">✎ <span>Inscripción</span></button>
-        <button class="nav-item" data-view="styles">◉ <span>Estilos de aprendizaje</span></button>
-        <button class="nav-item" data-view="projects">▰ <span>Proyectos</span></button>
-        <button class="nav-item" data-view="daily">▣ <span>Registro diario</span></button>
-        <button class="nav-item" data-view="attendance">✓ <span>Asistencia</span></button>
-        <button class="nav-item" data-view="reports">▥ <span>Reportes</span></button>
-        <button class="nav-item" data-view="grades">▦ <span>Calificaciones</span></button>
-        <button class="nav-item" data-view="directory">☷ <span>Directorio familiar</span></button>
-        <button class="nav-item" data-view="family-access">🔐 <span>Accesos familiares</span></button>
-        <button class="nav-item" data-view="payments">$ <span>Control de pagos</span></button>
-        <button class="nav-item" data-view="settings">⚙ <span>Configuración</span></button>
+        <details class="nav-group" open><summary>♟ <span>Alumnos</span></summary><div><button class="nav-item" data-view="students">• <span>Lista de alumnos</span></button><button class="nav-item" data-view="enrollment-admin">• <span>Inscripción</span></button><button class="nav-item" data-view="styles">• <span>Estilos de aprendizaje</span></button></div></details>
+        <details class="nav-group"><summary>▰ <span>Trabajo académico</span></summary><div><button class="nav-item" data-view="projects">• <span>Proyectos</span></button><button class="nav-item" data-view="daily">• <span>Registro diario</span></button><button class="nav-item" data-view="attendance">• <span>Asistencia</span></button></div></details>
+        <details class="nav-group"><summary>▦ <span>Evaluación</span></summary><div><button class="nav-item" data-view="grades">• <span>Calificaciones</span></button><button class="nav-item" data-view="reports">• <span>Reportes</span></button><button class="nav-item" data-view="instruments">• <span>Instrumentos</span></button></div></details>
+        <details class="nav-group"><summary>☷ <span>Familias</span></summary><div><button class="nav-item" data-view="directory">• <span>Directorio familiar</span></button><button class="nav-item" data-view="family-access">• <span>Accesos familiares</span></button><button class="nav-external" data-action="open-family-login">↗ <span>Portal familiar</span></button></div></details>
+        <details class="nav-group"><summary>⚙ <span>Administración</span></summary><div><button class="nav-item" data-view="payments">• <span>Control de pagos</span></button><button class="nav-item" data-view="settings">• <span>Configuración</span></button></div></details>
       </nav>
     </aside>
 
@@ -109,6 +102,7 @@
             <div class="form-grid three"><label>Fecha<input id="classDate" type="date" name="fecha" required></label><label>Hora de inicio<input type="time" name="horaInicio" value="13:00" required></label><label>Hora de término<input type="time" name="horaFin" value="14:00" required></label></div>
             <div id="classAttendanceNotice" class="class-attendance-notice">Selecciona una fecha para cargar a los alumnos presentes.</div>
             <div class="form-grid two"><label>Nombre de la actividad<input name="actividad" placeholder="Ej. Identificamos los órganos del aparato digestivo" required></label><label>Cuaderno, libro o material<select name="material" required><option value="">Selecciona</option><optgroup label="Cuadernos"><option>Lenguajes</option><option>Saberes y Pensamiento Matemático</option><option>Saberes y Pensamiento Científico</option><option>Ética, Naturaleza y Sociedades</option><option>De lo Humano y lo Comunitario</option><option>Dibujo</option><option>Ortografía</option></optgroup><optgroup label="Libros"><option>Libro de Texto Gratuito (LTG)</option><option>La Guía Escolar</option><option>PRACMATICA</option><option>C.A.P. (Comprender, Aprender y Practicar)</option></optgroup><option>Hoja de trabajo</option><option>Otro material</option></select></label></div>
+            <div class="instrument-choice"><label>Instrumento de evaluación<select id="classInstrument" name="instrumentoId"><option value="">Evaluación sencilla</option></select></label><div id="classInstrumentSummary" class="instrument-summary">Puedes evaluar únicamente la entrega o seleccionar una rúbrica/lista de cotejo reutilizable.</div><button type="button" class="btn small" data-action="open-instruments">Administrar instrumentos</button></div>
           </article>
           <article class="panel evaluation-panel">
             <div class="section-head evaluation-heading"><div><h2>Evaluación del grupo</h2><p class="muted">Solo aparecen los alumnos con asistencia o retardo en la fecha seleccionada.</p></div><div class="button-row"><button type="button" class="btn small" data-action="all-complete">Todos entregaron</button><button type="button" class="btn small" data-action="all-adequate">Conducta adecuada</button></div></div>
@@ -117,6 +111,11 @@
           </article>
           <div class="sticky-save"><span id="evaluationProgress">0 de 35 alumnos</span><button type="submit" class="btn primary">Guardar actividad y evaluaciones</button></div>
         </form>
+      </section>
+      <section id="instruments" class="view">
+        <div class="page-head"><div><p class="eyebrow">EVALUACIÓN</p><h1>Instrumentos de evaluación</h1><p class="muted">Crea, busca y reutiliza rúbricas o listas de cotejo sin modificar resultados anteriores.</p></div><button class="btn primary" data-action="new-instrument">+ Nuevo instrumento</button></div>
+        <div class="toolbar"><input id="instrumentSearch" class="input" placeholder="Buscar por título"><select id="instrumentTypeFilter" class="input"><option value="">Todos</option><option value="RUBRICA">Rúbricas</option><option value="LISTA_COTEJO">Listas de cotejo</option></select></div>
+        <div id="instrumentGrid" class="instrument-grid"></div>
       </section>
       <section id="attendance" class="view">
         <div class="page-head"><div><p class="eyebrow">CONTROL DEL GRUPO</p><h1>Pase de lista</h1><p class="muted">Registra asistencia, falta, retardo o justificación sin perder el historial.</p></div><div class="button-row"><button class="btn" data-action="attendance-report">Reporte individual</button><button class="btn primary" data-action="save-attendance">Guardar asistencia</button></div></div>
@@ -169,7 +168,8 @@
             <form id="paymentEventForm">
               <div class="form-grid two"><label>Nombre del evento<input name="name" required placeholder="Ej. Excursión escolar"></label><label>Descripción<input name="description" placeholder="Opcional"></label></div>
               <div class="form-grid three"><label>Fecha del evento<input type="date" name="date" required></label><label>Hora<input type="time" name="time" required></label><label>Cobro por alumno<input type="number" name="charge" min="0.01" step="0.01" required></label></div>
-              <div class="form-grid three"><label>Entrega por alumno<input type="number" name="delivery" min="0" step="0.01" value="0" required></label><label>Inicio de cobro<input type="date" name="collectionStart"></label><label>Fin de cobro<input type="date" name="collectionEnd"></label></div>
+              <div class="form-grid three"><label>Entrega de dinero por alumno<input type="number" name="delivery" min="0" step="0.01" value="0" required></label><label>Inicio de cobro<input type="date" name="collectionStart"></label><label>Fin de cobro<input type="date" name="collectionEnd"></label></div>
+              <div class="delivery-event-options"><label class="check"><input id="paymentRequiresDelivery" type="checkbox" name="requiresDelivery" value="true"> Este evento requiere entregar un producto</label><label id="paymentProductField" class="hidden-control">Producto que se entregará<input name="product" placeholder="Ej. Libro de actividades"></label></div>
               <div class="modal-actions"><button type="button" class="btn" data-action="toggle-payment-event-form">Cancelar</button><button class="btn primary" type="submit">Crear evento</button></div>
             </form>
           </article>
@@ -183,7 +183,7 @@
           <div id="paymentDetailStats" class="stats payment-stats"></div>
           <div class="payment-detail-grid">
             <article class="panel payment-students-panel">
-              <div class="section-head"><div><h2>Pagos por alumno</h2><p class="muted">Registra un pago completo o un abono.</p></div><select id="paymentStudentFilter"><option value="TODOS">Todos</option><option value="PAGADO">Pagaron</option><option value="ABONO">Abonaron</option><option value="PENDIENTE">No pagaron</option></select></div>
+              <div class="section-head"><div><h2>Pagos y entregas por alumno</h2><p class="muted">La entrega se habilita únicamente cuando el pago está liquidado.</p></div><select id="paymentStudentFilter"><option value="TODOS">Todos</option><option value="PAGADO">Pagaron</option><option value="ABONO">Abonaron</option><option value="PENDIENTE">No pagaron</option><option value="PAGADO_NO_ENTREGADO">Pagado y no entregado</option><option value="ENTREGADO">Pagado y entregado</option></select></div>
               <input id="paymentStudentSearch" class="input" placeholder="Buscar alumno">
               <div id="paymentStudentList" class="payment-student-list"></div>
             </article>
@@ -278,12 +278,12 @@
       </section>
       <section id="familyInvitationPanel" class="family-card hidden-control"><p class="eyebrow">PRIMER ACCESO</p><h1>Crear cuenta familiar</h1><p id="familyInvitationStudent" class="muted"></p><form id="familyRegisterForm"><label>Correo electrónico<input type="email" name="email" autocomplete="email" required></label><label>Contraseña<input type="password" name="password" minlength="10" autocomplete="new-password" required></label><label>Confirmar contraseña<input type="password" name="passwordConfirmation" minlength="10" autocomplete="new-password" required></label><p class="muted">Utiliza al menos 10 caracteres con letras y números.</p><button class="btn primary full-button" type="submit">Crear cuenta y continuar</button></form></section>
       <section id="familyGroupPanel" class="family-card hidden-control"><p class="eyebrow">INVITACIÓN GRUPAL</p><h1>Localiza a tu alumno</h1><p class="muted">Escribe al menos dos letras del apellido o nombre. La lista completa nunca se muestra.</p><label>Buscar alumno<input id="familyGroupSearch" autocomplete="off" placeholder="Ej. Hernández"></label><div id="familyGroupResults" class="family-group-results"></div><form id="familyGroupRegisterForm" class="hidden-control"><input type="hidden" name="studentId"><p id="familyGroupStudent" class="integration-note"></p><label>Últimos 4 dígitos del teléfono del tutor<input name="phoneLast4" inputmode="numeric" maxlength="4" required></label><label>Correo electrónico<input type="email" name="email" required></label><label>Contraseña<input type="password" name="password" minlength="10" required></label><label>Confirmar contraseña<input type="password" name="passwordConfirmation" minlength="10" required></label><button class="btn primary full-button" type="submit">Crear cuenta y continuar</button></form></section>
-      <section id="familyLoginPanel" class="family-card family-login-card hidden-control"><img class="family-login-logo" src="school-logo.webp" alt="Logo de la escuela"><p class="eyebrow">ACCESO PARA FAMILIAS</p><h1>Consulta el avance de tu hijo(a)</h1><p class="muted">Revisa asistencia, tareas, participación, conducta y calificaciones.</p><form id="familyLoginForm"><label>Usuario o correo electrónico<input name="email" autocomplete="username" required></label><label>Contraseña<input type="password" name="password" autocomplete="current-password" required></label><button class="btn primary full-button" type="submit">Entrar</button></form><button class="link-button family-link" data-action="show-family-forgot">¿Olvidaste tu contraseña?</button><button class="link-button family-link" data-action="back-teacher-login">Acceso del maestro</button><p class="family-security-note">🔒 Cada familia solo puede consultar la información de su alumno.</p></section>
+      <section id="familyLoginPanel" class="family-card family-login-card hidden-control"><img class="family-login-logo" src="school-logo.webp" alt="Logo de la escuela"><p class="eyebrow">ACCESO PARA FAMILIAS</p><h1>Consulta el avance de tu hijo(a)</h1><p class="muted">Revisa asistencia, tareas, participación, conducta y calificaciones.</p><form id="familyLoginForm"><label>Usuario o correo electrónico<input name="email" autocomplete="username" required></label><label>Contraseña<input type="password" name="password" autocomplete="current-password" required></label><label class="check family-remember"><input type="checkbox" name="remember"> Mantener mi sesión solamente en este dispositivo</label><button class="btn primary full-button" type="submit">Entrar</button></form><button class="link-button family-link" data-action="show-family-forgot">¿Olvidaste tu contraseña?</button><button class="link-button family-link" data-action="back-teacher-login">Acceso del maestro</button><p class="family-security-note">🔒 Cada familia solo puede consultar la información de su alumno. Cierra la sesión si el dispositivo es compartido.</p></section>
       <section id="familyForgotPanel" class="family-card hidden-control"><img class="family-panel-logo" src="school-logo.webp" alt="Logo de la escuela"><p class="eyebrow">RECUPERAR ACCESO</p><h1>Recuperar contraseña</h1><p class="muted">Escribe tu usuario o correo. Si la cuenta tiene correo registrado, recibirás un enlace válido durante 30 minutos. El teléfono sirve para que el maestro pueda identificarte y ayudarte.</p><form id="familyForgotForm"><label>Usuario o correo registrado<input name="email" required></label><button class="btn primary full-button" type="submit">Enviar enlace</button></form><button class="link-button family-link" data-action="show-family-login">Volver al acceso</button></section>
       <section id="familyResetPanel" class="family-card hidden-control"><p class="eyebrow">NUEVA CONTRASEÑA</p><h1>Restablecer acceso</h1><p id="familyResetStudent" class="muted"></p><form id="familyResetForm"><label>Nueva contraseña<input type="password" name="password" minlength="10" required></label><label>Confirmar contraseña<input type="password" name="passwordConfirmation" minlength="10" required></label><button class="btn primary full-button" type="submit">Guardar contraseña</button></form></section>
       <section id="familyOnboardingPanel" class="family-onboarding hidden-control"><div class="family-onboarding-head"><img src="school-logo.webp" alt="Logo de la escuela"><div><p class="eyebrow">PRIMER ACCESO</p><h1>Confirma la información de tu familia</h1><p>Revisa los datos de <strong id="familyOnboardingStudent">tu alumno</strong>. Corrige lo necesario y configura la recuperación de tu cuenta.</p></div></div><form id="familyOnboardingForm"><article class="family-card"><h2>Cuenta y recuperación</h2><div class="form-grid two"><label>Usuario<input name="username" minlength="4" maxlength="40" required></label><label>Correo de recuperación<input type="email" name="email" required><small>Se utilizará únicamente para recuperar la contraseña.</small></label><label>Teléfono de recuperación<input name="phone" inputmode="tel" required><small>Permitirá al maestro identificarte si necesitas ayuda.</small></label><label>Nueva contraseña<input type="password" name="password" minlength="10" required></label><label>Confirmar contraseña<input type="password" name="passwordConfirmation" minlength="10" required></label></div><p class="family-security-note">La contraseña temporal debe cambiarse. Utiliza al menos 10 caracteres con letras y números.</p></article><article class="family-card"><div class="section-head"><div><h2>Información del directorio</h2><p class="muted">Si todo está correcto, no modifiques los campos y pulsa Confirmar y guardar.</p></div></div><div id="familyOnboardingFields"></div></article><button class="btn primary family-onboarding-save" type="submit">Confirmar y guardar información</button></form></section>
       <section id="familyAppPanel" class="family-app hidden-control">
-        <div class="family-student-head"><div><span class="family-readonly">SOLO CONSULTA</span><p>Hola, familia de</p><h1 id="familyProfileStudent">Alumno</h1><small id="familyStudentMeta">Grupo y ciclo escolar</small></div><button class="btn" data-action="family-logout">Cerrar sesión</button></div>
+        <div class="family-student-head"><div><span class="family-readonly">SOLO CONSULTA</span><p>Hola, familia de</p><h1 id="familyProfileStudent">Alumno</h1><small id="familyStudentMeta">Grupo y ciclo escolar</small></div><div class="button-row"><button class="btn" data-action="family-change-account">Cambiar cuenta</button><button class="btn" data-action="family-logout">Cerrar sesión</button></div></div>
         <div class="family-period-bar"><div class="family-period-controls"><label>Consulta<select id="familyPeriodType"><option value="week">Semanal</option><option value="month">Mensual</option><option value="trimester" selected>Trimestral</option></select></label><label id="familyPeriodWeek" class="hidden-control">Semana<input id="familyPeriodDate" type="date"></label><label id="familyPeriodMonth" class="hidden-control">Mes<input id="familyPeriodMonthValue" type="month"></label><label id="familyPeriodTrimester">Trimestre<select id="familyTrimester"><option value="1">Primer trimestre</option><option value="2">Segundo trimestre</option><option value="3">Tercer trimestre</option></select></label></div><span id="familyUpdatedAt">Información actualizada</span></div>
         <nav class="family-tabs" aria-label="Consulta académica"><button class="active" data-family-view="familyOverview">Resumen</button><button data-family-view="familyTasks">Tareas</button><button data-family-view="familyGrades">Calificaciones</button><button data-family-view="familyProfile">Datos familiares</button></nav>
         <div id="familyOverview" class="family-view active"></div>
@@ -335,6 +335,21 @@
     </form>
   </dialog>
 
+  <dialog id="instrumentDialog" class="modal large">
+    <form id="instrumentForm">
+      <div class="modal-head"><div><p class="eyebrow">PLANTILLA REUTILIZABLE</p><h2 id="instrumentDialogTitle">Nuevo instrumento</h2></div><button type="button" class="icon-button" data-close="instrumentDialog">×</button></div>
+      <input type="hidden" name="id"><div class="form-grid two"><label>Título del instrumento<input name="titulo" required placeholder="Ej. Escritura legible"></label><label>Tipo<select name="tipo"><option value="RUBRICA">Rúbrica</option><option value="LISTA_COTEJO">Lista de cotejo</option></select></label></div>
+      <div class="form-grid two"><label>Campo formativo<select id="instrumentSubject" name="campoFormativo"><option value="">Todos</option></select></label><label>Descripción<input name="descripcion" placeholder="Uso recomendado"></label></div>
+      <div class="instrument-level-note"><b>Niveles predeterminados:</b> NE · Nivel esperado (10), EN · En desarrollo (7), RA · Requiere apoyo (5).</div>
+      <div class="section-head"><h3>Criterios o indicadores</h3><button type="button" class="btn small" data-action="add-instrument-criterion">+ Añadir criterio</button></div><div id="instrumentCriteria"></div>
+      <div class="modal-actions"><button type="button" class="btn" data-close="instrumentDialog">Cancelar</button><button type="submit" class="btn primary">Guardar instrumento</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="deliveryDialog" class="modal">
+    <form id="deliveryForm"><div class="modal-head"><div><p class="eyebrow">ENTREGA DE PRODUCTO</p><h2 id="deliveryDialogTitle">Registrar entrega</h2></div><button type="button" class="icon-button" data-close="deliveryDialog">×</button></div><input type="hidden" name="studentId"><p id="deliveryDialogStudent" class="integration-note"></p><label>Fecha de entrega<input type="date" name="date" required></label><label>Persona que recibió<input name="receivedBy" placeholder="Madre, padre, tutor o alumno"></label><label>Observación<input name="note" placeholder="Opcional"></label><div class="modal-actions"><button type="button" class="btn" data-close="deliveryDialog">Cancelar</button><button class="btn primary" type="submit">Marcar entregado</button></div></form>
+  </dialog>
+
   <dialog id="directoryDialog" class="modal large">
     <form id="directoryForm" method="dialog"><div class="modal-head"><div><p class="eyebrow">FICHA FAMILIAR</p><h2 id="directoryDialogTitle">Alumno</h2></div><button type="button" class="icon-button" data-close="directoryDialog">×</button></div><input type="hidden" name="studentId"><div id="directoryFormFields"></div><div class="modal-actions"><button type="button" class="btn" data-close="directoryDialog">Cancelar</button><button type="submit" class="btn primary">Guardar ficha</button></div></form>
   </dialog>
@@ -373,5 +388,6 @@
   <script src="config.js"></script>
   <script src="app.js"></script>
   <script src="enrollment.js"></script>
+  <script src="enhancements.js"></script>
 </body>
 </html>
