@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="app" class="app-shell">
+  <div id="app" class="app-shell auth-protected">
     <aside class="sidebar" id="sidebar">
       <div class="brand"><span class="brand-mark">▣</span><span class="brand-text">Carpeta<br>Académica</span><button id="sidebarCollapse" class="sidebar-collapse" type="button" aria-label="Contraer menú">‹</button></div>
       <nav class="nav" aria-label="Navegación principal">
@@ -213,14 +213,15 @@
         <article id="directoryReportPreview" class="panel directory-report-preview hidden-control"></article>
       </section>
       <section id="family-access" class="view">
-        <div class="page-head"><div><p class="eyebrow">CUENTAS DE MADRES, PADRES Y TUTORES</p><h1>Accesos familiares</h1><p class="muted">Consulta usuarios, crea contraseñas temporales e imprime las hojas de acceso.</p></div><button class="btn" data-action="refresh-family-access">Actualizar</button></div>
-        <div id="familyAccessNotice" class="integration-note"><strong>Seguridad:</strong> las contraseñas personales nunca se muestran. Una contraseña temporal solamente aparece al generarla.</div>
+        <div class="page-head"><div><p class="eyebrow">FAMILIAS</p><h1>Accesos familiares</h1><p class="muted">Consulta, genera, edita y revoca credenciales sin eliminar los datos del alumno.</p></div><button class="btn" data-action="refresh-family-access">Actualizar</button></div>
+        <div id="familyAccessNotice" class="integration-note"><strong>Seguridad:</strong> puedes consultar las contraseñas temporales mientras estén vigentes. Las contraseñas personales creadas por las familias nunca se muestran.</div>
         <div id="familyAccessStats" class="stats"></div>
         <article class="panel family-access-tools">
-          <div class="form-grid two"><label>Buscar alumno o usuario<input id="familyAccessSearch" class="input" placeholder="Apellido, nombre o usuario"></label><label>Estado<select id="familyAccessStatus"><option value="TODOS">Todos</option><option value="SIN_CUENTA">Sin cuenta</option><option value="PENDIENTE">Primer acceso pendiente</option><option value="ACTIVA">Cuenta activa</option><option value="BLOQUEADA">Cuenta bloqueada</option></select></label></div>
-          <div class="button-row"><button class="btn small" data-action="select-all-family-access">Seleccionar visibles</button><button class="btn small" data-action="select-without-family-access">Seleccionar sin cuenta</button><button class="btn small" data-action="clear-family-access">Quitar selección</button><button class="btn primary" data-action="generate-selected-family-access">Generar accesos seleccionados</button><button class="btn primary" data-action="generate-all-family-access">Generar para todo el grupo</button><button class="btn" data-action="print-last-family-access">Imprimir última generación</button></div>
+          <div class="form-grid two"><label>Buscar alumno o usuario<input id="familyAccessSearch" class="input" placeholder="Apellido, nombre o usuario"></label><label>Estado<select id="familyAccessStatus"><option value="TODOS">Todos</option><option value="SIN_CUENTA">Sin cuenta</option><option value="PENDIENTE">Primer acceso pendiente</option><option value="ACTIVA">Cuenta activa</option><option value="BLOQUEADA">Cuenta bloqueada</option><option value="REVOCADA">Acceso revocado</option></select></label></div>
+          <div class="button-row family-selection-row"><button class="btn small" data-action="select-all-family-access">Seleccionar visibles</button><button class="btn small" data-action="select-without-family-access">Seleccionar sin cuenta</button><button class="btn small" data-action="clear-family-access">Quitar selección</button><strong id="familyAccessSelectedCount">0 seleccionados</strong></div>
         </article>
-        <article class="panel table-wrap"><table class="family-access-table"><thead><tr><th></th><th>Alumno</th><th>Usuario</th><th>Recuperación</th><th>Estado</th><th>Último acceso</th><th></th></tr></thead><tbody id="familyAccessTable"></tbody></table></article>
+        <article class="family-bulk-actions"><strong>☑ Acciones para seleccionados</strong><button class="btn primary" data-action="generate-selected-family-access">Generar o regenerar</button><button class="btn" data-action="print-selected-family-access">Imprimir credenciales</button><button class="btn danger" data-action="revoke-selected-family-access">Revocar accesos</button></article>
+        <article class="panel table-wrap"><table class="family-access-table"><thead><tr><th></th><th>Alumno</th><th>Usuario y contraseña</th><th>Recuperación</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr></thead><tbody id="familyAccessTable"></tbody></table></article>
       </section>
       <section id="grades" class="view">
         <div class="page-head"><div><p class="eyebrow">EVALUACIÓN TRIMESTRAL</p><h1>Calificaciones</h1><p class="muted">Configura ponderaciones, captura criterios manuales y genera reportes legibles.</p></div><button class="btn" data-action="grades-refresh">Actualizar</button></div>
@@ -371,13 +372,27 @@
 
   <dialog id="loginDialog" class="modal login-modal">
     <form id="loginForm">
-      <div class="login-brand"><span class="brand-mark">▣</span><div><strong>Carpeta Académica</strong><small>Acceso privado del docente</small></div></div>
+      <img class="teacher-login-logo" src="school-logo.webp" alt="Logotipo de la escuela">
+      <p class="eyebrow teacher-login-eyebrow">ACCESO SEGURO</p>
+      <h1>Carpeta Académica</h1>
+      <p class="teacher-login-intro">Ingresa como docente o entra al portal familiar.</p>
+      <div class="access-role-switch"><strong>Acceso del maestro</strong><button type="button" data-action="open-family-login">Acceso para familias</button></div>
       <label>Usuario<input name="username" autocomplete="username" required></label>
       <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
       <p id="loginError" class="login-error" role="alert"></p>
-      <button type="submit" class="btn primary login-button">Entrar</button>
-      <button type="button" class="link-button family-link" data-action="open-family-login">Acceso para madres, padres o tutores</button>
-      <p class="login-note">Los datos académicos se consultan de forma segura desde Google Sheets.</p>
+      <button type="submit" class="btn primary login-button">Entrar al panel privado</button>
+      <p class="login-note">Sin una sesión válida no se muestra ningún dato del grupo.</p>
+    </form>
+  </dialog>
+
+  <dialog id="familyAccessAdminDialog" class="modal family-access-admin-dialog">
+    <form id="familyAccessAdminForm">
+      <div class="modal-head"><div><p class="eyebrow">ADMINISTRAR ACCESO</p><h2 id="familyAccessAdminStudent">Alumno</h2></div><button type="button" class="icon-button" data-close="familyAccessAdminDialog">×</button></div>
+      <input type="hidden" name="studentId">
+      <div id="familyAccessAdminCredential" class="family-admin-credential"></div>
+      <div class="form-grid two"><label>Correo de recuperación<input name="email" type="email" placeholder="correo@ejemplo.com"></label><label>Teléfono de recuperación<input name="phone" inputmode="tel" placeholder="10 dígitos"></label></div>
+      <p class="muted">Guardar estos datos no cambia la contraseña ni elimina información académica.</p>
+      <div class="modal-actions family-admin-actions"><button type="button" class="btn danger" data-action="revoke-current-family-access">Revocar acceso</button><button type="button" class="btn" data-action="regenerate-current-family-access">Regenerar contraseña</button><button type="button" class="btn" data-action="print-current-managed-family-access">Imprimir credencial</button><button type="submit" class="btn primary">Guardar recuperación</button></div>
     </form>
   </dialog>
 
