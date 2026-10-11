@@ -24,8 +24,8 @@
     <main class="main">
       <header class="topbar">
         <button id="menuButton" class="icon-button mobile-only" aria-label="Abrir menú">☰</button>
-        <div><strong id="schoolName">Carpeta Académica</strong><span id="groupName" class="top-meta"></span></div>
-        <div class="teacher"><span id="teacherName">Docente</span><button class="avatar" data-action="logout" title="Cerrar sesión">M</button></div>
+        <div class="current-page-context"><strong id="currentViewTitle">Inicio</strong><span class="top-meta">Carpeta Académica</span></div>
+        <div class="teacher"><button class="avatar" data-action="logout" title="Cerrar sesión" aria-label="Cerrar sesión">M</button></div>
       </header>
 
       <div id="loading" class="loading">Preparando tu carpeta académica…</div>
@@ -213,15 +213,12 @@
         <article id="directoryReportPreview" class="panel directory-report-preview hidden-control"></article>
       </section>
       <section id="family-access" class="view">
-        <div class="page-head"><div><p class="eyebrow">FAMILIAS</p><h1>Accesos familiares</h1><p class="muted">Consulta, genera, edita y revoca credenciales sin eliminar los datos del alumno.</p></div><button class="btn" data-action="refresh-family-access">Actualizar</button></div>
-        <div id="familyAccessNotice" class="integration-note"><strong>Seguridad:</strong> puedes consultar las contraseñas temporales mientras estén vigentes. Las contraseñas personales creadas por las familias nunca se muestran.</div>
-        <div id="familyAccessStats" class="stats"></div>
         <article class="panel family-access-tools">
-          <div class="form-grid two"><label>Buscar alumno o usuario<input id="familyAccessSearch" class="input" placeholder="Apellido, nombre o usuario"></label><label>Estado<select id="familyAccessStatus"><option value="TODOS">Todos</option><option value="SIN_CUENTA">Sin cuenta</option><option value="PENDIENTE">Primer acceso pendiente</option><option value="ACTIVA">Cuenta activa</option><option value="BLOQUEADA">Cuenta bloqueada</option><option value="REVOCADA">Acceso revocado</option></select></label></div>
+          <div class="family-access-filter-row"><label>Buscar alumno o usuario<input id="familyAccessSearch" class="input" placeholder="Apellido, nombre o usuario"></label><label>Estado<select id="familyAccessStatus"><option value="TODOS">Todos</option><option value="SIN_CUENTA">Sin cuenta</option><option value="PENDIENTE">Primer acceso pendiente</option><option value="ACTIVA">Cuenta activa</option><option value="BLOQUEADA">Cuenta bloqueada</option><option value="REVOCADA">Acceso revocado</option></select></label><button class="btn family-access-refresh" data-action="refresh-family-access">Actualizar</button></div>
           <div class="button-row family-selection-row"><button class="btn small" data-action="select-all-family-access">Seleccionar visibles</button><button class="btn small" data-action="select-without-family-access">Seleccionar sin cuenta</button><button class="btn small" data-action="clear-family-access">Quitar selección</button><strong id="familyAccessSelectedCount">0 seleccionados</strong></div>
         </article>
-        <article class="family-bulk-actions"><strong>☑ Acciones para seleccionados</strong><button class="btn primary" data-action="generate-selected-family-access">Generar o regenerar</button><button class="btn" data-action="print-selected-family-access">Imprimir credenciales</button><button class="btn danger" data-action="revoke-selected-family-access">Revocar accesos</button><button class="btn delete-students-button" data-action="delete-selected-students">Eliminar alumnos seleccionados</button></article>
-        <article class="panel table-wrap"><table class="family-access-table"><thead><tr><th></th><th>Alumno</th><th>Usuario y contraseña</th><th>Recuperación</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr></thead><tbody id="familyAccessTable"></tbody></table></article>
+        <article class="family-bulk-actions"><label class="family-bulk-select"><input id="familyAccessSelectAll" type="checkbox" aria-label="Seleccionar o quitar selección de los alumnos visibles"><span>Acciones para seleccionados</span></label><button class="btn primary" data-action="generate-selected-family-access">Generar o regenerar</button><button class="btn" data-action="print-selected-family-access">Imprimir credenciales</button><button class="btn danger" data-action="revoke-selected-family-access">Revocar accesos</button><button class="btn delete-students-button" data-action="delete-selected-students">Eliminar alumnos seleccionados</button></article>
+        <article class="panel table-wrap family-access-table-panel"><table class="family-access-table"><thead><tr><th><span class="sr-only">Seleccionar</span></th><th>Alumno</th><th>Usuario y contraseña</th><th>Recuperación</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr></thead><tbody id="familyAccessTable"></tbody></table></article>
       </section>
       <section id="grades" class="view">
         <div class="page-head"><div><p class="eyebrow">EVALUACIÓN TRIMESTRAL</p><h1>Calificaciones</h1><p class="muted">Configura ponderaciones, captura criterios manuales y genera reportes legibles.</p></div><button class="btn" data-action="grades-refresh">Actualizar</button></div>
