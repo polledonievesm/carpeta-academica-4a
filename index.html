@@ -17,6 +17,15 @@
       <button id="bootRetry" class="btn primary hidden-control" type="button">Reintentar conexión</button>
     </div>
   </div>
+  <section id="operationLoader" class="operation-loader hidden-control" aria-live="polite" aria-busy="true">
+    <div class="operation-loader-card">
+      <span class="operation-loader-mark">▣</span>
+      <strong id="operationLoaderTitle">Cargando información…</strong>
+      <p id="operationLoaderStatus">La página continúa funcionando. Espera un momento.</p>
+      <div class="operation-loader-progress"><i></i></div>
+      <button id="operationLoaderRetry" type="button" class="btn hidden-control">Reintentar</button>
+    </div>
+  </section>
   <div id="app" class="app-shell auth-protected">
     <aside class="sidebar" id="sidebar">
       <div class="brand"><span class="brand-mark">▣</span><span class="brand-text">Carpeta<br>Académica</span><button id="sidebarCollapse" class="sidebar-collapse" type="button" aria-label="Contraer menú">‹</button></div>
@@ -292,11 +301,12 @@
       <section id="familyAppPanel" class="family-app hidden-control">
         <div class="family-student-head"><div><span class="family-readonly">SOLO CONSULTA</span><p>Hola, familia de</p><h1 id="familyProfileStudent">Alumno</h1><small id="familyStudentMeta">Grupo y ciclo escolar</small></div><div class="button-row"><button class="btn" data-action="family-change-account">Cambiar cuenta</button><button class="btn" data-action="family-logout">Cerrar sesión</button></div></div>
         <div class="family-period-bar"><div class="family-period-controls"><label>Consulta<select id="familyPeriodType"><option value="week">Semanal</option><option value="month">Mensual</option><option value="trimester" selected>Trimestral</option></select></label><label id="familyPeriodWeek" class="hidden-control">Semana<input id="familyPeriodDate" type="date"></label><label id="familyPeriodMonth" class="hidden-control">Mes<input id="familyPeriodMonthValue" type="month"></label><label id="familyPeriodTrimester">Trimestre<select id="familyTrimester"><option value="1">Primer trimestre</option><option value="2">Segundo trimestre</option><option value="3">Tercer trimestre</option></select></label></div><span id="familyUpdatedAt">Información actualizada</span></div>
-        <nav class="family-tabs" aria-label="Consulta académica"><button class="active" data-family-view="familyOverview">Resumen</button><button data-family-view="familyTasks">Tareas</button><button data-family-view="familyGrades">Calificaciones</button><button data-family-view="familyProfile">Datos familiares</button></nav>
+        <nav class="family-tabs" aria-label="Consulta académica"><button class="active" data-family-view="familyOverview">Resumen</button><button data-family-view="familyTasks">Tareas</button><button data-family-view="familyGrades">Calificaciones</button><button data-family-view="familyProfile">Datos familiares</button><button data-family-view="familyAccount">Mi cuenta</button></nav>
         <div id="familyOverview" class="family-view active"></div>
         <div id="familyTasks" class="family-view"></div>
         <div id="familyGrades" class="family-view"></div>
-        <div id="familyProfile" class="family-view"><article class="family-card family-profile-card"><div class="section-head"><div><p class="eyebrow">DIRECTORIO</p><h2>Datos familiares</h2></div></div><form id="familyProfileForm"></form></article></div>
+        <div id="familyProfile" class="family-view"><article class="family-card family-profile-card"><div class="section-head"><div><p class="eyebrow">DIRECTORIO</p><h2>Datos familiares</h2><p class="muted">Entra aquí solamente cuando necesites consultar o corregir información.</p></div></div><form id="familyProfileForm"><p class="muted">Los datos se cargarán al abrir esta pestaña.</p></form></article></div>
+        <div id="familyAccount" class="family-view"><article class="family-card family-profile-card family-account-card"><div class="section-head"><div><p class="eyebrow">SEGURIDAD Y RECUPERACIÓN</p><h2>Mi cuenta</h2><p class="muted">Puedes actualizar usuario, correo o teléfono. Para conservar tu contraseña actual, deja vacíos los campos de contraseña.</p></div></div><form id="familyAccountForm"><div class="form-grid two"><label>Usuario<input name="username" minlength="4" maxlength="40" required></label><label>Correo de recuperación<input type="email" name="email"><small>Se utiliza para recuperar el acceso.</small></label><label>Teléfono de recuperación<input name="phone" inputmode="tel"><small>Incluye la lada.</small></label></div><h3>Cambiar contraseña (opcional)</h3><div class="form-grid two"><label>Nueva contraseña<input type="password" name="password" minlength="10" autocomplete="new-password"></label><label>Confirmar nueva contraseña<input type="password" name="passwordConfirmation" minlength="10" autocomplete="new-password"></label></div><p class="family-security-note">Si no deseas cambiarla, deja ambos campos vacíos. Una nueva contraseña debe tener al menos 10 caracteres, letras y números.</p><div class="family-save"><button class="btn primary" type="submit">Guardar cambios</button></div></form></article></div>
       </section>
     </main>
   </div>
