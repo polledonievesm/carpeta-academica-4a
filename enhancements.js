@@ -81,3 +81,324 @@
     enhancePasswords();renderInstrumentOptions();renderInstruments();addSaveOverlay();
   });
 })();
+
+/* Panel familiar v1.6: semana escolar centralizada, reporte semanal y credenciales compactas. */
+(function () {
+  'use strict';
+  const planningCalendar = window.CARPETA_PLANNING_CALENDAR;
+  if (!planningCalendar) return;
+
+  let planningSelectedDate = planningCalendar.today();
+  let planningFollowsToday = true;
+  let planningLastToday = planningSelectedDate;
+
+  function ensureFamilyPlanningShell() {
+    const app = $('#familyAppPanel');
+    if (!app || $('#familyPlanningPanel')) return;
+    const studentHead = app.querySelector('.family-student-head');
+    studentHead.insertAdjacentHTML('afterend', `
+      <section id="familyPlanningPanel" class="family-planning-panel" aria-live="polite">
+        <div class="family-planning-top">
+          <div><span class="family-planning-eyebrow">SEMANA DE PLANEACIÓN</span><h2 id="familyPlanningTitle">Semana</h2><p id="familyPlanningRange"></p></div>
+          <span id="familyPlanningState" class="family-planning-state"><i></i> Semana actual</span>
+        </div>
+        <div class="family-planning-date-row">
+          <span class="family-planning-calendar" aria-hidden="true">▣</span>
+          <div><small>Fecha seleccionada</small><strong id="familyPlanningSelectedLabel"></strong></div>
+          <label class="btn family-date-button">▣&nbsp; Elegir fecha<input id="familyPlanningDateInput" type="date" aria-label="Elegir fecha"></label>
+          <button class="btn primary" data-action="family-planning-today">Hoy</button>
+        </div>
+        <div id="familyPlanningDays" class="family-planning-days"></div>
+        <p id="familyPlanningNote" class="family-planning-note">ⓘ Sábados y domingos conservan la semana que acaba de finalizar.</p>
+      </section>
+      <div class="family-report-actions">
+        <button class="btn primary" data-action="family-view-weekly-report">▤&nbsp; Ver reporte</button>
+        <button class="btn" data-action="family-print-weekly-report">▣&nbsp; Imprimir / PDF</button>
+      </div>`);
+
+    const periodBar = app.querySelector('.family-period-bar');
+    const otherPeriods = document.createElement('details');
+    otherPeriods.className = 'family-other-periods';
+    otherPeriods.innerHTML = '<summary>Consultar otro periodo</summary>';
+    periodBar.parentNode.insertBefore(otherPeriods, periodBar);
+    otherPeriods.appendChild(periodBar);
+
+    const reportView = document.createElement('div');
+    reportView.id = 'familyWeeklyReport';
+    reportView.className = 'family-view';
+    app.insertBefore(reportView, $('#familyProfile'));
+
+    app.insertAdjacentHTML('beforeend', `
+      <nav class="family-bottom-nav" aria-label="Navegación familiar móvil">
+        <button class="active" data-family-bottom-view="familyOverview"><span>⌂</span>Inicio</button>
+        <button data-family-bottom-view="familyTasks"><span>▣</span>Tareas</button>
+        <button data-family-bottom-view="familyGrades"><span>▥</span>Calificaciones</button>
+        <button data-family-bottom-view="familyAccount"><span>♙</span>Mi cuenta</button>
+      </nav>`);
+
+    const familyHeader = $('#familyPortal .family-header');
+    familyHeader.insertAdjacentHTML('beforeend', `
+      <button id="familyMobileMenuButton" class="family-mobile-menu-button" type="button" aria-expanded="false" aria-label="Abrir menú">☰</button>
+      <div id="familyMobileMenu" class="family-mobile-menu hidden-control">
+        <button type="button" data-family-mobile-view="familyProfile">Datos familiares</button>
+        <button type="button" data-family-mobile-view="familyAccount">Mi cuenta</button>
+        <button type="button" data-action="family-logout">Cerrar sesión</button>
+      </div>`);
+
+    $('#familyPlanningDateInput').addEventListener('change', function (event) {
+      if (event.target.value) setFamilyPlanningDate(event.target.value, true, false);
+    });
+    $('.family-bottom-nav').addEventListener('click', function (event) {
+      const button = event.target.closest('[data-family-bottom-view]');
+      if (!button) return;
+      showFamilyView(button.dataset.familyBottomView);
+      $$('.family-bottom-nav button').forEach(function (item) { item.classList.toggle('active', item === button); });
+    });
+    $('#familyMobileMenuButton').addEventListener('click', function () {
+      const menu = $('#familyMobileMenu');
+      const open = menu.classList.toggle('hidden-control') === false;
+      this.setAttribute('aria-expanded', String(open));
+    });
+    $('#familyMobileMenu').addEventListener('click', function (event) {
+      const button = event.target.closest('[data-family-mobile-view]');
+      if (!button) return;
+      showFamilyView(button.dataset.familyMobileView);
+      this.classList.add('hidden-control');
+      $('#familyMobileMenuButton').setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function capitalize(value) {
+    const text = String(value || '');
+    return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+  }
+
+  function selectedDateLabel(value) {
+    return capitalize(new Date(value + 'T12:00:00').toLocaleDateString('es-MX', {
+      weekday: 'long', day: 'numeric', month: 'long'
+    }));
+  }
+
+  function renderFamilyPlanningPanel() {
+    ensureFamilyPlanningShell();
+    const info = planningCalendar.resolve(planningSelectedDate);
+    $('#familyPlanningTitle').textContent = info.title;
+    $('#familyPlanningRange').textContent = info.rangeLabel;
+    $('#familyPlanningSelectedLabel').textContent = selectedDateLabel(planningSelectedDate);
+    $('#familyPlanningDateInput').value = planningSelectedDate;
+    const isToday = planningSelectedDate === planningCalendar.today();
+    const state = $('#familyPlanningState');
+    state.className = 'family-planning-state ' + (info.type === 'vacation' ? 'vacation' : info.type === 'suspension' ? 'suspension' : '');
+    state.innerHTML = '<i></i> ' + (info.type === 'vacation' ? 'Vacaciones' : info.type === 'suspension' ? 'Suspensión' : isToday ? 'Semana actual' : 'Fecha consultada');
+    const days = planningCalendar.daysFor(info);
+    $('#familyPlanningDays').innerHTML = days.map(function (day) {
+      return `<button type="button" class="${day.selected ? 'active' : ''}" data-action="family-select-planning-day" data-date="${day.date}"><span>${day.label}</span><b>${day.day}</b></button>`;
+    }).join('');
+    $('#familyPlanningDays').classList.toggle('hidden-control', !days.length);
+    $('#familyPlanningNote').textContent = info.type === 'vacation'
+      ? 'ⓘ Durante este periodo no se contabilizan días de clase.'
+      : info.type === 'suspension'
+        ? 'ⓘ El 6 de enero corresponde a la Semana 17, pero no hay clases.'
+        : 'ⓘ Sábados y domingos conservan la semana que acaba de finalizar.';
+    $$('.family-report-actions .btn').forEach(function (button) {
+      button.disabled = !['week', 'suspension'].includes(info.type);
+    });
+  }
+
+  async function setFamilyPlanningDate(value, loadData, followsToday) {
+    planningSelectedDate = value || planningCalendar.today();
+    planningFollowsToday = Boolean(followsToday);
+    renderFamilyPlanningPanel();
+    const type = $('#familyPeriodType');
+    const date = $('#familyPeriodDate');
+    if (type) type.value = 'week';
+    if (date) date.value = planningSelectedDate;
+    toggleFamilyPeriodControls();
+    if (loadData && familyPortalData) await loadFamilyAcademic();
+  }
+
+  const originalLoadFamilyProfileV16 = loadFamilyProfile;
+  loadFamilyProfile = async function () {
+    ensureFamilyPlanningShell();
+    planningSelectedDate = planningCalendar.today();
+    planningFollowsToday = true;
+    $('#familyPeriodType').value = 'week';
+    $('#familyPeriodDate').value = planningSelectedDate;
+    toggleFamilyPeriodControls();
+    setLoading(true, 'Cargando el avance académico…', function () { loadFamilyProfile(); });
+    try {
+      resetFamilyIdleTimer();
+      familyMessage('Consultando el avance académico…');
+      const period = { type: 'week', trimester: Number($('#familyTrimester').value || 1), reference: planningSelectedDate };
+      try {
+        familyPortalData = await familyServer('getFamilyPortalInitialData', period);
+      } catch (error) {
+        if (!/acción familiar solicitada no está permitida/i.test(String(error.message || ''))) throw error;
+        await originalLoadFamilyProfileV16();
+        return;
+      }
+      renderFamilyPortal();
+      renderFamilyPlanningPanel();
+      showFamilyPanel('familyAppPanel');
+    } catch (error) {
+      familySessionToken = '';
+      localStorage.removeItem(FAMILY_SESSION_KEY);
+      sessionStorage.removeItem(FAMILY_SESSION_KEY);
+      showFamilyPanel('familyLoginPanel');
+      familyMessage(error.message, true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  function familyConductGaugeV16(summary) {
+    const score = Number(summary && summary.score);
+    const valid = Number.isFinite(score);
+    const safe = valid ? Math.max(0, Math.min(10, score)) : 0;
+    const rotation = -90 + safe * 18;
+    const label = summary && summary.label || 'Sin datos';
+    return `<div class="conduct-gauge"><div class="conduct-arc"><i style="transform:rotate(${rotation}deg)"></i></div><div><strong>${escapeHtml(label)}</strong><span>${valid ? score.toFixed(1) + ' de 10' : 'Sin registros'}</span></div><small><b>Malo</b><b>Regular</b><b>Bueno</b><b>Excelente</b></small></div>`;
+  }
+
+  function familyReportTaskStatus(task) {
+    return String(task && task.status || '') === 'Entregó'
+      ? { className: 'done', icon: '✓', label: 'Entregó' }
+      : { className: 'missing', icon: '✕', label: 'No entregó' };
+  }
+
+  function familyTaskLineV16(task) {
+    const status = familyReportTaskStatus(task);
+    return `<article class="family-task-line ${status.className}"><div><span>${escapeHtml(formatDateShort(task.date))} · ${escapeHtml(formatTime(task.start))}${task.end ? '–' + escapeHtml(formatTime(task.end)) : ''}</span><h4>${escapeHtml(task.name)}</h4><p>${escapeHtml(task.source || '')} · ${escapeHtml(task.project || 'Sin proyecto')}</p></div><b class="family-task-status">${status.icon} ${status.label}</b>${task.opportunities ? `<p class="opportunity"><b>Área de oportunidad:</b> ${escapeHtml(task.opportunities)}</p>` : ''}</article>`;
+  }
+
+  function familyTasksForCurrentPeriod() {
+    const academic = familyPortalData && familyPortalData.academic;
+    if (!academic) return [];
+    if (Array.isArray(academic.tasks)) return academic.tasks;
+    return (academic.fields || []).flatMap(function (field) {
+      return (field.tasks || []).map(function (task) { return Object.assign({ source: field.name }, task); });
+    });
+  }
+
+  function weeklyObservation(academic) {
+    const opportunities = academic && academic.opportunities || [];
+    return opportunities.length
+      ? 'Áreas de oportunidad: ' + opportunities.join('; ') + '.'
+      : 'Sin observaciones adicionales registradas durante esta semana.';
+  }
+
+  function renderFamilyWeeklyReport() {
+    const host = $('#familyWeeklyReport');
+    if (!host || !familyPortalData) return;
+    const academic = familyPortalData.academic || {};
+    const tasks = familyTasksForCurrentPeriod();
+    const info = planningCalendar.resolve(planningSelectedDate);
+    host.innerHTML = `<div class="family-report-mobile-head"><button class="btn" data-action="family-report-back">← Regresar</button><div><p class="eyebrow">REPORTE SEMANAL</p><h2>${escapeHtml(familyPortalData.student.name)}</h2><p>${escapeHtml((familyPortalData.school.group || '') + ' · ' + info.title + ' · ' + info.rangeLabel)}</p></div><button class="btn" data-action="family-print-weekly-report">▣ Imprimir / PDF</button></div><h2 class="family-report-section-title">Tareas y actividades</h2><div class="family-report-task-list">${tasks.length ? tasks.map(function (task) {
+      const status = familyReportTaskStatus(task);
+      return `<article><time>${escapeHtml(formatDateShort(task.date))}</time><div><small>${escapeHtml(task.source || 'Campo formativo')}</small><h3>${escapeHtml(task.name)}</h3><p>${escapeHtml(formatTime(task.start))}${task.end ? '–' + escapeHtml(formatTime(task.end)) : ''}${task.project ? ' · ' + escapeHtml(task.project) : ''}</p></div><strong class="${status.className}">${status.icon} ${status.label}</strong></article>`;
+    }).join('') : '<article class="family-report-empty">No hay tareas registradas para esta semana.</article>'}</div><details class="family-report-note"><summary>Indicaciones para la familia</summary><ul><li>Revisar las actividades marcadas como no entregadas.</li><li>Firmar las tareas corregidas cuando el docente lo solicite.</li><li>Practicar lectura durante 15 minutos diarios.</li></ul></details><details class="family-report-note" open><summary>Observaciones de la semana</summary><p>${escapeHtml(weeklyObservation(academic))}</p></details>`;
+  }
+
+  renderFamilyAcademic = function () {
+    ensureFamilyPlanningShell();
+    const academic = familyPortalData && familyPortalData.academic;
+    if (!academic) return;
+    const fields = academic.fields || [];
+    const summary = academic.taskSummary || {};
+    const attendance = academic.attendanceSummary || {};
+    const conduct = academic.conductSummary || {};
+    const periodLabel = academic.periodLabel || ('Trimestre ' + (academic.trimester || 1));
+    const type = $('#familyPeriodType').value;
+    const heading = type === 'week' ? 'Resumen del ' + selectedDateLabel(planningSelectedDate).toLowerCase() : 'Resumen de ' + periodLabel;
+    $('#familyUpdatedAt').textContent = 'Actualizado: ' + new Date(academic.updatedAt).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
+    renderFamilyPlanningPanel();
+    $('#familyOverview').innerHTML = `<h2 class="family-summary-heading">${escapeHtml(heading)}</h2><div class="family-dashboard-summary"><article class="family-metric attendance-metric"><span>Asistencia</span><strong>${attendance.attended || 0} de ${attendance.total || 0}</strong><div class="family-progress"><i style="width:${Math.min(attendance.percentage || 0, 100)}%"></i></div><small>${attendance.percentage || 0}% de asistencia${attendance.late ? ' · ' + attendance.late + ' retardo(s)' : ''}</small></article><article class="family-metric task-metric"><span>Tareas</span><strong>${summary.completed || 0} de ${summary.total || 0}</strong><div class="family-progress"><i style="width:${Math.min(summary.percentage || 0, 100)}%"></i></div><small>${summary.percentage || 0}% de tareas entregadas</small></article><article class="family-metric conduct-metric"><span>Conducta</span>${familyConductGaugeV16(conduct)}</article></div><article class="family-info-note"><b>Información en proceso.</b> Los resultados cambian cuando el maestro agrega tareas, asistencias, participación, conducta o examen.</article><div class="family-field-preview">${fields.map(function (field) { return `<article><span>${familyFieldIcon(field.name)}</span><div><h3>${escapeHtml(field.name)}</h3><p>${field.completed} de ${field.total} tareas · Calificación ${familyNumber(field.grade)}</p>${field.sources && field.sources.length > 1 ? `<small>Matemático ${familyNumber(field.sources[0].grade)} · Científico ${familyNumber(field.sources[1].grade)}</small>` : ''}</div></article>`; }).join('')}</div>`;
+    const weeks = academic.weeklyTasks || [];
+    $('#familyTasks').innerHTML = `<div class="family-page-title"><div><p class="eyebrow">${escapeHtml(periodLabel)}</p><h2>Tareas por semana</h2></div><strong>${summary.completed || 0} de ${summary.total || 0}</strong></div>${weeks.length ? weeks.map(function (week) {
+      const calendarWeek = planningCalendar.resolve(week.start);
+      return `<details class="family-week" ${weeks.length === 1 ? 'open' : ''}><summary><div><b>${escapeHtml(calendarWeek.title)}</b><span>${escapeHtml(calendarWeek.rangeLabel)}</span></div><strong>${week.completed} realizadas · ${week.pending} pendientes</strong></summary><div>${week.tasks.map(familyTaskLineV16).join('')}</div></details>`;
+    }).join('') : '<article class="family-card"><p class="muted">No hay actividades registradas en este periodo.</p></article>'}`;
+    $('#familyGrades').innerHTML = familyGradesHtml(fields);
+    renderFamilyWeeklyReport();
+  };
+
+  async function ensureWeeklyData() {
+    if ($('#familyPeriodType').value === 'week' && $('#familyPeriodDate').value === planningSelectedDate) return;
+    await setFamilyPlanningDate(planningSelectedDate, true, planningFollowsToday);
+  }
+
+  async function openFamilyWeeklyReport() {
+    await ensureWeeklyData();
+    renderFamilyWeeklyReport();
+    showFamilyView('familyWeeklyReport');
+    $$('.family-bottom-nav button').forEach(function (button) { button.classList.remove('active'); });
+  }
+
+  function weeklyPrintRows(tasks) {
+    if (!tasks.length) return '<tr><td colspan="5">No hay tareas registradas para esta semana.</td></tr>';
+    return tasks.map(function (task) {
+      const delivered = familyReportTaskStatus(task).className === 'done';
+      return `<tr><td>${escapeHtml(formatDateShort(task.date))}</td><td>${escapeHtml(task.source || '—')}</td><td>${escapeHtml(task.name)}</td><td class="mark">${delivered ? '✓' : ''}</td><td class="mark">${delivered ? '' : '✕'}</td></tr>`;
+    }).join('');
+  }
+
+  async function printFamilyWeeklyReport() {
+    await ensureWeeklyData();
+    const academic = familyPortalData.academic || {};
+    const tasks = familyTasksForCurrentPeriod();
+    const info = planningCalendar.resolve(planningSelectedDate);
+    const popup = window.open('', '_blank');
+    if (!popup) return toast('Permite las ventanas emergentes para imprimir.', true);
+    const logo = new URL('school-logo.webp', location.href).href;
+    const school = familyPortalData.school || {};
+    const chunks = [];
+    for (let index = 0; index < Math.max(tasks.length, 1); index += 12) chunks.push(tasks.slice(index, index + 12));
+    const pages = chunks.map(function (pageTasks, pageIndex) {
+      const last = pageIndex === chunks.length - 1;
+      return `<section class="weekly-page"><header><img src="${escapeHtml(logo)}"><div><p>${escapeHtml(school.name || 'Escuela Primaria Francisco Hoil Torres T.V.')}</p><h1>REPORTE SEMANAL DEL ALUMNO</h1></div></header><div class="student-data"><p><b>Alumno:</b> ${escapeHtml(familyPortalData.student.name)}</p><p><b>Grado y grupo:</b> ${escapeHtml(school.group || '4° A')}</p><p><b>Docente:</b> ${escapeHtml(school.teacher || 'Prof. Michel Otaner Polledo Nieves')}</p><p><b>${escapeHtml(info.title)}:</b> ${escapeHtml(info.rangeLabel.replace(/^Del /, ''))}</p></div><h2>TAREAS Y ACTIVIDADES DE LA SEMANA${pageIndex ? ' · CONTINUACIÓN' : ''}</h2><table><thead><tr><th>Fecha</th><th>Campo formativo</th><th>Tarea o actividad</th><th>Entregó</th><th>No entregó</th></tr></thead><tbody>${weeklyPrintRows(pageTasks)}</tbody></table>${last ? `<section class="notes"><h2>INDICACIONES PARA MADRES, PADRES O TUTORES</h2><ul><li>Revisar las actividades marcadas como no entregadas.</li><li>Firmar las tareas corregidas cuando el docente lo solicite.</li><li>Practicar lectura durante 15 minutos diarios.</li></ul></section><section class="observations"><h2>OBSERVACIONES DE LA SEMANA</h2><p>${escapeHtml(weeklyObservation(academic))}</p><i></i><i></i><i></i></section>` : ''}<footer>Este reporte corresponde únicamente a la semana indicada.</footer></section>`;
+    }).join('');
+    popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reporte semanal</title><style>@page{size:letter portrait;margin:9mm}*{box-sizing:border-box}body{margin:0;color:#000;font-family:Arial,sans-serif;font-size:9pt}.weekly-page{min-height:250mm;position:relative;break-after:page;page-break-after:always;padding-bottom:9mm}.weekly-page:last-child{break-after:auto;page-break-after:auto}header{display:flex;align-items:center;justify-content:center;gap:8mm;padding-bottom:3mm}header img{width:14mm;height:14mm;object-fit:contain;filter:grayscale(1)}header div{text-align:center}header p{margin:0 0 1mm;font-size:10pt;font-weight:700}h1{margin:0;font-size:15pt}.student-data{display:grid;grid-template-columns:1.45fr .9fr;border:1px solid #000;margin:1mm 0 5mm}.student-data p{margin:0;padding:2.2mm 3mm;border-right:1px solid #000;border-bottom:1px solid #000}.student-data p:nth-child(2n){border-right:0}.student-data p:nth-last-child(-n+2){border-bottom:0}h2{margin:0;text-align:center;font-size:11pt;background:#eee;border:1px solid #000;padding:2mm}table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:2mm;vertical-align:middle}th{background:#f0f0f0}th:nth-child(1){width:17%}th:nth-child(2){width:23%}th:nth-child(4),th:nth-child(5){width:10%;text-align:center}.mark{text-align:center;font-size:15pt;font-weight:700}.notes,.observations{margin-top:4mm;border:1px solid #000}.notes h2,.observations h2{border-width:0 0 1px}.notes ul{margin:2.5mm 5mm;padding-left:5mm}.notes li{margin:1mm 0}.observations p{margin:2.5mm 4mm 1mm}.observations i{display:block;height:7mm;border-bottom:1px solid #888;margin:0 4mm}footer{position:absolute;bottom:0;width:100%;text-align:center;font-size:8pt}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>${pages}</body></html>`);
+    popup.document.close();
+    popup.focus();
+    setTimeout(function () { popup.print(); }, 700);
+  }
+
+  printFamilyCredentials = function (credentials) {
+    const rows = Array.isArray(credentials) ? credentials.filter(function (item) { return item && item.password; }) : [];
+    if (!rows.length) return toast('Primero genera una contraseña temporal. Por seguridad, las contraseñas anteriores no se pueden volver a mostrar.', true);
+    const popup = window.open('', '_blank');
+    if (!popup) return toast('Permite las ventanas emergentes para imprimir.', true);
+    const logo = new URL('school-logo.webp', location.href).href;
+    const qr = new URL('family-access-qr.svg', location.href).href;
+    const school = state.config.escuela || 'Escuela Primaria Francisco Hoil Torres T.V.';
+    const cards = rows.map(function (item) {
+      return `<article class="credential"><header><img src="${escapeHtml(logo)}"><div><b>${escapeHtml(school)}</b><small>${escapeHtml(state.config.gradoGrupo || '4° A')} · ${escapeHtml(state.config.cicloEscolar || '2026-2027')}</small></div></header><span>ACCESO FAMILIAR</span><h2>${escapeHtml(item.studentName)}</h2><div class="credential-body"><div><label>USUARIO</label><strong>${escapeHtml(item.username)}</strong><label>CONTRASEÑA TEMPORAL</label><strong>${escapeHtml(item.password)}</strong></div><figure><img src="${escapeHtml(qr)}"><figcaption>Escanea para abrir el portal</figcaption></figure></div></article>`;
+    });
+    const pages = [];
+    for (let index = 0; index < cards.length; index += 10) pages.push(`<section class="credential-sheet">${cards.slice(index, index + 10).join('')}</section>`);
+    popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Credenciales familiares</title><style>@page{size:letter portrait;margin:6mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#0b315d}.credential-sheet{height:267mm;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(5,1fr);gap:2.5mm;break-after:page;page-break-after:always}.credential-sheet:last-child{break-after:auto;page-break-after:auto}.credential{border:1px dashed #1788b8;border-radius:3mm;padding:2.5mm 3mm;overflow:hidden;background:#fff}.credential header{display:flex;align-items:center;gap:2mm;border-bottom:1.2px solid #10a9b0;padding-bottom:1.2mm}.credential header img{width:9mm;height:9mm;object-fit:contain}.credential header div{min-width:0}.credential header b{display:block;font-size:7.6pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.credential header small{display:block;font-size:6.3pt;margin-top:.5mm}.credential>span{display:block;color:#07868c;font-size:6.7pt;font-weight:900;letter-spacing:.7px;margin-top:1.3mm}.credential h2{font-size:10pt;line-height:1.05;margin:1mm 0 1.5mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.credential-body{display:grid;grid-template-columns:minmax(0,1fr) 27mm;gap:2mm;align-items:center;background:#eef8f8;border-radius:2mm;padding:1.5mm 2mm}.credential-body label{display:block;font-size:6.2pt;color:#4e6f7b;font-weight:700}.credential-body strong{display:block;font-size:11pt;line-height:1.08;margin:.4mm 0 1.2mm;overflow-wrap:anywhere;color:#0b315d}.credential figure{margin:0;text-align:center}.credential figure img{width:22mm;height:22mm;display:block;margin:auto}.credential figcaption{font-size:5.5pt;color:#355a6b;margin-top:.4mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>${pages.join('')}</body></html>`);
+    popup.document.close();
+    popup.focus();
+    setTimeout(function () { popup.print(); }, 850);
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    ensureFamilyPlanningShell();
+    renderFamilyPlanningPanel();
+    Object.assign(actions, {
+      'family-planning-today': function () { setFamilyPlanningDate(planningCalendar.today(), true, true); },
+      'family-select-planning-day': function (button) { setFamilyPlanningDate(button.dataset.date, true, false); },
+      'family-view-weekly-report': function () { openFamilyWeeklyReport(); },
+      'family-print-weekly-report': function () { printFamilyWeeklyReport(); },
+      'family-report-back': function () { showFamilyView('familyOverview'); $('.family-bottom-nav [data-family-bottom-view="familyOverview"]').classList.add('active'); }
+    });
+    setInterval(function () {
+      const currentToday = planningCalendar.today();
+      if (currentToday === planningLastToday) return;
+      planningLastToday = currentToday;
+      if (planningFollowsToday && familySessionToken && !$('#familyAppPanel').classList.contains('hidden-control')) {
+        setFamilyPlanningDate(currentToday, true, true);
+      }
+    }, 60000);
+  });
+})();
