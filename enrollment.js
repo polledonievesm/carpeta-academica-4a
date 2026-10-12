@@ -144,7 +144,7 @@ async function submitEnrollment(){
 async function generateAllFamilyAccess(){
   if(!state.directory)await loadFamilyAccess(true);const ids=(state.directory?.rows||[]).map(row=>row.student.id);if(!ids.length)return toast('No hay alumnos para generar accesos.',true);
   if(!confirm(`Se crearán o renovarán ${ids.length} contraseñas temporales. ¿Continuar?`))return;
-  await runAction(async()=>{const result=await server('generateFamilyCredentialsBatch',ids);state.familyCredentials=result.credentials||[];state.directory=await server('getDirectoryAdminData');state.directoryLoadedAt=Date.now();renderFamilyAccess();toast(result.message+' Ya puedes imprimir las tarjetas.')})
+  await runAction(async()=>{const result=await server('generateFamilyCredentialsBatch',ids);state.familyCredentials=result.credentials||[];applyFamilyCredentials(state.familyCredentials);renderFamilyAccess();toast(result.message+' Ya puedes imprimir las tarjetas.')})
 }
 
 function printFamilyCredentials(credentials){

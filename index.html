@@ -8,6 +8,15 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div id="bootScreen" class="boot-screen" role="status" aria-live="polite">
+    <div class="boot-card">
+      <span class="boot-mark">▣</span>
+      <h1>Carpeta Académica</h1>
+      <p id="bootStatus">Preparando el acceso seguro…</p>
+      <div class="boot-progress"><i></i></div>
+      <button id="bootRetry" class="btn primary hidden-control" type="button">Reintentar conexión</button>
+    </div>
+  </div>
   <div id="app" class="app-shell auth-protected">
     <aside class="sidebar" id="sidebar">
       <div class="brand"><span class="brand-mark">▣</span><span class="brand-text">Carpeta<br>Académica</span><button id="sidebarCollapse" class="sidebar-collapse" type="button" aria-label="Contraer menú">‹</button></div>
