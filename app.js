@@ -5,7 +5,9 @@ const API_URL=String(window.CARPETA_ACADEMICA_CONFIG?.apiUrl||'').trim();
 const SESSION_KEY='carpeta_academica_session_v1';
 const FAMILY_SESSION_KEY='carpeta_academica_family_session_v1';
 const FAMILY_REMEMBER_KEY='carpeta_academica_family_remember_v1';
+const DRAFT_KEYS={project:'carpeta_academica_draft_project_v1',classRecord:'carpeta_academica_draft_activity_v1',instrument:'carpeta_academica_draft_instrument_v1'};
 const pendingRequests=new Map();
+const draftTimers=new Map();
 let sessionToken=localStorage.getItem(SESSION_KEY)||'';
 let familySessionToken=sessionStorage.getItem(FAMILY_SESSION_KEY)||(localStorage.getItem(FAMILY_REMEMBER_KEY)==='true'?localStorage.getItem(FAMILY_SESSION_KEY)||'':'');
 if(localStorage.getItem(FAMILY_REMEMBER_KEY)!=='true')localStorage.removeItem(FAMILY_SESSION_KEY);
@@ -114,6 +116,12 @@ function bindUI(){
   $('.family-tabs').addEventListener('click',e=>{const button=e.target.closest('[data-family-view]');if(button)showFamilyView(button.dataset.familyView)});
   $('#subjectForm').addEventListener('submit',saveSubjectForm);
   $('#gradeWeightsList').addEventListener('input',updateGradeWeightTotal);
+  installDraftAutosave($('#projectForm'),DRAFT_KEYS.project,null,'projectDraftStatus');
+  installDraftAutosave($('#classForm'),DRAFT_KEYS.classRecord,()=>({evaluations:state.classEvaluations}),'classDraftStatus');
+  window.addEventListener('pagehide',()=>{
+    if($('#projectDialog')?.open)writeDraft($('#projectForm'),DRAFT_KEYS.project,null,'projectDraftStatus');
+    if($('#view-daily')?.classList.contains('active'))writeDraft($('#classForm'),DRAFT_KEYS.classRecord,()=>({evaluations:state.classEvaluations}),'classDraftStatus');
+  });
 }
 const actions={
   'logout':()=>logout(),
@@ -125,7 +133,9 @@ const actions={
   'edit-current-project':()=>state.currentProject&&openProject(state.currentProject),
   'new-class':()=>openClassForm(state.currentProject?.id),
   'edit-class':btn=>openClassForm(state.currentProject?.id,btn.dataset.id),
-  'cancel-class':()=>state.currentProject?showView('project-detail'):showView('dashboard'),
+  'cancel-class':()=>{if(readDraft(DRAFT_KEYS.classRecord))toast('La actividad quedó guardada como borrador.');state.currentProject?showView('project-detail'):showView('dashboard')},
+  'discard-project-draft':()=>discardDraft(DRAFT_KEYS.project,'projectDraftStatus'),
+  'discard-class-draft':()=>discardDraft(DRAFT_KEYS.classRecord,'classDraftStatus'),
   'all-complete':()=>setAllEvaluations('trabajo','Completo'),
   'all-adequate':()=>setAllEvaluations('conducta','Adecuada'),
   'weekly-report':()=>openAcademicReports('weekly'),
@@ -252,21 +262,27 @@ function renderProjectWorkspace(){
 async function openClassForm(projectId='',classId=''){
   renderClassOptions();
   const form=$('#classForm');form.reset();form.elements.id.value='';form.elements.fecha.value=todayCancun();form.elements.horaInicio.value='13:00';form.elements.horaFin.value='14:00';
+  $('#classDraftStatus')?.classList.add('hidden-control');
   const selected=projectId||state.currentProject?.id||state.projects.find(p=>p.estado==='Activo')?.id||'';
   form.elements.proyectoId.value=selected;
   const project=state.projects.find(p=>String(p.id)===String(selected));
   if(project&&[...form.elements.materia.options].some(o=>o.value===project.campoFormativo))form.elements.materia.value=project.campoFormativo;
   state.classStudents=[];state.classEvaluations={};state.classAttendanceDay=null;
-  let savedEvaluations={};
+  let savedEvaluations={},restoredDraft=false;
   if(classId){
     await runAction(async()=>{
       const data=await server('getClassRecord',classId);Object.entries(data.classRecord).forEach(([key,value])=>{if(form.elements[key])form.elements[key].value=value??''});
       data.evaluations.forEach(row=>savedEvaluations[row.alumnoId]={alumnoId:row.alumnoId,trabajo:row.trabajo||'Completo',conducta:row.conducta||'Adecuada',participacion:row.participacion||'Media',desempeno:row.desempeno||'',observacionLibre:row.observacionLibre||'',instrumentResults:row.instrumentResults||{}});
     });
-  }
+    const draft=readDraft(DRAFT_KEYS.classRecord);
+    if(draft&&String(draft.data?.id||'')===String(classId)){
+      restoreFormDraft(form,draft.data);savedEvaluations=draft.extra?.evaluations||savedEvaluations;restoredDraft=true;showDraftStatus('classDraftStatus',draft.updatedAt);
+    }
+  }else{const draft=readDraft(DRAFT_KEYS.classRecord);if(draft&&!draft.data?.id&&(!projectId||!draft.data?.proyectoId||String(draft.data.proyectoId)===String(projectId))){restoreFormDraft(form,draft.data);savedEvaluations=draft.extra?.evaluations||{};restoredDraft=true;showDraftStatus('classDraftStatus',draft.updatedAt)}}
   $('#classFormTitle').textContent=classId?'Editar actividad':'Registrar actividad';
   await loadClassAttendance(savedEvaluations);
   showView('daily');
+  if(restoredDraft)toast('Se recuperó el borrador de la actividad.');
 }
 function defaultEvaluation(studentId){return {alumnoId:studentId,trabajo:'Completo',conducta:'Adecuada',participacion:'Media',desempeno:'',observacionLibre:''}}
 async function loadClassAttendance(savedEvaluations=null){
@@ -295,12 +311,12 @@ function renderEvaluationList(){
   $('#evaluationList').innerHTML=state.classStudents.length?state.classStudents.map((student,index)=>{const r=state.classEvaluations[student.id];return `<article class="evaluation-row" data-student="${student.id}"><div class="evaluation-student"><span>${index+1}</span><strong>${escapeHtml(fullName(student))}</strong></div><label>Trabajo<select data-field="trabajo"><option ${r.trabajo==='Completo'?'selected':''}>Completo</option><option ${r.trabajo==='Incompleto'?'selected':''}>Incompleto</option><option ${r.trabajo==='No trabajó'?'selected':''}>No trabajó</option></select></label><label>Conducta<select data-field="conducta"><option ${r.conducta==='Excelente'?'selected':''}>Excelente</option><option ${r.conducta==='Adecuada'?'selected':''}>Adecuada</option><option ${r.conducta==='Requiere apoyo'?'selected':''}>Requiere apoyo</option></select></label><label>Participación<select data-field="participacion"><option ${r.participacion==='Alta'?'selected':''}>Alta</option><option ${r.participacion==='Media'?'selected':''}>Media</option><option ${r.participacion==='Nula'?'selected':''}>Nula</option></select></label><label class="rubric-field">Observación predeterminada<select data-field="desempeno">${rubricOptions(r.desempeno)}</select></label><label class="note-field">Observación adicional<input data-field="observacionLibre" value="${escapeHtml(r.observacionLibre)}" placeholder="Opcional"></label></article>`}).join(''):'<div class="empty-history"><strong>No hay alumnos disponibles para evaluar</strong><p>Guarda primero la asistencia del día.</p></div>';
   $('#evaluationProgress').textContent=`${state.classStudents.length} alumno(s) presentes preparados`;
 }
-function updateClassEvaluation(e){const row=e.target.closest('[data-student]'),field=e.target.dataset.field;if(!row||!field)return;state.classEvaluations[row.dataset.student][field]=e.target.value}
-function setAllEvaluations(field,value){Object.values(state.classEvaluations).forEach(row=>row[field]=value);renderEvaluationList()}
+function updateClassEvaluation(e){const row=e.target.closest('[data-student]'),field=e.target.dataset.field;if(!row||!field)return;state.classEvaluations[row.dataset.student][field]=e.target.value;scheduleDraftSave($('#classForm'),DRAFT_KEYS.classRecord,()=>({evaluations:state.classEvaluations}),'classDraftStatus')}
+function setAllEvaluations(field,value){Object.values(state.classEvaluations).forEach(row=>row[field]=value);renderEvaluationList();scheduleDraftSave($('#classForm'),DRAFT_KEYS.classRecord,()=>({evaluations:state.classEvaluations}),'classDraftStatus')}
 async function saveClassForm(e){
   e.preventDefault();if(!state.classStudents.length)return toast('Primero guarda la asistencia; no hay alumnos presentes para evaluar.',true);const payload=formData(e.currentTarget);payload.evaluaciones=state.classStudents.map(s=>state.classEvaluations[s.id]);
   if(!confirm(`¿Guardar la actividad y la evaluación de ${payload.evaluaciones.length} alumnos?`))return;
-  await runAction(async()=>{const result=await server('saveClassRecord',payload);state.stats.activities=Number(state.stats.activities||0)+(payload.id?0:1);state.stats.followUp=result.followUp;state.projectWorkspace=await server('getProjectWorkspace',payload.proyectoId);state.currentProject=state.projectWorkspace.project;renderProjectWorkspace();renderStats();showView('project-detail');toast(result.message)});
+  await runAction(async()=>{const result=await server('saveClassRecord',payload);clearDraft(DRAFT_KEYS.classRecord,'classDraftStatus');state.stats.activities=Number(state.stats.activities||0)+(payload.id?0:1);state.stats.followUp=result.followUp;state.projectWorkspace=await server('getProjectWorkspace',payload.proyectoId);state.currentProject=state.projectWorkspace.project;renderProjectWorkspace();renderStats();showView('project-detail');toast(result.message)});
 }
 function formatDateShort(value){if(!value)return 'Sin fecha';const [y,m,d]=String(value).split('-');return `${d}/${m}/${y}`}
 function formatTime(value){if(!value)return '';const [h,m]=String(value).split(':').map(Number);return `${h%12||12}:${String(m||0).padStart(2,'0')} ${h<12?'a. m.':'p. m.'}`}
@@ -592,13 +608,22 @@ async function generateConsolidatedReport(){const trimester=$('#gradeTrimester')
 async function setPaymentEventActive(eventId,active){if(!confirm(active?'¿Reactivar este evento?':'¿Archivar este evento? Su historial se conservará.'))return;await runAction(async()=>{const result=await server('setPaymentEventActive',eventId,active);state.paymentsInitial=await server('getPaymentsInitialData');backPaymentEvents();toast(result.message)})}
 async function syncPaymentStudents(){if(!confirm('¿Sincronizar la lista actual de alumnos con el Control de pagos? El historial anterior se conservará.'))return;await runAction(async()=>{const result=await server('syncPaymentStudents');state.paymentsInitial=result.initialData;renderPaymentsHome();toast(result.message)})}
 function openStudent(s={}){const f=$('#studentForm');f.reset();Object.entries(s).forEach(([k,v])=>{if(f.elements[k])f.elements[k].value=v??''});$('#studentModalTitle').textContent=s.id?'Editar alumno':'Nuevo alumno';$('#studentDialog').showModal()}
-function openProject(p={}){renderProjectSubjectOptions();const f=$('#projectForm');f.reset();Object.entries(p).forEach(([k,v])=>{if(!f.elements[k]||k==='ejes')return;if(f.elements[k].type==='checkbox')f.elements[k].checked=Boolean(v);else f.elements[k].value=v??''});const selected=new Set(String(p.ejes||'').split('|').map(x=>x.trim()).filter(Boolean));$$('input[name="ejes"]',f).forEach(input=>input.checked=selected.has(input.value));$('#projectDialog').showModal()}
+function openProject(p={}){renderProjectSubjectOptions();const f=$('#projectForm');f.reset();Object.entries(p).forEach(([k,v])=>{if(!f.elements[k]||k==='ejes')return;if(f.elements[k].type==='checkbox')f.elements[k].checked=Boolean(v);else f.elements[k].value=v??''});const selected=new Set(String(p.ejes||'').split('|').map(x=>x.trim()).filter(Boolean));$$('input[name="ejes"]',f).forEach(input=>input.checked=selected.has(input.value));const draft=readDraft(DRAFT_KEYS.project),canRestore=draft&&((!p.id&&!draft.data?.id)||(p.id&&String(draft.data?.id)===String(p.id)));if(canRestore){restoreFormDraft(f,draft.data);showDraftStatus('projectDraftStatus',draft.updatedAt)}else $('#projectDraftStatus')?.classList.add('hidden-control');$('#projectDialog').showModal();if(canRestore)toast('Se recuperó el borrador del proyecto.')}
 function openSubjectForm(subject={}){const f=$('#subjectForm');f.reset();f.elements.id.value=subject.id||'';f.elements.nombre.value=subject.nombre||'';$('#subjectDialog').showModal()}
 async function saveSubjectForm(e){e.preventDefault();const payload=formData(e.currentTarget);await runAction(async()=>{const result=await server('saveSubject',payload);const index=state.subjects.findIndex(x=>x.id===result.subject.id);if(index<0)state.subjects.push(result.subject);else state.subjects[index]=result.subject;$('#subjectDialog').close();renderSubjects();renderFields();renderClassOptions();renderProjectSubjectOptions();toast(result.message)})}
 async function deleteSubject(id){if(!confirm('¿Eliminar este campo formativo? Solo será posible si no tiene proyectos ni actividades.'))return;await runAction(async()=>{const result=await server('deleteSubject',id);state.subjects=state.subjects.filter(x=>x.id!==id);renderSubjects();renderFields();renderClassOptions();renderProjectSubjectOptions();toast(result.message)})}
 async function saveStudentForm(e){e.preventDefault();const form=e.target,payload=formData(form);await runAction(async()=>{const r=await server('saveStudent',payload),index=state.students.findIndex(student=>String(student.id)===String(r.student.id));if(index<0)state.students.push(r.student);else state.students[index]=Object.assign({},state.students[index],r.student);state.students.sort((a,b)=>fullName(a).localeCompare(fullName(b),'es'));state.stats.students=state.students.length;state.directory=null;form.closest('dialog').close();renderAll();toast(r.temporaryPassword?`Alumno guardado. Usuario: ${r.student.tutorUsuario} · Contraseña inicial: ${r.temporaryPassword}`:'Alumno actualizado.')})}
-async function saveProjectForm(e){e.preventDefault();const form=e.target,payload=formData(form);payload.ejes=$$('input[name="ejes"]:checked',form).map(input=>input.value).join(' | ');payload.sinProductoFinal=form.elements.sinProductoFinal.checked;await runAction(async()=>{const r=await server('saveProject',payload);const i=state.projects.findIndex(x=>x.id===r.project.id);if(i<0)state.projects.unshift(r.project);else state.projects[i]=r.project;state.stats.projects=state.projects.filter(x=>x.estado==='Activo').length;form.closest('dialog').close();renderAll();toast('Proyecto guardado correctamente.')})}
+async function saveProjectForm(e){e.preventDefault();const form=e.target,payload=formData(form);payload.ejes=$$('input[name="ejes"]:checked',form).map(input=>input.value).join(' | ');payload.sinProductoFinal=form.elements.sinProductoFinal.checked;await runAction(async()=>{const r=await server('saveProject',payload);clearDraft(DRAFT_KEYS.project,'projectDraftStatus');const i=state.projects.findIndex(x=>x.id===r.project.id);if(i<0)state.projects.unshift(r.project);else state.projects[i]=r.project;state.stats.projects=state.projects.filter(x=>x.estado==='Activo').length;form.closest('dialog').close();renderAll();toast('Proyecto guardado correctamente.')})}
 function formData(form){return Object.fromEntries(new FormData(form).entries())}
+function serializeFormDraft(form){const data={};[...form.elements].forEach(control=>{if(!control.name||control.disabled||['button','submit','file','password'].includes(control.type))return;if(control.type==='checkbox'){if(!Array.isArray(data[control.name]))data[control.name]=[];if(control.checked)data[control.name].push(control.value||'on')}else if(control.type==='radio'){if(control.checked)data[control.name]=control.value}else data[control.name]=control.value});return data}
+function restoreFormDraft(form,data={}){Object.entries(data).forEach(([name,value])=>{const controls=[...form.elements].filter(control=>control.name===name);controls.forEach(control=>{if(control.type==='checkbox')control.checked=Array.isArray(value)&&value.includes(control.value||'on');else if(control.type==='radio')control.checked=String(control.value)===String(value);else control.value=value??''})})}
+function readDraft(key){try{const value=JSON.parse(localStorage.getItem(key)||'null');return value&&value.data?value:null}catch(error){return null}}
+function writeDraft(form,key,extraProvider,statusId){try{const draft={updatedAt:new Date().toISOString(),data:serializeFormDraft(form),extra:typeof extraProvider==='function'?extraProvider():{}};localStorage.setItem(key,JSON.stringify(draft));showDraftStatus(statusId,draft.updatedAt)}catch(error){console.warn('No fue posible guardar el borrador.',error)}}
+function scheduleDraftSave(form,key,extraProvider,statusId){clearTimeout(draftTimers.get(key));draftTimers.set(key,setTimeout(()=>writeDraft(form,key,extraProvider,statusId),350))}
+function installDraftAutosave(form,key,extraProvider,statusId){if(!form)return;['input','change'].forEach(type=>form.addEventListener(type,()=>scheduleDraftSave(form,key,extraProvider,statusId)))}
+function showDraftStatus(statusId,updatedAt=''){const box=$(`#${statusId}`);if(!box)return;const label=$('span',box);if(label){const time=updatedAt?new Date(updatedAt).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}):'';label.textContent=`✓ Borrador guardado${time?' · '+time:''} en este dispositivo`}box.classList.remove('hidden-control')}
+function clearDraft(key,statusId){clearTimeout(draftTimers.get(key));draftTimers.delete(key);localStorage.removeItem(key);$(`#${statusId}`)?.classList.add('hidden-control')}
+function discardDraft(key,statusId){if(!confirm('¿Descartar este borrador guardado? Los datos que aún no se hayan registrado se perderán.'))return;clearDraft(key,statusId);toast('Borrador descartado.')}
 async function runAction(fn){setLoading(true,'Guardando o consultando información…');try{await fn()}catch(e){if(isSessionError(e.message)){sessionToken='';localStorage.removeItem(SESSION_KEY);showLogin(e.message)}else toast(e.message,true)}finally{setLoading(false)}}
 function fullName(s){return s.nombreCompleto||[s.apellidoPaterno,s.apellidoMaterno,s.nombres].filter(Boolean).join(' ')}
 function setLoading(v,message='Cargando información…',retry=null){

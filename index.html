@@ -115,6 +115,7 @@
         <form id="classForm">
           <input type="hidden" name="id">
           <div class="page-head"><div><p class="eyebrow">REGISTRO ACADÉMICO</p><h1 id="classFormTitle">Registrar actividad</h1><p class="muted">Registra en una sola pantalla la tarea, conducta y participación.</p></div><div class="button-row"><button type="button" class="btn" data-action="cancel-class">Cancelar</button><button type="submit" class="btn primary">Guardar registro</button></div></div>
+          <div id="classDraftStatus" class="draft-status hidden-control"><span>✓ Borrador guardado en este dispositivo</span><button type="button" data-action="discard-class-draft">Descartar borrador</button></div>
           <article class="panel class-data-panel">
             <div class="form-grid two"><label>Proyecto<select id="classProject" name="proyectoId" required></select></label><label>Campo formativo o materia<select id="classSubject" name="materia" required></select></label></div>
             <div class="form-grid three"><label>Fecha<input id="classDate" type="date" name="fecha" required></label><label>Hora de inicio<input type="time" name="horaInicio" value="13:00" required></label><label>Hora de término<input type="time" name="horaFin" value="14:00" required></label></div>
@@ -326,6 +327,7 @@
   <dialog id="projectDialog" class="modal large">
     <form id="projectForm" method="dialog">
       <div class="modal-head"><div><p class="eyebrow">PLANEACIÓN</p><h2>Nuevo proyecto</h2></div><button type="button" class="icon-button" data-close="projectDialog">×</button></div>
+      <div id="projectDraftStatus" class="draft-status hidden-control"><span>✓ Borrador guardado en este dispositivo</span><button type="button" data-action="discard-project-draft">Descartar borrador</button></div>
       <input type="hidden" name="id">
       <div class="form-grid two"><label>Nombre del proyecto<input name="nombre" required></label><label>Campo formativo<select id="projectSubject" name="campoFormativo" required></select></label></div>
       <div class="form-grid three"><label>Fecha de inicio<input type="date" name="fechaInicio"></label><label>Fecha de término<input type="date" name="fechaFin"></label><label>Temporalidad<select name="temporalidad"><option>Sin temporalidad</option><option>1 semana</option><option>2 semanas</option><option>3 semanas</option><option>4 semanas</option><option>1 mes</option><option>1 trimestre</option></select></label></div>
@@ -355,6 +357,7 @@
   <dialog id="instrumentDialog" class="modal large">
     <form id="instrumentForm" class="instrument-builder">
       <div class="modal-head"><div><p class="eyebrow">GENERADOR NEM · 4.º DE PRIMARIA</p><h2 id="instrumentDialogTitle">Nuevo instrumento</h2><p class="muted">Contenido y PDA basados en el Programa de Estudio Fase 4, edición 2025.</p></div><button type="button" class="icon-button" data-close="instrumentDialog">×</button></div>
+      <div id="instrumentDraftStatus" class="draft-status hidden-control"><span>✓ Borrador guardado en este dispositivo</span><button type="button" data-action="discard-instrument-draft">Descartar borrador</button></div>
       <input type="hidden" name="id"><input id="instrumentContentText" type="hidden" name="contenido"><input type="hidden" name="origenCurricular" value="SEP Programa de Estudio Fase 4, edición 2025">
       <section class="instrument-builder-step">
         <div class="instrument-step-title"><span>1</span><div><h3>Selecciona el aprendizaje</h3><p>El sistema mostrará únicamente los PDA que corresponden al contenido elegido.</p></div></div>
