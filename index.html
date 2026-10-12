@@ -131,8 +131,8 @@
         </form>
       </section>
       <section id="instruments" class="view">
-        <div class="page-head"><div><p class="eyebrow">EVALUACIÓN</p><h1>Instrumentos de evaluación</h1><p class="muted">Crea, busca y reutiliza rúbricas o listas de cotejo sin modificar resultados anteriores.</p></div><button class="btn primary" data-action="new-instrument">+ Nuevo instrumento</button></div>
-        <div class="toolbar"><input id="instrumentSearch" class="input" placeholder="Buscar por título"><select id="instrumentTypeFilter" class="input"><option value="">Todos</option><option value="RUBRICA">Rúbricas</option><option value="LISTA_COTEJO">Listas de cotejo</option></select></div>
+        <div class="page-head"><div><p class="eyebrow">EVALUACIÓN</p><h1>Instrumentos de evaluación</h1><p class="muted">Elige contenidos y PDA oficiales de 4.º; genera, adapta y reutiliza el instrumento que necesites.</p></div><button class="btn primary" data-action="new-instrument">+ Nuevo instrumento</button></div>
+        <div class="toolbar"><input id="instrumentSearch" class="input" placeholder="Buscar por título, contenido o PDA"><select id="instrumentTypeFilter" class="input"><option value="">Todos</option><option value="RUBRICA">Rúbricas</option><option value="LISTA_COTEJO">Listas de cotejo</option><option value="ESCALA_VALORACION">Escalas de valoración</option><option value="EXAMEN">Exámenes</option><option value="CUESTIONARIO">Cuestionarios</option></select></div>
         <div id="instrumentGrid" class="instrument-grid"></div>
       </section>
       <section id="attendance" class="view">
@@ -353,13 +353,32 @@
   </dialog>
 
   <dialog id="instrumentDialog" class="modal large">
-    <form id="instrumentForm">
-      <div class="modal-head"><div><p class="eyebrow">PLANTILLA REUTILIZABLE</p><h2 id="instrumentDialogTitle">Nuevo instrumento</h2></div><button type="button" class="icon-button" data-close="instrumentDialog">×</button></div>
-      <input type="hidden" name="id"><div class="form-grid two"><label>Título del instrumento<input name="titulo" required placeholder="Ej. Escritura legible"></label><label>Tipo<select name="tipo"><option value="RUBRICA">Rúbrica</option><option value="LISTA_COTEJO">Lista de cotejo</option></select></label></div>
-      <div class="form-grid two"><label>Campo formativo<select id="instrumentSubject" name="campoFormativo"><option value="">Todos</option></select></label><label>Descripción<input name="descripcion" placeholder="Uso recomendado"></label></div>
-      <div class="instrument-level-note"><b>Niveles predeterminados:</b> NE · Nivel esperado (10), EN · En desarrollo (7), RA · Requiere apoyo (5).</div>
-      <div class="section-head"><h3>Criterios o indicadores</h3><button type="button" class="btn small" data-action="add-instrument-criterion">+ Añadir criterio</button></div><div id="instrumentCriteria"></div>
-      <div class="modal-actions"><button type="button" class="btn" data-close="instrumentDialog">Cancelar</button><button type="submit" class="btn primary">Guardar instrumento</button></div>
+    <form id="instrumentForm" class="instrument-builder">
+      <div class="modal-head"><div><p class="eyebrow">GENERADOR NEM · 4.º DE PRIMARIA</p><h2 id="instrumentDialogTitle">Nuevo instrumento</h2><p class="muted">Contenido y PDA basados en el Programa de Estudio Fase 4, edición 2025.</p></div><button type="button" class="icon-button" data-close="instrumentDialog">×</button></div>
+      <input type="hidden" name="id"><input id="instrumentContentText" type="hidden" name="contenido"><input type="hidden" name="origenCurricular" value="SEP Programa de Estudio Fase 4, edición 2025">
+      <section class="instrument-builder-step">
+        <div class="instrument-step-title"><span>1</span><div><h3>Selecciona el aprendizaje</h3><p>El sistema mostrará únicamente los PDA que corresponden al contenido elegido.</p></div></div>
+        <div class="form-grid three instrument-curriculum-grid"><label>Campo formativo<select id="instrumentSubject" name="campoFormativo" required><option value="">Selecciona</option></select></label><label>Área<select id="instrumentArea" name="area" required disabled><option value="">Selecciona un campo</option></select></label><label>Contenido<select id="instrumentContent" name="contenidoId" required disabled><option value="">Selecciona un área</option></select></label></div>
+        <div class="instrument-pda-box"><div><b>Procesos de Desarrollo de Aprendizaje (PDA)</b><small>Puedes seleccionar uno o varios.</small></div><div id="instrumentPdaList" class="instrument-pda-list"><p class="muted">Selecciona primero un contenido.</p></div></div>
+      </section>
+      <section class="instrument-builder-step">
+        <div class="instrument-step-title"><span>2</span><div><h3>Elige el tipo de instrumento</h3><p>Podrás modificar todos los indicadores y valores antes de guardar.</p></div></div>
+        <div class="instrument-type-cards" role="radiogroup" aria-label="Tipo de instrumento">
+          <label><input type="radio" name="tipo" value="RUBRICA" checked><span><b>▦</b><strong>Rúbrica</strong><small>Niveles NE, EN y RA</small></span></label>
+          <label><input type="radio" name="tipo" value="LISTA_COTEJO"><span><b>✓</b><strong>Lista de cotejo</strong><small>Cumple o no cumple</small></span></label>
+          <label><input type="radio" name="tipo" value="ESCALA_VALORACION"><span><b>↗</b><strong>Escala de valoración</strong><small>Progreso por niveles</small></span></label>
+          <label><input type="radio" name="tipo" value="EXAMEN"><span><b>▤</b><strong>Examen</strong><small>Calificación de 0 a 10</small></span></label>
+          <label><input type="radio" name="tipo" value="CUESTIONARIO"><span><b>?</b><strong>Cuestionario</strong><small>Reactivos editables</small></span></label>
+        </div>
+      </section>
+      <section class="instrument-builder-step">
+        <div class="instrument-step-title"><span>3</span><div><h3>Revisa y personaliza</h3><p>La propuesta es un punto de partida: puedes editarla, añadir indicadores o cambiar sus valores.</p></div></div>
+        <div class="form-grid two"><label>Título del instrumento<input name="titulo" required placeholder="Se genera a partir del contenido"></label><label>Descripción<input name="descripcion" placeholder="Uso recomendado"></label></div>
+        <div id="instrumentLevelNote" class="instrument-level-note"><b>Niveles:</b> NE · Nivel esperado (10), EN · En desarrollo (7), RA · Requiere apoyo (5).</div>
+        <div id="instrumentCriteriaBlock"><div class="section-head"><h3 id="instrumentCriteriaTitle">Criterios o indicadores</h3><button type="button" class="btn small" data-action="add-instrument-criterion">+ Añadir criterio</button></div><div id="instrumentCriteria"></div></div>
+        <article id="instrumentGeneratedPreview" class="instrument-generated-preview"><span>VISTA PREVIA</span><h4>Selecciona un contenido y un PDA</h4><p>Aquí verás el resumen curricular del instrumento.</p></article>
+      </section>
+      <div class="modal-actions"><button type="button" class="btn" data-close="instrumentDialog">Cancelar</button><button type="button" class="btn" data-action="regenerate-instrument">↻ Volver a generar</button><button type="submit" class="btn primary">Guardar instrumento</button></div>
     </form>
   </dialog>
 
