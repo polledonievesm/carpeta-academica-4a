@@ -262,6 +262,7 @@ function renderProjectWorkspace(){
 async function openClassForm(projectId='',classId=''){
   renderClassOptions();
   const form=$('#classForm');form.reset();form.elements.id.value='';form.elements.fecha.value=todayCancun();form.elements.horaInicio.value='13:00';form.elements.horaFin.value='14:00';
+  $('.class-data-panel',form)?.classList.remove('hidden-control');$('#classCompactSummary')?.classList.add('hidden-control');
   $('#classDraftStatus')?.classList.add('hidden-control');
   const selected=projectId||state.currentProject?.id||state.projects.find(p=>p.estado==='Activo')?.id||'';
   form.elements.proyectoId.value=selected;
