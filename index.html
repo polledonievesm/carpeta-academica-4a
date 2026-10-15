@@ -121,6 +121,7 @@
             <div class="form-grid three"><label>Fecha<input id="classDate" type="date" name="fecha" required></label><label>Hora de inicio<input type="time" name="horaInicio" value="13:00" required></label><label>Hora de término<input type="time" name="horaFin" value="14:00" required></label></div>
             <div id="classAttendanceNotice" class="class-attendance-notice">Selecciona una fecha para cargar a los alumnos presentes.</div>
             <div class="form-grid two"><label>Nombre de la actividad<input name="actividad" placeholder="Ej. Identificamos los órganos del aparato digestivo" required></label><label>Cuaderno, libro o material<select name="material" required><option value="">Selecciona</option><optgroup label="Cuadernos"><option>Lenguajes</option><option>Saberes y Pensamiento Matemático</option><option>Saberes y Pensamiento Científico</option><option>Ética, Naturaleza y Sociedades</option><option>De lo Humano y lo Comunitario</option><option>Dibujo</option><option>Ortografía</option></optgroup><optgroup label="Libros"><option>Libro de Texto Gratuito (LTG)</option><option>La Guía Escolar</option><option>PRACMATICA</option><option>C.A.P. (Comprender, Aprender y Practicar)</option></optgroup><option>Hoja de trabajo</option><option>Otro material</option></select></label></div>
+            <div class="form-grid three class-report-details"><label>Tipo de actividad<select name="tipoActividad"><option>Clase</option><option>Tarea para casa</option></select></label><label>Páginas realizadas<input name="paginas" placeholder="Ej. 42 y 43"></label><label class="class-instructions-field">Instrucciones completas<textarea name="instrucciones" rows="2" placeholder="Escribe las indicaciones que verá la familia en el reporte"></textarea></label></div>
             <div class="instrument-choice"><label>Instrumento de evaluación<select id="classInstrument" name="instrumentoId"><option value="">Evaluación sencilla</option></select></label><div id="classInstrumentSummary" class="instrument-summary">Puedes evaluar únicamente la entrega o seleccionar una rúbrica/lista de cotejo reutilizable.</div><button type="button" class="btn small" data-action="open-instruments">Administrar instrumentos</button></div>
             <div class="class-setup-actions"><button type="button" class="btn primary" data-action="continue-class-evaluation">Continuar a evaluar alumnos →</button></div>
           </article>
@@ -159,7 +160,7 @@
         </div>
       </section>
       <section id="reports" class="view">
-        <div class="page-head"><div><p class="eyebrow">SEGUIMIENTO POR ALUMNO</p><h1>Reporte individual</h1><p class="muted">Consulta todas las materias, actividades, conducta, participación y asistencia.</p></div><button class="btn" data-action="print-academic-report">Imprimir reporte</button></div>
+        <div class="page-head"><div><p class="eyebrow">SEGUIMIENTO POR ALUMNO</p><h1>Reporte individual</h1><p class="muted">Consulta todas las materias, actividades, conducta, participación y asistencia.</p></div><div class="button-row"><button class="btn primary" data-action="open-weekly-report-options">Reporte semanal familiar</button><button class="btn" data-action="print-academic-report">Imprimir reporte</button></div></div>
         <article class="panel academic-report-controls">
           <div class="form-grid three"><label>Alumno<select id="academicStudent"><option value="">Selecciona un alumno</option></select></label><label>Periodo<select id="academicReportType"><option value="weekly">Semanal</option><option value="monthly">Mensual</option></select></label><label id="academicWeekControl">Semana que contiene la fecha<input id="academicReportDate" type="date"></label><label id="academicMonthControl" class="hidden-control">Mes<input id="academicReportMonth" type="month"></label></div>
           <button class="btn primary" data-action="academic-report">Generar reporte individual</button>
@@ -408,6 +409,18 @@
 
   <dialog id="directoryLinkDialog" class="modal">
     <form method="dialog"><div class="modal-head"><div><p class="eyebrow">ACCESO PRIVADO</p><h2 id="directoryLinkTitle">Invitación familiar</h2></div><button type="button" class="icon-button" data-close="directoryLinkDialog">×</button></div><p id="directoryLinkDescription" class="muted"></p><label>Información para copiar<textarea id="directoryLinkValue" rows="3" readonly></textarea></label><div class="modal-actions"><button type="button" class="btn" data-close="directoryLinkDialog">Cerrar</button><button type="button" id="directoryCredentialPrint" class="btn hidden-control" data-action="print-current-family-access">Imprimir acceso</button><button type="button" class="btn primary" data-action="copy-directory-link">Copiar</button></div></form>
+  </dialog>
+
+  <dialog id="weeklyReportOptionsDialog" class="modal large weekly-report-options-dialog">
+    <form id="weeklyReportOptionsForm">
+      <div class="modal-head"><div><p class="eyebrow">REPORTE FAMILIAR</p><h2>Preparar reporte semanal</h2><p class="muted">El PDF respetará el diseño institucional aprobado y cada alumno comenzará en una página nueva.</p></div><button type="button" class="icon-button" data-close="weeklyReportOptionsDialog">×</button></div>
+      <input type="hidden" name="context" value="teacher">
+      <div class="form-grid three"><label>Semana que contiene la fecha<input id="weeklyReportReference" type="date" name="reference" required></label><label>Contenido<select name="mode"><option value="complete">PDF completo</option><option value="summary">PDF resumido</option></select></label><label>Impresión<select name="colorMode"><option value="color">Color</option><option value="bw">Blanco y negro</option></select></label></div>
+      <div class="weekly-report-option-checks"><label class="check"><input type="checkbox" name="includeInstructions" checked> Incluir instrucciones detalladas</label><label class="check"><input type="checkbox" name="includeSignature"> Añadir espacio para firma familiar</label></div>
+      <section id="weeklyReportTeacherSelection" class="weekly-report-student-selection"><div class="section-head"><div><h3>Alumnos que se incluirán</h3><p class="muted">Puedes imprimir uno, varios o todo el grupo.</p></div><div class="button-row"><button type="button" class="btn small" data-action="weekly-report-select-all">Seleccionar todos</button><button type="button" class="btn small" data-action="weekly-report-clear">Quitar selección</button></div></div><div id="weeklyReportStudentChecks" class="weekly-report-student-checks"></div></section>
+      <p class="weekly-report-security-note">Solo se utilizan registros académicos guardados. No se incluyen borradores ni información privada del maestro.</p>
+      <div class="modal-actions"><button type="button" class="btn" data-close="weeklyReportOptionsDialog">Cancelar</button><button type="submit" class="btn primary">Generar e imprimir PDF</button></div>
+    </form>
   </dialog>
 
   <dialog id="loginDialog" class="modal login-modal">

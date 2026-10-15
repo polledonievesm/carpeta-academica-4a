@@ -124,7 +124,7 @@
     const host=$('#evaluationList'),students=state.classStudents||[];if(!students.length){host.innerHTML='<div class="empty-history"><strong>No hay alumnos disponibles para evaluar</strong><p>Guarda primero la asistencia del día.</p></div>';$('#evaluationProgress').textContent='0 alumnos disponibles';return}
     compactStudentIndex=Math.max(0,Math.min(compactStudentIndex,students.length-1));const student=students[compactStudentIndex],row=state.classEvaluations[student.id]||defaultEvaluation(student.id),instrument=currentInstrument(),selections=row.instrumentResults||{},summary=instrumentResultSummary(instrument,selections);
     const instrumentControl=instrument?(instrument.tipo==='EXAMEN'?`<label class="instrument-direct-grade"><span>Calificación del examen</span><input type="number" min="0" max="10" step="0.1" data-instrument-grade value="${escapeHtml(selections.__grade??'')}"></label>`:(instrument.criterios||[]).map(criterion=>criterionButtons(instrument,criterion,selections[criterion.id])).join('')):'';
-    host.innerHTML=`<nav class="student-evaluation-nav"><button type="button" class="btn" data-action="student-eval-prev" ${compactStudentIndex===0?'disabled':''}>← Anterior</button><label><span>Alumno ${compactStudentIndex+1} de ${students.length}</span><select id="compactStudentSelect">${students.map((item,index)=>`<option value="${index}" ${index===compactStudentIndex?'selected':''}>${escapeHtml(fullName(item))}</option>`).join('')}</select></label><button type="button" class="btn" data-action="student-eval-next" ${compactStudentIndex===students.length-1?'disabled':''}>Siguiente →</button></nav><article class="evaluation-row compact ${instrument?'with-instrument':''}" data-student="${student.id}"><div class="compact-student-title"><span>${compactStudentIndex+1}</span><div><small>EVALUANDO A</small><strong>${escapeHtml(fullName(student))}</strong></div></div><div class="compact-basic-fields"><label>Entrega<select data-field="trabajo"><option ${row.trabajo==='Completo'?'selected':''}>Completo</option><option ${row.trabajo==='Incompleto'?'selected':''}>Incompleto</option><option ${row.trabajo==='No trabajó'?'selected':''}>No trabajó</option></select></label><label>Conducta<select data-field="conducta"><option ${row.conducta==='Excelente'?'selected':''}>Excelente</option><option ${row.conducta==='Adecuada'?'selected':''}>Adecuada</option><option ${row.conducta==='Requiere apoyo'?'selected':''}>Requiere apoyo</option></select></label><label>Participación<select data-field="participacion"><option ${row.participacion==='Alta'?'selected':''}>Alta</option><option ${row.participacion==='Media'?'selected':''}>Media</option><option ${row.participacion==='Nula'?'selected':''}>Nula</option></select></label></div>${instrument?`<div class="instrument-evaluation compact-instrument"><div class="instrument-evaluation-title"><div><small>${escapeHtml(typeLabel(instrument.tipo))}</small><b>${escapeHtml(instrument.titulo)}</b></div><span class="instrument-grade" data-grade>${summary?.grade==null?'—':summary.grade.toFixed(1)}</span></div><p class="instrument-result-label" data-result-label>${escapeHtml(summary?.label||'Sin calificar')}</p><p class="instrument-result-message" data-result-message>${escapeHtml(summary?.message||'')}</p><div class="compact-criteria">${instrumentControl}</div></div>`:`<label class="rubric-field">Observación predeterminada<select data-field="desempeno">${rubricOptions(row.desempeno)}</select></label>`}<label class="note-field">Observación adicional<input data-field="observacionLibre" value="${escapeHtml(row.observacionLibre||'')}" placeholder="Opcional"></label></article>`;
+    host.innerHTML=`<nav class="student-evaluation-nav"><button type="button" class="btn" data-action="student-eval-prev" ${compactStudentIndex===0?'disabled':''}>← Anterior</button><label><span>Alumno ${compactStudentIndex+1} de ${students.length}</span><select id="compactStudentSelect">${students.map((item,index)=>`<option value="${index}" ${index===compactStudentIndex?'selected':''}>${escapeHtml(fullName(item))}</option>`).join('')}</select></label><button type="button" class="btn" data-action="student-eval-next" ${compactStudentIndex===students.length-1?'disabled':''}>Siguiente →</button></nav><article class="evaluation-row compact ${instrument?'with-instrument':''}" data-student="${student.id}"><div class="compact-student-title"><span>${compactStudentIndex+1}</span><div><small>EVALUANDO A</small><strong>${escapeHtml(fullName(student))}</strong></div></div><div class="compact-basic-fields"><label>Entrega<select data-field="trabajo"><option value="Completo" ${row.trabajo==='Completo'?'selected':''}>Entregada</option><option value="Incompleto" ${row.trabajo==='Incompleto'?'selected':''}>Incompleta</option><option value="No trabajó" ${row.trabajo==='No trabajó'?'selected':''}>No entregada</option><option value="Entregada tarde" ${row.trabajo==='Entregada tarde'?'selected':''}>Entregada tarde</option><option value="Pendiente" ${row.trabajo==='Pendiente'?'selected':''}>Pendiente</option></select></label><label>Conducta<select data-field="conducta"><option ${row.conducta==='Excelente'?'selected':''}>Excelente</option><option ${row.conducta==='Adecuada'?'selected':''}>Adecuada</option><option ${row.conducta==='Requiere apoyo'?'selected':''}>Requiere apoyo</option></select></label><label>Participación<select data-field="participacion"><option ${row.participacion==='Alta'?'selected':''}>Alta</option><option ${row.participacion==='Media'?'selected':''}>Media</option><option ${row.participacion==='Nula'?'selected':''}>Nula</option></select></label></div>${instrument?`<div class="instrument-evaluation compact-instrument"><div class="instrument-evaluation-title"><div><small>${escapeHtml(typeLabel(instrument.tipo))}</small><b>${escapeHtml(instrument.titulo)}</b></div><span class="instrument-grade" data-grade>${summary?.grade==null?'—':summary.grade.toFixed(1)}</span></div><p class="instrument-result-label" data-result-label>${escapeHtml(summary?.label||'Sin calificar')}</p><p class="instrument-result-message" data-result-message>${escapeHtml(summary?.message||'')}</p><div class="compact-criteria">${instrumentControl}</div></div>`:`<label class="rubric-field">Observación predeterminada<select data-field="desempeno">${rubricOptions(row.desempeno)}</select></label>`}<label class="note-field">Observación adicional<input data-field="observacionLibre" value="${escapeHtml(row.observacionLibre||'')}" placeholder="Opcional"></label></article>`;
     $('#compactStudentSelect').addEventListener('change',event=>{compactStudentIndex=Number(event.target.value)||0;renderEvaluationList();window.scrollTo({top:$('#evaluationList').getBoundingClientRect().top+scrollY-120,behavior:'smooth'})});$('#evaluationProgress').textContent=`Alumno ${compactStudentIndex+1} de ${students.length} · ${fullName(student)}`;
   };
   function updateInstrumentPreview(row){const instrument=currentInstrument(),studentId=row?.dataset.student,record=state.classEvaluations[studentId];if(!instrument||!record)return;const summary=instrumentResultSummary(instrument,record.instrumentResults||{}),grade=$('[data-grade]',row),label=$('[data-result-label]',row),message=$('[data-result-message]',row);if(grade)grade.textContent=summary?.grade==null?'—':summary.grade.toFixed(1);if(label)label.textContent=summary?.label||'Sin calificar';if(message)message.textContent=summary?.message||''}
@@ -368,19 +368,32 @@
   }
 
   function familyReportTaskStatus(task) {
-    return String(task && task.status || '') === 'Entregó'
-      ? { className: 'done', icon: '✓', label: 'Entregó' }
-      : { className: 'missing', icon: '✕', label: 'No entregó' };
+    const value = String(task && task.status || 'Sin registro');
+    const map = {
+      'Entregada': { className: 'done', icon: '✓', label: 'Entregada' },
+      'Entregó': { className: 'done', icon: '✓', label: 'Entregada' },
+      'Entregada tarde': { className: 'late', icon: '◷', label: 'Entregada tarde' },
+      'Incompleta': { className: 'partial', icon: '!', label: 'Incompleta' },
+      'Entregó incompleta': { className: 'partial', icon: '!', label: 'Incompleta' },
+      'No entregada': { className: 'missing', icon: '×', label: 'No entregada' },
+      'No entregó': { className: 'missing', icon: '×', label: 'No entregada' },
+      'Pendiente por inasistencia justificada': { className: 'justified', icon: '!', label: 'Pendiente por inasistencia justificada' },
+      'Pendiente': { className: 'pending', icon: '·', label: 'Pendiente' },
+      'Pendiente de evaluar': { className: 'pending', icon: '·', label: 'Pendiente' },
+      'Sin registro': { className: 'neutral', icon: '—', label: 'Sin registro' }
+    };
+    return map[value] || { className: 'neutral', icon: '—', label: value };
   }
 
   function familyTaskLineV16(task) {
     const status = familyReportTaskStatus(task);
-    return `<article class="family-task-line ${status.className}"><div><span>${escapeHtml(formatDateShort(task.date))} · ${escapeHtml(formatTime(task.start))}${task.end ? '–' + escapeHtml(formatTime(task.end)) : ''}</span><h4>${escapeHtml(task.name)}</h4><p>${escapeHtml(task.source || '')} · ${escapeHtml(task.project || 'Sin proyecto')}</p></div><b class="family-task-status">${status.icon} ${status.label}</b>${task.feedback ? `<p class="learning-feedback">${escapeHtml(task.feedback)}</p>` : task.opportunities ? `<p class="opportunity"><b>Área de oportunidad:</b> ${escapeHtml(task.opportunities)}</p>` : ''}</article>`;
+    return `<article class="family-task-line ${status.className}"><div><span>${escapeHtml(formatDateShort(task.date))} · ${escapeHtml(formatTime(task.start))}${task.end ? '–' + escapeHtml(formatTime(task.end)) : ''}</span><h4>${escapeHtml(task.title || task.name || 'Actividad')}</h4><p>${escapeHtml(task.source || '')} · ${escapeHtml(task.project || 'Sin proyecto')}</p></div><b class="family-task-status">${status.icon} ${status.label}</b>${task.feedback ? `<p class="learning-feedback">${escapeHtml(task.feedback)}</p>` : task.opportunities ? `<p class="opportunity"><b>Área de oportunidad:</b> ${escapeHtml(task.opportunities)}</p>` : ''}</article>`;
   }
 
   function familyTasksForCurrentPeriod() {
     const academic = familyPortalData && familyPortalData.academic;
     if (!academic) return [];
+    if (academic.weeklyReport && Array.isArray(academic.weeklyReport.tasks)) return academic.weeklyReport.tasks;
     if (Array.isArray(academic.tasks)) return academic.tasks;
     return (academic.fields || []).flatMap(function (field) {
       return (field.tasks || []).map(function (task) { return Object.assign({ source: field.name }, task); });
@@ -396,16 +409,41 @@
       : 'Sin observaciones adicionales registradas durante esta semana.';
   }
 
+  function currentWeeklyReportModel() {
+    const academic = familyPortalData && familyPortalData.academic || {};
+    if (academic.weeklyReport) return academic.weeklyReport;
+    return {
+      student: familyPortalData.student,
+      school: familyPortalData.school,
+      period: { start: planningCalendar.resolve(planningSelectedDate).start, end: planningCalendar.resolve(planningSelectedDate).end },
+      attendance: { records: [] }, tasks: familyTasksForCurrentPeriod(), learnings: [], achievements: [],
+      observations: weeklyObservation(academic) ? [{ category: 'Observaciones generales', text: weeklyObservation(academic) }] : [], guidance: []
+    };
+  }
+
+  function weeklyAttendanceScreen(report) {
+    const info = planningCalendar.resolve(report.period && report.period.start || planningSelectedDate);
+    const records = report.attendance && report.attendance.records || [];
+    const byDate = records.reduce(function (map, row) { map[row.date] = row; return map; }, {});
+    return planningCalendar.daysFor(info).map(function (day) {
+      const record = byDate[day.date] || {};
+      const meta = record.status === 'A' || record.status === 'R' ? ['present', '✓', 'Asistió'] : record.status === 'J' ? ['justified', '!', 'Falta justificada'] : record.status === 'F' ? ['absent', '×', 'Faltó'] : ['neutral', '·', 'Sin registro'];
+      return `<div class="family-report-attendance-day"><span>${escapeHtml(day.label)} ${escapeHtml(day.day)}</span><i class="attendance-symbol ${meta[0]}" aria-label="${meta[2]}">${meta[1]}</i></div>`;
+    }).join('');
+  }
+
   function renderFamilyWeeklyReport() {
     const host = $('#familyWeeklyReport');
     if (!host || !familyPortalData) return;
-    const academic = familyPortalData.academic || {};
-    const tasks = familyTasksForCurrentPeriod();
-    const info = planningCalendar.resolve(planningSelectedDate);
-    host.innerHTML = `<div class="family-report-mobile-head"><button class="btn" data-action="family-report-back">← Regresar</button><div><p class="eyebrow">REPORTE SEMANAL</p><h2>${escapeHtml(familyPortalData.student.name)}</h2><p>${escapeHtml((familyPortalData.school.group || '') + ' · ' + info.title + ' · ' + info.rangeLabel)}</p></div><button class="btn" data-action="family-print-weekly-report">▣ Imprimir / PDF</button></div><h2 class="family-report-section-title">Tareas y actividades</h2><div class="family-report-task-list">${tasks.length ? tasks.map(function (task) {
+    const report = currentWeeklyReportModel();
+    const tasks = report.tasks || [];
+    const info = planningCalendar.resolve(report.period && report.period.start || planningSelectedDate);
+    const learningRows = (report.learnings || []).map(function (row) { return `<article><div><h3>${escapeHtml(row.title)}</h3><p>${escapeHtml(row.pda || row.observation || '')}</p></div><strong class="learning-level">${escapeHtml(row.level)}</strong></article>`; }).join('');
+    const observationRows = (report.observations || []).map(function (row) { return `<div><b>${escapeHtml(row.category)}</b><p>${escapeHtml(row.text)}</p></div>`; }).join('');
+    host.innerHTML = `<div class="family-report-mobile-head"><button class="btn" data-action="family-report-back">← Regresar</button><div><p class="eyebrow">REPORTE SEMANAL</p><h2>${escapeHtml(report.student && report.student.name || familyPortalData.student.name)}</h2><p>${escapeHtml((report.school && report.school.group || '') + ' · ' + info.title + ' · ' + info.rangeLabel)}</p></div><button class="btn" data-action="family-print-weekly-report">▣ Imprimir / PDF</button></div><h2 class="family-report-section-title">Asistencia semanal</h2><div class="family-report-attendance">${weeklyAttendanceScreen(report)}</div><h2 class="family-report-section-title">Tareas y actividades</h2><div class="family-report-task-list">${tasks.length ? tasks.map(function (task) {
       const status = familyReportTaskStatus(task);
-      return `<article><time>${escapeHtml(formatDateShort(task.date))}</time><div><small>${escapeHtml(task.source || 'Campo formativo')}</small><h3>${escapeHtml(task.name)}</h3><p>${escapeHtml(formatTime(task.start))}${task.end ? '–' + escapeHtml(formatTime(task.end)) : ''}${task.project ? ' · ' + escapeHtml(task.project) : ''}</p>${task.feedback?`<p class="learning-feedback">${escapeHtml(task.feedback)}</p>`:''}</div><strong class="${status.className}">${status.icon} ${status.label}</strong></article>`;
-    }).join('') : '<article class="family-report-empty">No hay tareas registradas para esta semana.</article>'}</div><details class="family-report-note"><summary>Indicaciones para la familia</summary><ul><li>Revisar las actividades marcadas como no entregadas.</li><li>Firmar las tareas corregidas cuando el docente lo solicite.</li><li>Practicar lectura durante 15 minutos diarios.</li></ul></details><details class="family-report-note" open><summary>Observaciones de la semana</summary><p>${escapeHtml(weeklyObservation(academic))}</p></details>`;
+      return `<article><time>${escapeHtml(formatDateShort(task.date))}</time><div><small>${escapeHtml(task.source || 'Campo formativo')}</small><h3>${escapeHtml(task.title || task.name)}</h3><p>${escapeHtml(task.type || 'Clase')} · ${escapeHtml(task.material || task.project || 'Sin material')}${task.pages ? ' · págs. ' + escapeHtml(task.pages) : ''}</p>${task.instructions ? `<p class="family-task-instructions">${escapeHtml(task.instructions)}</p>` : ''}</div><strong class="${status.className}">${status.icon} ${escapeHtml(status.label)}</strong></article>`;
+    }).join('') : '<article class="family-report-empty">No hay tareas registradas para esta semana.</article>'}</div>${learningRows ? `<h2 class="family-report-section-title">Aprendizajes trabajados</h2><div class="family-report-learning-list">${learningRows}</div>` : ''}${(report.achievements || []).length ? `<h2 class="family-report-section-title">Logros y avances</h2><div class="family-report-note"><p>${report.achievements.map(escapeHtml).join(' ')}</p></div>` : ''}${observationRows ? `<h2 class="family-report-section-title">Observaciones generales</h2><div class="family-report-observation-list">${observationRows}</div>` : ''}<details class="family-report-note" open><summary>Indicaciones para la familia</summary>${(report.guidance || []).length ? `<ul>${report.guidance.map(function (text) { return `<li>${escapeHtml(text)}</li>`; }).join('')}</ul>` : '<p>Sin indicaciones adicionales registradas para esta semana.</p>'}</details>`;
   }
 
   renderFamilyAcademic = function () {
@@ -443,33 +481,123 @@
     $$('.family-bottom-nav button').forEach(function (button) { button.classList.remove('active'); });
   }
 
-  function weeklyPrintRows(tasks) {
-    if (!tasks.length) return '<tr><td colspan="5">No hay tareas registradas para esta semana.</td></tr>';
-    return tasks.map(function (task) {
-      const delivered = familyReportTaskStatus(task).className === 'done';
-      return `<tr><td>${escapeHtml(formatDateShort(task.date))}</td><td>${escapeHtml(task.source || '—')}</td><td>${escapeHtml(task.name)}</td><td class="mark">${delivered ? '✓' : ''}</td><td class="mark">${delivered ? '' : '✕'}</td></tr>`;
-    }).join('');
+  function weeklyPrintDate(value) {
+    if (!value) return '';
+    const date = new Date(value + 'T12:00:00');
+    const day = capitalize(date.toLocaleDateString('es-MX', { weekday: 'short' }).replace('.', ''));
+    return day + ' ' + date.getDate();
   }
 
-  async function printFamilyWeeklyReport() {
-    await ensureWeeklyData();
-    const academic = familyPortalData.academic || {};
-    const tasks = familyTasksForCurrentPeriod();
-    const info = planningCalendar.resolve(planningSelectedDate);
-    const popup = window.open('', '_blank');
-    if (!popup) return toast('Permite las ventanas emergentes para imprimir.', true);
-    const logo = new URL('school-logo.webp', location.href).href;
-    const school = familyPortalData.school || {};
-    const chunks = [];
-    for (let index = 0; index < Math.max(tasks.length, 1); index += 12) chunks.push(tasks.slice(index, index + 12));
-    const pages = chunks.map(function (pageTasks, pageIndex) {
-      const last = pageIndex === chunks.length - 1;
-      return `<section class="weekly-page"><header><img src="${escapeHtml(logo)}"><div><p>${escapeHtml(school.name || 'Escuela Primaria Francisco Hoil Torres T.V.')}</p><h1>REPORTE SEMANAL DEL ALUMNO</h1></div></header><div class="student-data"><p><b>Alumno:</b> ${escapeHtml(familyPortalData.student.name)}</p><p><b>Grado y grupo:</b> ${escapeHtml(school.group || '4° A')}</p><p><b>Docente:</b> ${escapeHtml(school.teacher || 'Prof. Michel Otaner Polledo Nieves')}</p><p><b>${escapeHtml(info.title)}:</b> ${escapeHtml(info.rangeLabel.replace(/^Del /, ''))}</p></div><h2>TAREAS Y ACTIVIDADES DE LA SEMANA${pageIndex ? ' · CONTINUACIÓN' : ''}</h2><table><thead><tr><th>Fecha</th><th>Campo formativo</th><th>Tarea o actividad</th><th>Entregó</th><th>No entregó</th></tr></thead><tbody>${weeklyPrintRows(pageTasks)}</tbody></table>${last ? `<section class="notes"><h2>INDICACIONES PARA MADRES, PADRES O TUTORES</h2><ul><li>Revisar las actividades marcadas como no entregadas.</li><li>Firmar las tareas corregidas cuando el docente lo solicite.</li><li>Practicar lectura durante 15 minutos diarios.</li></ul></section><section class="observations"><h2>OBSERVACIONES DE LA SEMANA</h2><p>${escapeHtml(weeklyObservation(academic))}</p><i></i><i></i><i></i></section>` : ''}<footer>Este reporte corresponde únicamente a la semana indicada.</footer></section>`;
+  function weeklyAttendancePrint(report) {
+    const info = planningCalendar.resolve(report.period.start);
+    const records = report.attendance && report.attendance.records || [];
+    const byDate = records.reduce(function (map, row) { map[row.date] = row; return map; }, {});
+    const cells = planningCalendar.daysFor(info).map(function (day) {
+      const row = byDate[day.date] || {};
+      const meta = row.status === 'A' || row.status === 'R' ? ['present', '✓', 'Asistió'] : row.status === 'J' ? ['justified', '!', 'Falta justificada'] : row.status === 'F' ? ['absent', '×', 'Faltó'] : ['neutral', '·', 'Sin registro'];
+      return `<div class="attendance-cell"><b>${escapeHtml(day.label)} ${escapeHtml(day.day)}</b><span class="attendance-icon ${meta[0]}" aria-label="${meta[2]}">${meta[1]}</span></div>`;
     }).join('');
-    popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reporte semanal</title><style>@page{size:letter portrait;margin:9mm}*{box-sizing:border-box}body{margin:0;color:#000;font-family:Arial,sans-serif;font-size:9pt}.weekly-page{min-height:250mm;position:relative;break-after:page;page-break-after:always;padding-bottom:9mm}.weekly-page:last-child{break-after:auto;page-break-after:auto}header{display:flex;align-items:center;justify-content:center;gap:8mm;padding-bottom:3mm}header img{width:14mm;height:14mm;object-fit:contain;filter:grayscale(1)}header div{text-align:center}header p{margin:0 0 1mm;font-size:10pt;font-weight:700}h1{margin:0;font-size:15pt}.student-data{display:grid;grid-template-columns:1.45fr .9fr;border:1px solid #000;margin:1mm 0 5mm}.student-data p{margin:0;padding:2.2mm 3mm;border-right:1px solid #000;border-bottom:1px solid #000}.student-data p:nth-child(2n){border-right:0}.student-data p:nth-last-child(-n+2){border-bottom:0}h2{margin:0;text-align:center;font-size:11pt;background:#eee;border:1px solid #000;padding:2mm}table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:2mm;vertical-align:middle}th{background:#f0f0f0}th:nth-child(1){width:17%}th:nth-child(2){width:23%}th:nth-child(4),th:nth-child(5){width:10%;text-align:center}.mark{text-align:center;font-size:15pt;font-weight:700}.notes,.observations{margin-top:4mm;border:1px solid #000}.notes h2,.observations h2{border-width:0 0 1px}.notes ul{margin:2.5mm 5mm;padding-left:5mm}.notes li{margin:1mm 0}.observations p{margin:2.5mm 4mm 1mm}.observations i{display:block;height:7mm;border-bottom:1px solid #888;margin:0 4mm}footer{position:absolute;bottom:0;width:100%;text-align:center;font-size:8pt}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>${pages}</body></html>`);
+    const notes = report.attendance && report.attendance.justificationNotes || [];
+    return `<div class="attendance-row">${cells}</div><div class="attendance-legend"><span><i class="attendance-icon present">✓</i> Asistió</span><span><i class="attendance-icon justified">!</i> Falta justificada</span><span><i class="attendance-icon absent">×</i> Faltó</span>${notes.length ? `<em>${escapeHtml(notes.join(' '))}</em>` : ''}</div>`;
+  }
+
+  function weeklyTaskPrint(task, options) {
+    const status = familyReportTaskStatus(task);
+    const detailed = options.mode === 'complete';
+    const title = task.title || task.name || 'Actividad';
+    return `<article class="report-task"><div class="report-task-head"><h3>${escapeHtml(weeklyPrintDate(task.date))} · ${escapeHtml(title)}</h3><strong class="task-status ${status.className}">${escapeHtml(status.label)}</strong></div>${detailed ? `<p><b>Tipo:</b> ${escapeHtml(task.type || 'Clase')}</p><p><b>Material:</b> ${escapeHtml(task.material || 'Sin material registrado')}${task.pages ? ' · <b>Páginas:</b> ' + escapeHtml(task.pages) : ''}</p>` : `<p><b>${escapeHtml(task.source || 'Campo formativo')}</b>${task.project ? ' · ' + escapeHtml(task.project) : ''}</p>`}${options.includeInstructions && task.instructions ? `<p class="task-instruction"><b>Indicación:</b> ${escapeHtml(task.instructions)}</p>` : ''}</article>`;
+  }
+
+  function weeklySectionTitle(title) {
+    return `<h2 class="arrow-title"><span>${escapeHtml(title)}</span></h2>`;
+  }
+
+  function weeklyReportPrintHtml(report, options, reportIndex) {
+    const school = report.school || {};
+    const student = report.student || {};
+    const info = planningCalendar.resolve(report.period.start);
+    const tasks = report.tasks || [];
+    const learnings = report.learnings || [];
+    const achievements = report.achievements || [];
+    const observations = report.observations || [];
+    const guidance = report.guidance || [];
+    const logo = new URL('school-logo.webp', location.href).href;
+    const continueOnNewPage = tasks.length >= 5 || tasks.some(function (task) { return options.includeInstructions && String(task.instructions || '').length > 120; });
+    return `<section class="weekly-student ${reportIndex ? 'next-student' : ''}"><header class="institutional-head"><img src="${escapeHtml(logo)}" alt="Logo"><div><h1>${escapeHtml(school.name || 'Escuela Primaria Francisco Hoil Torres')}</h1><p>REPORTE SEMANAL · ${escapeHtml(school.group || '4.º A')}</p><small>${escapeHtml(school.shift || 'Turno vespertino')} · C.C.T. ${escapeHtml(school.cct || '23DPR0136V')}</small></div></header><div class="student-data"><p><b>Alumno:</b> ${escapeHtml(student.name || '')}</p><p><b>${escapeHtml(info.title)}:</b> ${escapeHtml(info.rangeLabel.replace(/^Del /, ''))}</p><p><b>Grado y grupo:</b> ${escapeHtml(school.group || '4.º A')}</p><p><b>Docente:</b> ${escapeHtml(school.teacher || 'Prof. Michel Otaner Polledo Nieves')}</p></div>${weeklySectionTitle('ASISTENCIA SEMANAL')}${weeklyAttendancePrint(report)}${weeklySectionTitle('TAREAS Y ACTIVIDADES')}<div class="report-tasks">${tasks.length ? tasks.map(function (task) { return weeklyTaskPrint(task, options); }).join('') : '<p class="empty-print">No hay tareas registradas para esta semana.</p>'}</div><div class="report-followup ${continueOnNewPage ? 'continue-page' : ''}">${learnings.length ? `${weeklySectionTitle('APRENDIZAJES TRABAJADOS')}<div class="learning-print-list">${learnings.map(function (row) { return `<article><div><h3>${escapeHtml(row.title || 'Aprendizaje')}</h3><p>${escapeHtml(row.pda || row.observation || '')}</p>${row.observation && row.observation !== row.pda ? `<small>${escapeHtml(row.observation)}</small>` : ''}</div><b>${escapeHtml(row.level)}</b></article>`; }).join('')}</div>` : ''}${achievements.length ? `${weeklySectionTitle('LOGROS Y AVANCES')}<div class="simple-text">${achievements.map(function (text) { return `<p>${escapeHtml(text)}</p>`; }).join('')}</div>` : ''}${observations.length ? `${weeklySectionTitle('OBSERVACIONES GENERALES')}<table class="observations-table"><thead><tr><th>ASPECTO EVALUADO</th><th>OBSERVACIÓN DEL DOCENTE</th></tr></thead><tbody>${observations.map(function (row) { return `<tr><td>${escapeHtml(row.category)}</td><td>${escapeHtml(row.text)}</td></tr>`; }).join('')}</tbody></table>` : ''}${weeklySectionTitle('INDICACIONES PARA LA FAMILIA')}<div class="simple-text guidance">${guidance.length ? guidance.map(function (text) { return `<p>${escapeHtml(text)}</p>`; }).join('') : '<p>Sin indicaciones adicionales registradas para esta semana.</p>'}</div>${options.includeSignature ? '<div class="family-signature"><span></span><p>Nombre y firma de la madre, padre o tutor</p></div>' : ''}</div><footer>Reporte generado con información académica autorizada · ${escapeHtml(info.title)}</footer></section>`;
+  }
+
+  function weeklyReportDocument(reports, options) {
+    const content = reports.map(function (report, index) { return weeklyReportPrintHtml(report, options, index); }).join('');
+    return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reporte semanal familiar</title><style>@page{size:letter portrait;margin:13mm 14mm 12mm}*{box-sizing:border-box}html,body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:11.2pt;line-height:1.35}.weekly-student{min-height:252mm;position:relative;padding-bottom:9mm}.weekly-student.next-student{break-before:page;page-break-before:always}.institutional-head{display:grid;grid-template-columns:25mm 1fr 25mm;align-items:center;border-bottom:.35mm solid #9baeb5;padding:0 0 4mm;margin-bottom:4mm}.institutional-head img{width:22mm;height:22mm;object-fit:contain;justify-self:center}.institutional-head div{grid-column:2;text-align:center}.institutional-head h1{font-size:15.5pt;margin:0 0 1mm;text-transform:uppercase}.institutional-head p{font-size:12pt;margin:0}.institutional-head small{font-size:9.5pt}.student-data{display:grid;grid-template-columns:1.25fr 1fr;gap:0 10mm;margin:0 2mm 5mm}.student-data p{margin:0;padding:1.6mm 0}.arrow-title{display:flex;width:max-content;max-width:92%;align-items:center;margin:5mm 0 4mm;background:#d9f1f1;color:#176e73;font-size:11.5pt;line-height:1;font-weight:800;letter-spacing:.25px;padding:3mm 4mm;position:relative}.arrow-title:after{content:"";position:absolute;left:100%;top:0;border-top:6mm solid transparent;border-bottom:6mm solid transparent;border-left:6mm solid #d9f1f1}.attendance-row{display:grid;grid-template-columns:repeat(5,1fr);border:.3mm solid #9baeb5}.attendance-cell{min-height:12mm;display:flex;align-items:center;justify-content:space-between;padding:2mm 3mm;border-right:.25mm solid #b6c3c8}.attendance-cell:last-child{border-right:0}.attendance-icon{display:inline-grid;place-items:center;width:7mm;height:7mm;border-radius:50%;font-style:normal;font-weight:900;font-size:11pt;color:#fff;background:#7b8589;border:.3mm solid currentColor}.attendance-icon.present{background:#218c58}.attendance-icon.justified{background:#e29a00}.attendance-icon.absent{background:#cf3d43}.attendance-icon.neutral{background:#fff;color:#68777d}.attendance-legend{display:flex;justify-content:center;align-items:center;gap:7mm;flex-wrap:wrap;margin:4mm 0 5mm;font-size:9.8pt}.attendance-legend span{display:flex;align-items:center;gap:1.5mm}.attendance-legend .attendance-icon{width:6mm;height:6mm;font-size:9pt}.attendance-legend em{font-style:normal}.report-task{break-inside:avoid;page-break-inside:avoid;padding:2.5mm 1.5mm 3mm;border-bottom:.25mm solid #c2cccf}.report-task-head{display:grid;grid-template-columns:1fr 42mm;gap:5mm;align-items:start}.report-task h3{font-size:11.5pt;margin:0 0 1.5mm}.report-task p{margin:1mm 0}.task-status{text-align:left;font-size:10.5pt;font-weight:400}.task-status.done{color:#176c47}.task-status.missing{color:#a31e25}.task-status.partial,.task-status.justified,.task-status.late{color:#805500}.task-status.pending,.task-status.neutral{color:#58666b}.task-instruction{line-height:1.42}.report-followup.continue-page{break-before:page;page-break-before:always;padding-top:1mm}.learning-print-list article{break-inside:avoid;display:grid;grid-template-columns:1fr 42mm;gap:5mm;padding:2.5mm;border-bottom:.25mm solid #c2cccf}.learning-print-list h3{font-size:11.5pt;margin:0 0 1mm}.learning-print-list p,.learning-print-list small{display:block;margin:0}.learning-print-list b{font-weight:400}.simple-text p{margin:0 0 2.5mm}.observations-table{width:100%;border-collapse:collapse}.observations-table th,.observations-table td{border-top:.3mm solid #9baeb5;border-bottom:.3mm solid #b9c5c9;padding:3mm 2.5mm;text-align:left;vertical-align:top}.observations-table th:first-child,.observations-table td:first-child{width:35%}.observations-table th{font-size:10.5pt}.family-signature{width:70mm;text-align:center;margin:13mm auto 0}.family-signature span{display:block;border-top:.3mm solid #555}.family-signature p{font-size:9pt;margin:1.5mm 0}.empty-print{padding:4mm 2mm;border-bottom:.25mm solid #c2cccf}footer{font-size:8pt;color:#666;text-align:center;margin-top:7mm}.bw .arrow-title{background:#eee;color:#111;border-left:1.2mm solid #333}.bw .arrow-title:after{border-left-color:#eee}.bw .attendance-icon{background:#fff!important;color:#000!important;border:.45mm solid #000}.bw .attendance-icon.present{background:#222!important;color:#fff!important}.bw .attendance-icon.absent{background:#000!important;color:#fff!important}.bw .task-status{color:#000!important}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body class="${options.colorMode === 'bw' ? 'bw' : 'color'}">${content}</body></html>`;
+  }
+
+  function renderWeeklyReportStudentChoices() {
+    const host = $('#weeklyReportStudentChecks');
+    if (!host) return;
+    host.innerHTML = state.students.map(function (student) { return `<label><input type="checkbox" value="${escapeHtml(student.id)}"> <span>${escapeHtml(fullName(student))}</span></label>`; }).join('');
+  }
+
+  function openWeeklyReportOptions(context) {
+    const dialog = $('#weeklyReportOptionsDialog');
+    const form = $('#weeklyReportOptionsForm');
+    form.reset();
+    form.elements.context.value = context;
+    $('#weeklyReportReference').value = context === 'family' ? planningSelectedDate : ($('#academicReportDate').value || planningCalendar.today());
+    $('#weeklyReportTeacherSelection').classList.toggle('hidden-control', context === 'family');
+    if (context === 'teacher') {
+      renderWeeklyReportStudentChoices();
+      const currentStudentId = $('#academicStudent') && $('#academicStudent').value;
+      if (currentStudentId) {
+        const current = $$('#weeklyReportStudentChecks input').find(function (input) { return input.value === currentStudentId; });
+        if (current) current.checked = true;
+      }
+    }
+    dialog.showModal();
+  }
+
+  function printWeeklyReports(reports, options, popup) {
+    popup.document.open();
+    popup.document.write(weeklyReportDocument(reports, options));
     popup.document.close();
     popup.focus();
-    setTimeout(function () { popup.print(); }, 700);
+    setTimeout(function () { popup.print(); }, 900);
+  }
+
+  async function submitWeeklyReportOptions(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const options = {
+      mode: form.elements.mode.value,
+      colorMode: form.elements.colorMode.value,
+      includeInstructions: form.elements.includeInstructions.checked,
+      includeSignature: form.elements.includeSignature.checked
+    };
+    const context = form.elements.context.value;
+    const popup = window.open('', '_blank');
+    if (!popup) return toast('Permite las ventanas emergentes para imprimir.', true);
+    popup.document.write('<!doctype html><html><body style="font-family:Arial;padding:40px"><h2>Preparando el reporte semanal…</h2><p>La impresión se abrirá en unos segundos.</p></body></html>');
+    $('#weeklyReportOptionsDialog').close();
+    try {
+      if (context === 'family') {
+        await ensureWeeklyData();
+        printWeeklyReports([currentWeeklyReportModel()], options, popup);
+      } else {
+        const studentIds = $$('#weeklyReportStudentChecks input:checked').map(function (input) { return input.value; });
+        if (!studentIds.length) { popup.close(); return toast('Selecciona por lo menos un alumno.', true); }
+        setLoading(true, 'Preparando los reportes semanales…');
+        const result = await server('getWeeklyFamilyReports', { studentIds: studentIds, reference: form.elements.reference.value });
+        printWeeklyReports(result.reports || [], options, popup);
+      }
+    } catch (error) {
+      popup.close();
+      toast(error.message || 'No fue posible preparar el reporte.', true);
+    } finally {
+      if (context === 'teacher') setLoading(false);
+    }
+  }
+
+  function printFamilyWeeklyReport() {
+    openWeeklyReportOptions('family');
   }
 
   printFamilyCredentials = function (credentials) {
@@ -504,8 +632,13 @@
       'family-select-planning-day': function (button) { setFamilyPlanningDate(button.dataset.date, true, false); },
       'family-view-weekly-report': function () { openFamilyWeeklyReport(); },
       'family-print-weekly-report': function () { printFamilyWeeklyReport(); },
-      'family-report-back': function () { showFamilyView('familyOverview'); $('.family-bottom-nav [data-family-bottom-view="familyOverview"]').classList.add('active'); }
+      'family-report-back': function () { showFamilyView('familyOverview'); $('.family-bottom-nav [data-family-bottom-view="familyOverview"]').classList.add('active'); },
+      'open-weekly-report-options': function () { openWeeklyReportOptions('teacher'); },
+      'weekly-report-select-all': function () { $$('#weeklyReportStudentChecks input').forEach(function (input) { input.checked = true; }); },
+      'weekly-report-clear': function () { $$('#weeklyReportStudentChecks input').forEach(function (input) { input.checked = false; }); }
     });
+    const weeklyReportForm = $('#weeklyReportOptionsForm');
+    if (weeklyReportForm) weeklyReportForm.addEventListener('submit', submitWeeklyReportOptions);
     setInterval(function () {
       const currentToday = planningCalendar.today();
       if (currentToday === planningLastToday) return;
