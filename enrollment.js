@@ -158,7 +158,7 @@ function printFamilyCredentials(credentials){
 
 function openEnrollmentAdmin(){showView('enrollment-admin');loadEnrollmentAdmin(false)}
 async function loadEnrollmentAdmin(force=false){
-  if(enrollmentAdminData&&!force){renderEnrollmentAdmin();return}await runAction(async()=>{if(state.config.directorioSiteUrl!==siteBaseUrl()){await server('saveDirectorySiteUrl',siteBaseUrl());state.config.directorioSiteUrl=siteBaseUrl()}enrollmentAdminData=await server('getEnrollmentAdminData');renderEnrollmentAdmin()})
+  if(enrollmentAdminData&&!force){renderEnrollmentAdmin();return}await runAction(async()=>{await syncSiteUrlSafely();enrollmentAdminData=await server('getEnrollmentAdminData');renderEnrollmentAdmin()})
 }
 function renderEnrollmentAdmin(){
   const stats=enrollmentAdminData?.stats||{};$('#enrollmentAdminStats').innerHTML=[['Fichas',stats.total||0],['Borradores',stats.drafts||0],['Enviadas',stats.submitted||0],['Aprobadas',stats.approved||0]].map(([label,value])=>`<div class="stat"><b>${value}</b><span>${label}</span></div>`).join('');

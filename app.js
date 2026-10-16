@@ -3,6 +3,7 @@ const $=(s,r=document)=>r.querySelector(s);const $$=(s,r=document)=>[...r.queryS
 const API_SOURCE='pase-lista-4a-api';
 const API_URL=String(window.CARPETA_ACADEMICA_CONFIG?.apiUrl||'').trim();
 const SESSION_KEY='carpeta_academica_session_v1';
+const BOOTSTRAP_CACHE_KEY='carpeta_academica_bootstrap_cache_v1';
 const FAMILY_SESSION_KEY='carpeta_academica_family_session_v1';
 const FAMILY_REMEMBER_KEY='carpeta_academica_family_remember_v1';
 const DRAFT_KEYS={project:'carpeta_academica_draft_project_v1',classRecord:'carpeta_academica_draft_activity_v1',instrument:'carpeta_academica_draft_instrument_v1'};
@@ -22,10 +23,30 @@ let loadingShowTimer=0;
 let loadingSlowTimer=0;
 let activeLoadingCount=0;
 let lastActionRetry=null;
+let gasSyncFadeTimer=null;
 const familyAccessSelection=new Set();
+const paymentEventCache=new Map();
+const gradeReportCache=new Map();
 const VIEW_TITLES={dashboard:'Inicio',students:'Lista de alumnos',styles:'Estilos de aprendizaje',projects:'Proyectos','project-detail':'Proyecto',daily:'Registro diario',attendance:'Asistencia','attendance-reports':'Reportes de asistencia',reports:'Reportes',grades:'Calificaciones',instruments:'Instrumentos',observations:'Observaciones',drafts:'Borradores',directory:'Directorio familiar','family-access':'Accesos familiares',payments:'Control de pagos',settings:'Configuración','enrollment-admin':'Inscripción'};
 document.addEventListener('DOMContentLoaded',()=>{bindUI();$('#bootRetry')?.addEventListener('click',()=>loadApp());$('#operationLoaderRetry')?.addEventListener('click',()=>{const retry=lastActionRetry;setLoading(false);if(retry)retry()});startApp()});
 window.addEventListener('message',receiveApiMessage);
+
+function setGasSyncStatus(status,text='',retry=null){
+  const el=$('#gasSyncIndicator'),label=$('#gasSyncText');
+  if(!el||!label)return;
+  clearTimeout(gasSyncFadeTimer);
+  if(status==='hidden'){el.classList.add('hidden-control');return}
+  el.className=`gas-sync-indicator ${status}`;
+  label.textContent=text||(status==='syncing'?'Conectando con Google…':status==='synced'?'✓ Sincronizado':status==='slow'?'Google responde lento…':'⚠️ Error de conexión');
+  el.onclick=(status==='error'&&typeof retry==='function')?retry:null;
+  el.classList.remove('hidden-control');
+}
+function readBootstrapCache(){
+  try{const raw=localStorage.getItem(BOOTSTRAP_CACHE_KEY);return raw?JSON.parse(raw):null}catch(e){return null}
+}
+function saveBootstrapCache(data){
+  try{if(data&&typeof data==='object')localStorage.setItem(BOOTSTRAP_CACHE_KEY,JSON.stringify(data))}catch(e){}
+}
 
 function validApiOrigin(origin){try{const host=new URL(origin).hostname;return host==='script.google.com'||host.endsWith('.googleusercontent.com')}catch(e){return false}}
 function receiveApiMessage(event){
@@ -47,21 +68,125 @@ function apiRequest(action,args=[],token=sessionToken){
     pendingRequests.set(requestId,{resolve,reject,iframe,timer});form.submit();form.remove();
   });
 }
-function server(name,...args){const key=name+'|'+JSON.stringify(args);if(inFlightServerCalls.has(key))return inFlightServerCalls.get(key);const request=apiRequest(name,args).finally(()=>inFlightServerCalls.delete(key));inFlightServerCalls.set(key,request);return request}
+function server(name,...args){
+  const key=name+'|'+JSON.stringify(args);
+  if(inFlightServerCalls.has(key))return inFlightServerCalls.get(key);
+  setGasSyncStatus('syncing','Consultando Google…');
+  const request=apiRequest(name,args).finally(()=>{
+    inFlightServerCalls.delete(key);
+    if(inFlightServerCalls.size===0){
+      setGasSyncStatus('synced','✓ Listo');
+      gasSyncFadeTimer=setTimeout(()=>setGasSyncStatus('hidden'),1800);
+    }
+  });
+  inFlightServerCalls.set(key,request);
+  return request;
+}
 function familyServer(name,...args){return apiRequest(name,args,familySessionToken)}
 function storeFamilySession(token,remember=false){familySessionToken=token||'';sessionStorage.setItem(FAMILY_SESSION_KEY,familySessionToken);if(remember){localStorage.setItem(FAMILY_SESSION_KEY,familySessionToken);localStorage.setItem(FAMILY_REMEMBER_KEY,'true')}else{localStorage.removeItem(FAMILY_SESSION_KEY);localStorage.removeItem(FAMILY_REMEMBER_KEY)}resetFamilyIdleTimer()}
-function resetFamilyIdleTimer(){clearTimeout(familyIdleTimer);if(!familySessionToken)return;familyIdleTimer=setTimeout(()=>familyLogout(false,'La sesión se cerró por inactividad.'),30*60*1000)}
-function siteBaseUrl(){return location.origin+location.pathname}
+function isLocalSite(){return /^(http:\/\/localhost|http:\/\/127\.0\.0\.1|file:)/i.test(location.origin)}
+function siteBaseUrl(){if(isLocalSite()&&state.config?.directorioSiteUrl){return state.config.directorioSiteUrl}return location.origin+location.pathname}
+async function syncSiteUrlSafely(){const current=siteBaseUrl();if(!isLocalSite()&&/^https?:\/\/[^/]+\/.+/i.test(current)&&state.config?.directorioSiteUrl!==current){try{await server('saveDirectorySiteUrl',current);state.config.directorioSiteUrl=current}catch(e){console.warn('Aviso: no fue necesario actualizar la URL del sitio:',e.message)}}}
 function lockTeacherApp(){document.body.classList.add('teacher-login-mode');$('#app')?.classList.add('auth-protected')}
 function unlockTeacherApp(){document.body.classList.remove('teacher-login-mode');$('#app')?.classList.remove('auth-protected')}
 function showBoot(message='Preparando el acceso seguro…',retry=false){const box=$('#bootScreen');if(!box)return;$('#bootStatus').textContent=message;$('#bootRetry').classList.toggle('hidden-control',!retry);box.classList.remove('hidden-control')}
-function hideBoot(){$('#bootScreen')?.classList.add('hidden-control')}
-async function startApp(){lockTeacherApp();showBoot();const params=new URLSearchParams(location.search);familyInvitationToken=params.get('familia')||'';familyResetToken=params.get('recuperar')||'';familyGroupToken=params.get('grupo')||'';const enrollment=params.get('inscripcion')||'';if(enrollment){hideBoot();return startEnrollmentPortal(enrollment)}if(familyInvitationToken||familyResetToken||familyGroupToken){hideBoot();return startFamilyPortal()}if(sessionToken)await loadApp();else{setLoading(false);hideBoot();showLogin()}}
+function hideBoot(){$('#bootScreen')?.classList.add('hidden-control');$('#loading')?.classList.add('hidden')}
+
+async function startApp(){
+  $('#loading')?.classList.add('hidden');
+  const params=new URLSearchParams(location.search);
+  familyInvitationToken=params.get('familia')||'';
+  familyResetToken=params.get('recuperar')||'';
+  familyGroupToken=params.get('grupo')||'';
+  const enrollment=params.get('inscripcion')||'';
+  if(enrollment){hideBoot();setLoading(false);return startEnrollmentPortal(enrollment)}
+  if(familyInvitationToken||familyResetToken||familyGroupToken){hideBoot();setLoading(false);return startFamilyPortal()}
+  if(sessionToken){
+    const cached=readBootstrapCache();
+    if(cached){
+      Object.assign(state,cached);
+      unlockTeacherApp();
+      hideBoot();
+      setLoading(false);
+      renderAll();
+      syncBootstrapInBackground();
+    }else{
+      unlockTeacherApp();
+      hideBoot();
+      renderAll();
+      await loadApp();
+      setLoading(false);
+    }
+  }else{
+    setLoading(false);
+    hideBoot();
+    showLogin();
+  }
+}
+
+async function syncBootstrapInBackground(){
+  setGasSyncStatus('syncing','Sincronizando con Google…');
+  let slowTimer=setTimeout(()=>setGasSyncStatus('slow','Google responde con lentitud…'),7000);
+  try{
+    let data;
+    try{data=await server('getBootstrapDataLite')}catch(error){if(!/acción solicitada no está permitida/i.test(String(error.message||'')))throw error;data=await server('getBootstrapData')}
+    clearTimeout(slowTimer);
+    Object.assign(state,data);
+    saveBootstrapCache(data);
+    renderAll();
+    setGasSyncStatus('synced','✓ Datos actualizados');
+    gasSyncFadeTimer=setTimeout(()=>setGasSyncStatus('hidden'),2200);
+  }catch(e){
+    clearTimeout(slowTimer);
+    if(isSessionError(e.message)){
+      sessionToken='';
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(BOOTSTRAP_CACHE_KEY);
+      setGasSyncStatus('hidden');
+      hideBoot();
+      showLogin(e.message);
+    }else{
+      setGasSyncStatus('error','⚠️ Sin conexión con Google · Reintentar',()=>syncBootstrapInBackground());
+    }
+  }
+}
+
 function showLogin(message=''){lockTeacherApp();$('#loginError').textContent=message;const dialog=$('#loginDialog');if(!dialog.open)dialog.showModal();setTimeout(()=>$('#loginForm').elements.username.focus(),50)}
-async function login(e){e.preventDefault();const form=e.currentTarget;$('#loginError').textContent='';setLoading(true);try{const r=await apiRequest('login',[form.elements.username.value,form.elements.password.value],'');sessionToken=r.token;localStorage.setItem(SESSION_KEY,sessionToken);form.elements.password.value='';$('#loginDialog').close();await loadApp()}catch(error){showLogin(error.message)}finally{setLoading(false)}}
-function logout(confirmFirst=true){if(confirmFirst&&!confirm('¿Cerrar la sesión de Carpeta Académica?'))return;sessionToken='';localStorage.removeItem(SESSION_KEY);location.reload()}
+async function login(e){e.preventDefault();const form=e.currentTarget;$('#loginError').textContent='';const submitBtn=$('button[type="submit"]',form);const origText=submitBtn?submitBtn.textContent:'';if(submitBtn){submitBtn.disabled=true;submitBtn.textContent='Comprobando acceso…'}setGasSyncStatus('syncing','Iniciando sesión…');try{const r=await apiRequest('login',[form.elements.username.value,form.elements.password.value],'');sessionToken=r.token;localStorage.setItem(SESSION_KEY,sessionToken);form.elements.password.value='';$('#loginDialog').close();setGasSyncStatus('syncing','Cargando datos del grupo…');const cached=readBootstrapCache();if(cached){Object.assign(state,cached);unlockTeacherApp();hideBoot();renderAll();syncBootstrapInBackground()}else{await loadApp()}}catch(error){setGasSyncStatus('hidden');showLogin(error.message)}finally{if(submitBtn){submitBtn.disabled=false;submitBtn.textContent=origText}setLoading(false)}}
+function logout(confirmFirst=true){if(confirmFirst&&!confirm('¿Cerrar la sesión de Carpeta Académica?'))return;sessionToken='';localStorage.removeItem(SESSION_KEY);localStorage.removeItem(BOOTSTRAP_CACHE_KEY);location.reload()}
 function isSessionError(message){return /sesión|sesion|inicia sesión|inicia sesion|venció|vencio/i.test(String(message||''))}
-async function loadApp(){lockTeacherApp();showBoot('Conectando con tus datos de Google…');setLoading(false);try{let data;try{data=await server('getBootstrapDataLite')}catch(error){if(!/acción solicitada no está permitida/i.test(String(error.message||'')))throw error;data=await server('getBootstrapData')}Object.assign(state,data);renderAll();unlockTeacherApp();hideBoot()}catch(e){if(isSessionError(e.message)){sessionToken='';localStorage.removeItem(SESSION_KEY);hideBoot();showLogin(e.message)}else{lockTeacherApp();showBoot('No fue posible cargar los datos. Revisa tu conexión y vuelve a intentarlo.',true)}}}
+
+async function loadApp(){
+  setGasSyncStatus('syncing','Conectando con Google…');
+  let slowTimer=setTimeout(()=>setGasSyncStatus('slow','Google tarda más de lo habitual…'),7000);
+  try{
+    let data;
+    try{data=await server('getBootstrapDataLite')}catch(error){if(!/acción solicitada no está permitida/i.test(String(error.message||'')))throw error;data=await server('getBootstrapData')}
+    clearTimeout(slowTimer);
+    Object.assign(state,data);
+    saveBootstrapCache(data);
+    renderAll();
+    unlockTeacherApp();
+    hideBoot();
+    setLoading(false);
+    setGasSyncStatus('synced','✓ Conectado');
+    gasSyncFadeTimer=setTimeout(()=>setGasSyncStatus('hidden'),2200);
+  }catch(e){
+    clearTimeout(slowTimer);
+    setLoading(false);
+    if(isSessionError(e.message)){
+      sessionToken='';
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(BOOTSTRAP_CACHE_KEY);
+      hideBoot();
+      setGasSyncStatus('hidden');
+      showLogin(e.message);
+    }else{
+      setGasSyncStatus('error','⚠️ Sin conexión · Reintentar',()=>loadApp());
+      showBoot('No fue posible cargar los datos. Revisa tu conexión y vuelve a intentarlo.',true);
+    }
+  }
+}
 function bindUI(){
   ['click','keydown','touchstart'].forEach(type=>document.addEventListener(type,()=>{if(document.body.classList.contains('family-mode'))resetFamilyIdleTimer()},{passive:true}));
   $$('.nav-item').forEach(b=>b.addEventListener('click',()=>b.dataset.view==='payments'?openPayments():b.dataset.view==='directory'?openDirectory():b.dataset.view==='family-access'?openFamilyAccess():b.dataset.view==='grades'?openGrades():b.dataset.view==='attendance'?openAttendance():b.dataset.view==='enrollment-admin'?openEnrollmentAdmin():showView(b.dataset.view)));
@@ -325,7 +450,7 @@ async function saveClassForm(e){
 }
 function formatDateShort(value){if(!value)return 'Sin fecha';const [y,m,d]=String(value).split('-');return `${d}/${m}/${y}`}
 function formatTime(value){if(!value)return '';const [h,m]=String(value).split(':').map(Number);return `${h%12||12}:${String(m||0).padStart(2,'0')} ${h<12?'a. m.':'p. m.'}`}
-function openAttendance(){showView('attendance');if(state.attendance&&Date.now()-state.attendanceLoadedAt<120000){renderAttendance();return}runAction(async()=>{state.attendance=await server('getInitialData');state.attendanceLoadedAt=Date.now();renderAttendance()})}
+function openAttendance(force=false){showView('attendance');if(state.attendance&&!force){renderAttendance();if(Date.now()-state.attendanceLoadedAt>300000){server('getInitialData').then(data=>{state.attendance=data;state.attendanceLoadedAt=Date.now();renderAttendance()}).catch(err=>console.warn('Revalidación de asistencia:',err))}return}runAction(async()=>{state.attendance=await server('getInitialData');state.attendanceLoadedAt=Date.now();renderAttendance()})}
 function renderAttendance(){
   if(!state.attendance)return;
   $('#attendanceDate').value=state.attendance.today;
@@ -348,8 +473,8 @@ function renderAttendanceList(){
 function selectAttendanceStatus(e){const b=e.target.closest('[data-status]');if(!b)return;const row=b.closest('[data-student]');state.attendanceRecords[row.dataset.student].status=b.dataset.status;renderAttendanceList()}
 function updateAttendanceNote(e){if(!e.target.classList.contains('attendance-note'))return;state.attendanceRecords[e.target.closest('[data-student]').dataset.student].note=e.target.value}
 function renderAttendanceSavedSummary(){const box=$('#attendanceSavedSummary'),r=state.attendanceSummary;if(!r){box.classList.add('hidden-control');box.innerHTML='';return}box.classList.remove('hidden-control');box.innerHTML=`<strong>Asistencia guardada</strong><span><b>${r.attended}</b> asistieron (A + R)</span><span><b>${r.absent}</b> faltaron (F + J)</span><small>A: ${r.counts.A} · R: ${r.counts.R} · F: ${r.counts.F} · J: ${r.counts.J}</small>`}
-async function saveAttendanceDay(){const students=state.attendance?.students||[];const pending=students.filter(s=>!state.attendanceRecords[s.id]?.status);if(pending.length)return toast(`Falta registrar a ${pending.length} alumno(s).`,true);if(!confirm('¿Guardar la asistencia de esta fecha?'))return;await runAction(async()=>{const payload={date:$('#attendanceDate').value,records:students.map(s=>({studentId:s.id,status:state.attendanceRecords[s.id].status,note:state.attendanceRecords[s.id].note||''}))};const r=await server('saveAttendance',payload);state.attendanceSummary=r;state.attendanceDay=await server('getDayData',payload.date);prepareAttendanceRecords();renderAttendanceList();renderAttendanceSavedSummary();toast(r.message)})}
-async function saveNoClassDay(){const reason=prompt('Motivo del día sin clases:','Consejo Técnico Escolar');if(!reason)return;const detail=prompt('Detalle opcional:','')||'';await runAction(async()=>{const r=await server('saveNoClass',{date:$('#attendanceDate').value,reason,detail});state.attendanceDay=await server('getDayData',$('#attendanceDate').value);prepareAttendanceRecords();renderAttendanceList();toast(r.message)})}
+async function saveAttendanceDay(){const students=state.attendance?.students||[];const pending=students.filter(s=>!state.attendanceRecords[s.id]?.status);if(pending.length)return toast(`Falta registrar a ${pending.length} alumno(s).`,true);if(!confirm('¿Guardar la asistencia de esta fecha?'))return;await runAction(async()=>{const payload={date:$('#attendanceDate').value,records:students.map(s=>({studentId:s.id,status:state.attendanceRecords[s.id].status,note:state.attendanceRecords[s.id].note||''}))};const r=await server('saveAttendance',payload);state.attendanceSummary=r;state.attendanceDay=await server('getDayData',payload.date);prepareAttendanceRecords();renderAttendanceList();renderAttendanceSavedSummary();window.dispatchEvent(new CustomEvent('attendance-updated'));toast(r.message)})}
+async function saveNoClassDay(){const reason=prompt('Motivo del día sin clases:','Consejo Técnico Escolar');if(!reason)return;const detail=prompt('Detalle opcional:','')||'';await runAction(async()=>{const r=await server('saveNoClass',{date:$('#attendanceDate').value,reason,detail});state.attendanceDay=await server('getDayData',$('#attendanceDate').value);prepareAttendanceRecords();renderAttendanceList();window.dispatchEvent(new CustomEvent('attendance-updated'));toast(r.message)})}
 function toggleAttendanceReportMode(){const weekly=$('#attendanceReportType').value==='weekly';$('#attendanceWeekControl').classList.toggle('hidden-control',!weekly);$('#attendanceMonthControl').classList.toggle('hidden-control',weekly)}
 async function loadAttendanceReport(){const studentId=$('#attendanceStudent').value;if(!studentId){showView('attendance');return toast('Selecciona un alumno para consultar el reporte.',true)}const weekly=$('#attendanceReportType').value==='weekly';await runAction(async()=>{const report=weekly?await server('getWeeklyAttendanceReport',studentId,$('#attendanceReportDate').value):await server('getIndividualReport',studentId,$('#attendancePeriod').value);weekly?renderWeeklyAttendanceReport(report):renderMonthlyAttendanceReport(report);showView('attendance')})}
 function attendanceKpis(r){return `<div class="attendance-kpis"><div class="attendance-kpi"><b>${r.percentage}%</b><span>Asistencia</span></div><div class="attendance-kpi"><b>${r.attended}</b><span>A + R</span></div><div class="attendance-kpi"><b>${r.absent}</b><span>F + J</span></div><div class="attendance-kpi"><b>${r.counts.R}</b><span>Retardos</span></div></div>`}
@@ -391,13 +516,10 @@ function renderDailyReport(r){
 }
 function renderDailyPeople(containerId,countId,items,type){$('#'+countId).textContent=items.length;$('#'+containerId).innerHTML=items.length?items.map(item=>`<div class="report-person"><div><strong>${escapeHtml(item.name)}</strong><small>${type==='complete'?'Entregó todas las actividades':type==='partial'?`Entregó ${item.delivered} de ${item.total}`:'No entregó actividades'} · Conducta: ${escapeHtml(item.conduct)}</small></div><span class="badge">${escapeHtml(item.attendance)}</span></div>`).join(''):'<p class="muted">No hay alumnos en este apartado.</p>'}
 async function syncLearningStyles(){await runAction(async()=>{const r=await server('syncLearningStyles');state.students=r.students;state.config.estilosSpreadsheetId=state.config.estilosSpreadsheetId||'vinculado';renderStudents();renderStyles();renderAcademicOptions();toast(`${r.matched} resultado(s) VAK actualizados${r.unmatched.length?` · ${r.unmatched.length} sin coincidencia`:''}.`)})}
-function openDirectory(){showView('directory');if(state.directory&&Date.now()-state.directoryLoadedAt<120000){renderDirectory();return}loadDirectory()}
-async function loadDirectory(force=true){await runAction(async()=>{if(state.config.directorioSiteUrl!==siteBaseUrl()){await server('saveDirectorySiteUrl',siteBaseUrl());state.config.directorioSiteUrl=siteBaseUrl()}state.directory=await server('getDirectoryAdminData');state.directoryLoadedAt=Date.now();renderDirectory();renderDirectoryBuilder();$('#directoryNotice').innerHTML='<strong>Directorio protegido.</strong> Escribe al menos dos letras para buscar. Las familias solo consultan la ficha de su propio alumno.'})}
-function openFamilyAccess(){showView('family-access');loadFamilyAccess(false)}
-async function loadFamilyAccess(force=false){
-  if(!force&&state.directory&&Date.now()-state.directoryLoadedAt<120000){renderFamilyAccess();return}
-  await runAction(async()=>{if(state.config.directorioSiteUrl!==siteBaseUrl()){await server('saveDirectorySiteUrl',siteBaseUrl());state.config.directorioSiteUrl=siteBaseUrl()}state.directory=await server('getDirectoryAdminData');state.directoryLoadedAt=Date.now();renderFamilyAccess();renderDirectoryBuilder()})
-}
+function openDirectory(force=false){showView('directory');if(state.directory&&!force){renderDirectory();renderDirectoryBuilder();if(Date.now()-state.directoryLoadedAt>300000){server('getDirectoryAdminData').then(data=>{state.directory=data;state.directoryLoadedAt=Date.now();renderDirectory();renderDirectoryBuilder()}).catch(err=>console.warn('Revalidación de directorio:',err))}return}loadDirectory(false)}
+async function loadDirectory(force=true){await runAction(async()=>{await syncSiteUrlSafely();state.directory=await server('getDirectoryAdminData');state.directoryLoadedAt=Date.now();renderDirectory();renderDirectoryBuilder();$('#directoryNotice').innerHTML='<strong>Directorio protegido.</strong> Escribe al menos dos letras para buscar. Las familias solo consultan la ficha de su propio alumno.'})}
+function openFamilyAccess(force=false){showView('family-access');if(state.directory&&!force){renderFamilyAccess();if(Date.now()-state.directoryLoadedAt>300000){server('getDirectoryAdminData').then(data=>{state.directory=data;state.directoryLoadedAt=Date.now();renderFamilyAccess();renderDirectoryBuilder()}).catch(err=>console.warn('Revalidación de accesos familiares:',err))}return}loadFamilyAccess(false)}
+async function loadFamilyAccess(force=false){if(!force&&state.directory&&Date.now()-state.directoryLoadedAt<120000){renderFamilyAccess();return}await runAction(async()=>{await syncSiteUrlSafely();state.directory=await server('getDirectoryAdminData');state.directoryLoadedAt=Date.now();renderFamilyAccess();renderDirectoryBuilder()})}
 function familyAccessFilteredRows(){
   const rows=state.directory?.rows||[],query=$('#familyAccessSearch').value.trim().toLowerCase(),status=$('#familyAccessStatus').value;
   return rows.filter(row=>{const account=row.account,text=[row.student.name,account?.username,account?.email,account?.phone].join(' ').toLowerCase();if(query&&!text.includes(query))return false;if(status==='SIN_CUENTA'&&account)return false;if(status==='PENDIENTE'&&(!account||(!account.mustChangePassword&&account.dataConfirmedAt)))return false;if(status==='ACTIVA'&&(!account||!account.active||account.accessRevoked))return false;if(status==='BLOQUEADA'&&(!account||account.active||account.accessRevoked))return false;if(status==='REVOCADA'&&(!account||!account.accessRevoked))return false;return true})
@@ -562,7 +684,32 @@ function togglePaymentEventForm(){
   if(opening){const form=$('#paymentEventForm');form.reset();form.elements.date.value=todayCancun();form.elements.time.value='13:00';form.elements.delivery.value='0';form.elements.name.focus()}
 }
 async function createPaymentEvent(e){e.preventDefault();const form=e.currentTarget;if(form.dataset.saving==='1')return;const payload=formData(form);payload.requestKey=ensureRequestKey(form,'PAYEV');setFormSaving(form,true);const ok=await runAction(async()=>{const result=await server('createPaymentEvent',payload);$('#paymentEventFormPanel').classList.add('hidden-control');state.paymentsInitial=await server('getPaymentsInitialData');renderPaymentsHome();toast(result.message);await openPaymentEvent(result.eventId)});setFormSaving(form,false);if(ok)resetRequestKey(form)}
-async function openPaymentEvent(eventId){await runAction(async()=>{state.paymentDetail=await server('getPaymentEventDetail',eventId);renderPaymentDetail();$('#paymentsHome').classList.add('hidden-control');$('#paymentEventDetail').classList.remove('hidden-control');window.scrollTo(0,0)})}
+async function openPaymentEvent(eventId,force=false){
+  const cached=paymentEventCache.get(String(eventId));
+  if(cached&&!force){
+    state.paymentDetail=cached;
+    renderPaymentDetail();
+    $('#paymentsHome').classList.add('hidden-control');
+    $('#paymentEventDetail').classList.remove('hidden-control');
+    window.scrollTo(0,0);
+    server('getPaymentEventDetail',eventId).then(detail=>{
+      paymentEventCache.set(String(eventId),detail);
+      if(state.paymentDetail&&String(state.paymentDetail.event?.id)===String(eventId)){
+        state.paymentDetail=detail;
+        renderPaymentDetail();
+      }
+    }).catch(err=>console.warn('Revalidación en segundo plano:',err));
+    return;
+  }
+  await runAction(async()=>{
+    state.paymentDetail=await server('getPaymentEventDetail',eventId);
+    paymentEventCache.set(String(eventId),state.paymentDetail);
+    renderPaymentDetail();
+    $('#paymentsHome').classList.add('hidden-control');
+    $('#paymentEventDetail').classList.remove('hidden-control');
+    window.scrollTo(0,0);
+  });
+}
 function backPaymentEvents(){state.paymentDetail=null;$('#paymentEventDetail').classList.add('hidden-control');$('#paymentsHome').classList.remove('hidden-control');renderPaymentsHome();window.scrollTo(0,0)}
 function renderPaymentDetail(){
   const detail=state.paymentDetail;if(!detail)return;const event=detail.event,summary=detail.summary;
@@ -584,9 +731,9 @@ function openStudentPayment(studentId,type){
   $('#paymentAmountField').classList.toggle('hidden-control',type==='TOTAL');form.elements.amount.required=type!=='TOTAL';if(type!=='TOTAL')form.elements.amount.max=student.remaining;
   $('#paymentDialog').showModal();
 }
-async function saveStudentPayment(e){e.preventDefault();const form=e.currentTarget;if(form.dataset.saving==='1')return;const payload=formData(form);payload.eventId=state.paymentDetail.event.id;payload.requestKey=ensureRequestKey(form,'PAY');setFormSaving(form,true);const ok=await runAction(async()=>{const result=await server('saveStudentPayment',payload);state.paymentDetail=result.detail;$('#paymentDialog').close();renderPaymentDetail();toast(result.message)});setFormSaving(form,false);if(ok)resetRequestKey(form)}
-async function savePaymentCut(e){e.preventDefault();const form=e.currentTarget;if(form.dataset.saving==='1')return;const payload=formData(form);payload.eventId=state.paymentDetail.event.id;if(!confirm(`¿Registrar un corte por ${paymentMoney(payload.amount)}?`))return;payload.requestKey=ensureRequestKey(form,'CUT');setFormSaving(form,true);const ok=await runAction(async()=>{const result=await server('savePaymentCut',payload);state.paymentDetail=result.detail;form.reset();renderPaymentDetail();toast(result.message)});setFormSaving(form,false);if(ok)resetRequestKey(form)}
-async function savePaymentMovement(e){e.preventDefault();const form=e.currentTarget;if(form.dataset.saving==='1')return;const payload=formData(form);payload.eventId=state.paymentDetail.event.id;if(!confirm(`¿Registrar ${payload.type.toLowerCase()} por ${paymentMoney(payload.amount)}?`))return;payload.requestKey=ensureRequestKey(form,'MOV');setFormSaving(form,true);const ok=await runAction(async()=>{const result=await server('savePaymentMovement',payload);state.paymentDetail=result.detail;form.reset();renderPaymentDetail();toast(result.message)});setFormSaving(form,false);if(ok)resetRequestKey(form)}
+async function saveStudentPayment(e){e.preventDefault();const form=e.currentTarget;if(form.dataset.saving==='1')return;const payload=formData(form);payload.eventId=state.paymentDetail.event.id;payload.requestKey=ensureRequestKey(form,'PAY');setFormSaving(form,true);const ok=await runAction(async()=>{const result=await server('saveStudentPayment',payload);state.paymentDetail=result.detail;paymentEventCache.set(String(payload.eventId),result.detail);$('#paymentDialog').close();renderPaymentDetail();toast(result.message)});setFormSaving(form,false);if(ok)resetRequestKey(form)}
+async function savePaymentCut(e){e.preventDefault();const form=e.currentTarget;if(form.dataset.saving==='1')return;const payload=formData(form);payload.eventId=state.paymentDetail.event.id;if(!confirm(`¿Registrar un corte por ${paymentMoney(payload.amount)}?`))return;payload.requestKey=ensureRequestKey(form,'CUT');setFormSaving(form,true);const ok=await runAction(async()=>{const result=await server('savePaymentCut',payload);state.paymentDetail=result.detail;paymentEventCache.set(String(payload.eventId),result.detail);form.reset();renderPaymentDetail();toast(result.message)});setFormSaving(form,false);if(ok)resetRequestKey(form)}
+async function savePaymentMovement(e){e.preventDefault();const form=e.currentTarget;if(form.dataset.saving==='1')return;const payload=formData(form);payload.eventId=state.paymentDetail.event.id;if(!confirm(`¿Registrar ${payload.type.toLowerCase()} por ${paymentMoney(payload.amount)}?`))return;payload.requestKey=ensureRequestKey(form,'MOV');setFormSaving(form,true);const ok=await runAction(async()=>{const result=await server('savePaymentMovement',payload);state.paymentDetail=result.detail;paymentEventCache.set(String(payload.eventId),result.detail);form.reset();renderPaymentDetail();toast(result.message)});setFormSaving(form,false);if(ok)resetRequestKey(form)}
 function renderPaymentLedgers(){
   const detail=state.paymentDetail;const ledger=(rows,kind)=>rows.length?rows.slice().reverse().map(item=>`<div class="payment-ledger-row"><div><strong>${kind==='cut'?'Corte':item.type==='RETIRO'?'Retiro':'Reposición'}</strong><small>${escapeHtml(formatDateShort(item.date))}${item.description?' · '+escapeHtml(item.description):''}</small></div><b>${paymentMoney(item.amount)}</b></div>`).join(''):'<p class="muted">Sin movimientos.</p>';
   $('#paymentCutsList').innerHTML=ledger(detail.cuts,'cut');$('#paymentMovementsList').innerHTML=ledger(detail.movements,'movement');
@@ -601,16 +748,53 @@ function renderGradeWeights(){const host=$('#gradeWeightsList');host.innerHTML='
 function addGradeCriterion(row={}){const automatic=['Tareas','Asistencia','Participación','Conducta','Puntualidad'];const wrapper=document.createElement('div');wrapper.className='grade-weight-row';wrapper.dataset.id=row.id||'';wrapper.innerHTML=`<input class="input" data-grade-name value="${escapeHtml(row.criterio||'')}" placeholder="Nombre del criterio"><select data-grade-type><option value="MANUAL">Captura manual</option><option value="AUTOMATICO">Cálculo automático</option></select><input data-grade-percent type="number" min="0" max="100" step="0.5" value="${row.porcentaje??0}"><span>%</span><button type="button" class="btn danger small" data-action="remove-grade-criterion">Quitar</button>`;wrapper.querySelector('[data-grade-type]').value=row.tipo||(automatic.includes(row.criterio)?'AUTOMATICO':'MANUAL');$('#gradeWeightsList').appendChild(wrapper);updateGradeWeightTotal()}
 function updateGradeWeightTotal(){const total=$$('[data-grade-percent]').reduce((sum,input)=>sum+Number(input.value||0),0);const badge=$('#gradeWeightTotal');badge.textContent=total+'%';badge.classList.toggle('danger-state',Math.abs(total-100)>.001)}
 function collectGradeWeights(){return $$('.grade-weight-row').map(row=>({id:row.dataset.id||'',criterio:row.querySelector('[data-grade-name]').value.trim(),tipo:row.querySelector('[data-grade-type]').value,porcentaje:Number(row.querySelector('[data-grade-percent]').value||0)}))}
-async function saveGradeWeights(){const payload={trimester:Number($('#gradeTrimester').value),subject:$('#gradeSubject').value,criteria:collectGradeWeights()};await runAction(async()=>{const result=await server('saveGradeWeights',payload);state.gradeWeights=result.weights;renderGradeWeights();toast(result.message)})}
-async function generateGradeReport(){const trimester=$('#gradeTrimester').value,subject=$('#gradeSubject').value;if(!subject)return toast('Selecciona un campo formativo.',true);await runAction(async()=>{state.gradeReport=await server('getQuarterlyGradeReport',trimester,subject);state.gradeWeights=state.gradeReport.weights;renderGradeWeights();renderManualGrades();$('#gradeWeightsPanel').classList.remove('hidden-control');$('#manualGradesPanel').classList.remove('hidden-control');$('#gradeReportPanel').classList.remove('grade-report-empty');$('#gradeReportPanel').innerHTML=gradeReportHtml(state.gradeReport,true)})}
+async function saveGradeWeights(){const payload={trimester:Number($('#gradeTrimester').value),subject:$('#gradeSubject').value,criteria:collectGradeWeights()};await runAction(async()=>{const result=await server('saveGradeWeights',payload);gradeReportCache.clear();state.gradeWeights=result.weights;renderGradeWeights();toast(result.message)})}
+async function generateGradeReport(force=false){
+  const trimester=$('#gradeTrimester').value,subject=$('#gradeSubject').value;
+  if(!subject)return toast('Selecciona un campo formativo.',true);
+  const cacheKey=`${trimester}_${subject}`;
+  const cached=gradeReportCache.get(cacheKey);
+  if(cached&&!force){
+    state.gradeReport=cached;
+    state.gradeWeights=cached.weights;
+    renderGradeWeights();
+    renderManualGrades();
+    $('#gradeWeightsPanel').classList.remove('hidden-control');
+    $('#manualGradesPanel').classList.remove('hidden-control');
+    $('#gradeReportPanel').classList.remove('grade-report-empty');
+    $('#gradeReportPanel').innerHTML=gradeReportHtml(state.gradeReport,true);
+    server('getQuarterlyGradeReport',trimester,subject).then(report=>{
+      gradeReportCache.set(cacheKey,report);
+      if(state.gradeReport&&String(state.gradeReport.trimester)===String(trimester)&&state.gradeReport.subject===subject){
+        state.gradeReport=report;
+        state.gradeWeights=report.weights;
+        renderGradeWeights();
+        renderManualGrades();
+        $('#gradeReportPanel').innerHTML=gradeReportHtml(state.gradeReport,true);
+      }
+    }).catch(err=>console.warn('Revalidación de calificaciones:',err));
+    return;
+  }
+  await runAction(async()=>{
+    state.gradeReport=await server('getQuarterlyGradeReport',trimester,subject);
+    gradeReportCache.set(cacheKey,state.gradeReport);
+    state.gradeWeights=state.gradeReport.weights;
+    renderGradeWeights();
+    renderManualGrades();
+    $('#gradeWeightsPanel').classList.remove('hidden-control');
+    $('#manualGradesPanel').classList.remove('hidden-control');
+    $('#gradeReportPanel').classList.remove('grade-report-empty');
+    $('#gradeReportPanel').innerHTML=gradeReportHtml(state.gradeReport,true);
+  });
+}
 function renderManualGrades(){const report=state.gradeReport;if(!report)return;const manual=report.weights.filter(w=>String(w.tipo).toUpperCase()!=='AUTOMATICO');$('#manualGradesPanel').classList.toggle('hidden-control',!manual.length);$('#manualGradesTable').innerHTML=manual.length?`<table><thead><tr><th>Alumno</th>${manual.map(w=>`<th>${escapeHtml(w.criterio)}</th>`).join('')}</tr></thead><tbody>${report.rows.map(row=>`<tr><td>${escapeHtml(row.name)}</td>${manual.map(w=>`<td><input type="number" min="0" max="10" step="0.1" data-manual-grade data-student="${escapeHtml(row.studentId)}" data-criterion="${escapeHtml(w.criterio)}" value="${row.scores[w.criterio]??''}"></td>`).join('')}</tr>`).join('')}</tbody></table>`:''}
-async function saveManualGrades(){if(!state.gradeReport)return;const groups={};$$('[data-manual-grade]').forEach(input=>{(groups[input.dataset.criterion]||(groups[input.dataset.criterion]=[])).push({studentId:input.dataset.student,grade:input.value})});await runAction(async()=>{for(const criterion of Object.keys(groups))await server('saveManualGrades',{trimester:state.gradeReport.trimester,subject:state.gradeReport.subject,criterion,values:groups[criterion]});toast('Calificaciones manuales guardadas.');await generateGradeReport()})}
+async function saveManualGrades(){if(!state.gradeReport)return;const groups={};$$('[data-manual-grade]').forEach(input=>{(groups[input.dataset.criterion]||(groups[input.dataset.criterion]=[])).push({studentId:input.dataset.student,grade:input.value})});await runAction(async()=>{for(const criterion of Object.keys(groups))await server('saveManualGrades',{trimester:state.gradeReport.trimester,subject:state.gradeReport.subject,criterion,values:groups[criterion]});gradeReportCache.clear();toast('Calificaciones manuales guardadas.');await generateGradeReport(true)})}
 function chunks(array,size){const result=[];for(let i=0;i<array.length;i+=size)result.push(array.slice(i,i+size));return result}
 function gradeHead(report,title){return `<header class="grade-print-head"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(report.config.escuela||'')} · ${escapeHtml(report.config.gradoGrupo||'')} · ${escapeHtml(report.config.cicloEscolar||'')} · Trimestre ${report.trimester}</p></header>`}
 function gradeReportHtml(report,controls=false){const weightNames=report.weights.map(w=>w.criterio);let html=controls?'<div class="button-row no-print"><button class="btn primary" data-action="print-grade-report">Imprimir / guardar PDF tamaño carta</button></div>':'';chunks(report.rows,20).forEach((rows,page)=>{html+=`<section class="grade-print-page">${gradeHead(report,`Reporte trimestral · ${report.subject}`)}<h2>Calificaciones${page?' (continuación)':''}</h2><table><thead><tr><th>Núm.</th><th>Alumno</th>${weightNames.map(name=>`<th>${escapeHtml(name)}</th>`).join('')}<th>Final</th></tr></thead><tbody>${rows.map((row,index)=>`<tr><td>${page*20+index+1}</td><td>${escapeHtml(row.name)}</td>${weightNames.map(name=>`<td>${row.scores[name]==null?'—':Number(row.scores[name]).toFixed(1)}</td>`).join('')}<td><b>${row.final==null?'—':Number(row.final).toFixed(1)}</b></td></tr>`).join('')}</tbody></table><p class="grade-foot">Ponderaciones: ${report.weights.map(w=>`${escapeHtml(w.criterio)} ${w.porcentaje}%`).join(' · ')}</p></section>`});const activityChunks=chunks(report.activities,10);activityChunks.forEach((activities,activityPage)=>{chunks(report.rows,18).forEach((rows,studentPage)=>{html+=`<section class="grade-print-page">${gradeHead(report,`Tareas del trimestre · ${report.subject}`)}<h2>Actividades ${activities[0]?.code||'—'} a ${activities[activities.length-1]?.code||'—'}${studentPage?' · continuación':''}</h2><table><thead><tr><th>Núm.</th><th>Alumno</th>${activities.map(a=>`<th>${escapeHtml(a.code)}</th>`).join('')}</tr></thead><tbody>${rows.map((row,index)=>`<tr><td>${studentPage*18+index+1}</td><td>${escapeHtml(row.name)}</td>${activities.map(a=>`<td>${escapeHtml(row.taskMarks[report.activities.indexOf(a)]||'—')}</td>`).join('')}</tr>`).join('')}</tbody></table><p class="grade-foot">✓ Completa · I Incompleta · NR No realizó · F Falta · — Sin evaluación</p></section>`})});chunks(report.activities,12).forEach((activities,page)=>{html+=`<section class="grade-print-page">${gradeHead(report,`Catálogo de actividades · ${report.subject}`)}<h2>Detalle de actividades${page?' (continuación)':''}</h2><table><thead><tr><th>Clave</th><th>Fecha</th><th>Horario</th><th>Actividad</th><th>Proyecto</th></tr></thead><tbody>${activities.map(a=>`<tr><td>${escapeHtml(a.code)}</td><td>${escapeHtml(formatDateShort(a.date))}</td><td>${escapeHtml(formatTime(a.start))}–${escapeHtml(formatTime(a.end))}</td><td>${escapeHtml(a.name)}</td><td>${escapeHtml(a.project)}</td></tr>`).join('')}</tbody></table></section>`});return html}
 function printGradeReport(){if(!state.gradeReport)return;printHtmlDocument(gradeReportHtml(state.gradeReport,false),'landscape')}
 async function generateConsolidatedReport(){const trimester=$('#gradeTrimester').value;await runAction(async()=>{const report=await server('getConsolidatedGradeReport',trimester);const content=chunks(report.rows,20).map((rows,page)=>`<section class="grade-print-page"><header class="grade-print-head"><h1>Reporte general trimestral</h1><p>${escapeHtml(report.config.escuela||'')} · Trimestre ${report.trimester}</p></header><table><thead><tr><th>Núm.</th><th>Alumno</th>${report.subjects.map(s=>`<th>${escapeHtml(s)}</th>`).join('')}</tr></thead><tbody>${rows.map((row,index)=>`<tr><td>${page*20+index+1}</td><td>${escapeHtml(row.name)}</td>${row.grades.map(g=>`<td>${g==null?'—':Number(g).toFixed(1)}</td>`).join('')}</tr>`).join('')}</tbody></table></section>`).join('');printHtmlDocument(content,'landscape')})}
-async function setPaymentEventActive(eventId,active){if(!confirm(active?'¿Reactivar este evento?':'¿Archivar este evento? Su historial se conservará.'))return;await runAction(async()=>{const result=await server('setPaymentEventActive',eventId,active);state.paymentsInitial=await server('getPaymentsInitialData');backPaymentEvents();toast(result.message)})}
+async function setPaymentEventActive(eventId,active){if(!confirm(active?'¿Reactivar este evento?':'¿Archivar este evento? Su historial se conservará.'))return;await runAction(async()=>{const result=await server('setPaymentEventActive',eventId,active);paymentEventCache.delete(String(eventId));state.paymentsInitial=await server('getPaymentsInitialData');backPaymentEvents();toast(result.message)})}
 async function syncPaymentStudents(){if(!confirm('¿Sincronizar la lista actual de alumnos con el Control de pagos? El historial anterior se conservará.'))return;await runAction(async()=>{const result=await server('syncPaymentStudents');state.paymentsInitial=result.initialData;renderPaymentsHome();toast(result.message)})}
 function openStudent(s={}){const f=$('#studentForm');f.reset();Object.entries(s).forEach(([k,v])=>{if(f.elements[k])f.elements[k].value=v??''});ensureRequestKey(f,'ALU',true);$('#studentModalTitle').textContent=s.id?'Editar alumno':'Nuevo alumno';$('#studentDialog').showModal()}
 function openProject(p={}){renderProjectSubjectOptions();const f=$('#projectForm');f.reset();Object.entries(p).forEach(([k,v])=>{if(!f.elements[k]||k==='ejes')return;if(f.elements[k].type==='checkbox')f.elements[k].checked=Boolean(v);else f.elements[k].value=v??''});const selected=new Set(String(p.ejes||'').split('|').map(x=>x.trim()).filter(Boolean));$$('input[name="ejes"]',f).forEach(input=>input.checked=selected.has(input.value));const draft=readDraft(DRAFT_KEYS.project),canRestore=draft&&((!p.id&&!draft.data?.id)||(p.id&&String(draft.data?.id)===String(p.id)));if(canRestore){restoreFormDraft(f,draft.data);showDraftStatus('projectDraftStatus',draft.updatedAt)}else $('#projectDraftStatus')?.classList.add('hidden-control');ensureRequestKey(f,'PRO',canRestore);$('#projectDialog').showModal();if(canRestore)toast('Se recuperó el borrador del proyecto.')}
@@ -649,7 +833,7 @@ function setLoading(v,message='Cargando información…',retry=null){
   retryButton?.classList.add('hidden-control');
   // Si Apps Script responde rápido no se interrumpe la pantalla con un aviso.
   loadingShowTimer=setTimeout(()=>overlay.classList.remove('hidden-control'),550);
-  loadingSlowTimer=setTimeout(()=>{overlay.classList.remove('hidden-control');$('#operationLoaderStatus').textContent='Google está tardando más de lo habitual. Puedes esperar o volver a intentar.';if(lastActionRetry)retryButton?.classList.remove('hidden-control')},8000)
+  loadingSlowTimer=setTimeout(()=>{overlay.classList.remove('hidden-control');$('#operationLoaderStatus').textContent='Google está tardando más de lo habitual. Puedes esperar o volver a intentar.';if(lastActionRetry)retryButton?.classList.remove('hidden-control')},14000)
 }
 function toast(msg,error=false){const t=$('#toast');t.textContent=msg;t.style.background=error?'#9f2d2d':'';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),5000)}
 function escapeHtml(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
