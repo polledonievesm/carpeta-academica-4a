@@ -43,10 +43,14 @@
       <header class="topbar">
         <button id="menuButton" class="icon-button mobile-only" aria-label="Abrir menú">☰</button>
         <div class="current-page-context"><strong id="currentViewTitle">Inicio</strong><span class="top-meta">Carpeta Académica</span></div>
+        <div id="gasSyncIndicator" class="gas-sync-indicator hidden-control" role="status" aria-live="polite">
+          <span class="sync-dot"></span>
+          <span id="gasSyncText">Conectando con Google…</span>
+        </div>
         <div class="teacher"><button class="avatar" data-action="logout" title="Cerrar sesión" aria-label="Cerrar sesión">M</button></div>
       </header>
 
-      <div id="loading" class="loading">Preparando tu carpeta académica…</div>
+      <div id="loading" class="loading hidden" aria-hidden="true">Preparando tu carpeta académica…</div>
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
       <section id="dashboard" class="view active">
@@ -477,11 +481,11 @@
     <form method="dialog"><div class="modal-head"><div><p class="eyebrow">FICHA DIGITAL</p><h2 id="enrollmentAdminDialogTitle">Inscripción</h2></div><button type="button" class="icon-button" data-close="enrollmentAdminDialog">×</button></div><div id="enrollmentAdminDetail"></div><div class="modal-actions"><button type="button" class="btn" data-close="enrollmentAdminDialog">Cerrar</button><button type="button" class="btn" data-action="admin-print-enrollment">Imprimir ficha</button><button type="button" class="btn danger" data-action="admin-request-enrollment-correction">Solicitar corrección</button><button type="button" class="btn primary" data-action="admin-approve-enrollment">Aprobar inscripción</button></div></form>
   </dialog>
 
-  <script src="config.js"></script>
-  <script src="planning-calendar.js"></script>
-  <script src="app.js"></script>
-  <script src="enrollment.js"></script>
-  <script src="enhancements.js"></script>
-  <script src="academic-v2.js"></script>
+  <script src="config.js" defer></script>
+  <script src="planning-calendar.js" defer></script>
+  <script src="app.js" defer></script>
+  <script src="enrollment.js" defer></script>
+  <script src="enhancements.js" defer></script>
+  <script src="academic-v2.js" defer></script>
 </body>
 </html>
