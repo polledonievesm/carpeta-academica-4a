@@ -32,7 +32,7 @@
       <nav class="nav" aria-label="Navegación principal">
         <button class="nav-item active" data-view="dashboard">⌂ <span>Inicio</span></button>
         <details class="nav-group" open><summary>♟ <span>Alumnos</span></summary><div><button class="nav-item" data-view="students">• <span>Lista de alumnos</span></button><button class="nav-item" data-view="enrollment-admin">• <span>Inscripción</span></button><button class="nav-item" data-view="styles">• <span>Estilos de aprendizaje</span></button></div></details>
-        <details class="nav-group"><summary>▰ <span>Trabajo académico</span></summary><div><button class="nav-item" data-view="projects">• <span>Proyectos</span></button><button class="nav-item" data-view="daily">• <span>Registro diario</span></button><button class="nav-item" data-view="observations">• <span>Banco de observaciones</span></button><button class="nav-item" data-view="attendance">• <span>Asistencia</span></button><button class="nav-item" data-view="drafts">• <span>Borradores</span><b id="draftNavBadge" class="nav-count hidden-control">0</b></button></div></details>
+        <details class="nav-group"><summary>▰ <span>Trabajo académico</span></summary><div><button class="nav-item" data-view="projects">• <span>Proyectos</span></button><button class="nav-item" data-view="daily">• <span>Registro diario</span></button><button class="nav-item" data-view="observations">• <span>Observaciones de conducta</span></button><button class="nav-item" data-view="pda-observations">• <span>Observaciones por PDA</span></button><button class="nav-item" data-view="attendance">• <span>Asistencia</span></button><button class="nav-item" data-view="drafts">• <span>Borradores</span><b id="draftNavBadge" class="nav-count hidden-control">0</b></button></div></details>
         <details class="nav-group"><summary>▦ <span>Evaluación</span></summary><div><button class="nav-item" data-view="grades">• <span>Calificaciones</span></button><button class="nav-item" data-view="reports">• <span>Reportes</span></button><button class="nav-item" data-view="attendance-reports">• <span>Asistencia mensual</span></button><button class="nav-item" data-view="instruments">• <span>Instrumentos</span></button></div></details>
         <details class="nav-group"><summary>☷ <span>Familias</span></summary><div><button class="nav-item" data-view="directory">• <span>Directorio familiar</span></button><button class="nav-item" data-view="family-access">• <span>Accesos familiares</span></button><button class="nav-external" data-action="open-family-login">↗ <span>Portal familiar</span></button></div></details>
         <details class="nav-group"><summary>⚙ <span>Administración</span></summary><div><button class="nav-item" data-view="payments">• <span>Control de pagos</span></button><button class="nav-item" data-view="settings">• <span>Configuración</span></button></div></details>
@@ -121,8 +121,8 @@
           <div class="page-head"><div><p class="eyebrow">REGISTRO ACADÉMICO</p><h1 id="classFormTitle">Registrar actividad</h1><p class="muted">Registra en una sola pantalla la tarea, conducta y participación.</p></div><div class="button-row"><button type="button" class="btn" data-action="cancel-class">Cancelar</button><button type="submit" class="btn primary">Guardar registro</button></div></div>
           <div id="classDraftStatus" class="draft-status hidden-control"><span>✓ Borrador guardado en este dispositivo</span><button type="button" data-action="discard-class-draft">Descartar borrador</button></div>
           <article class="panel class-data-panel">
-            <div class="form-grid two"><label>Proyecto<select id="classProject" name="proyectoId" required></select></label><label>Campo formativo o materia<select id="classSubject" name="materia" required></select></label></div>
-            <div class="form-grid three"><label>Fecha<input id="classDate" type="date" name="fecha" required></label><label>Hora de inicio<input type="time" name="horaInicio" value="13:00" required></label><label>Hora de término<input type="time" name="horaFin" value="14:00" required></label></div>
+            <div class="form-grid two"><label>Campo formativo o materia<select id="classSubject" name="materia" required></select></label><label>Fecha<input id="classDate" type="date" name="fecha" required></label></div><input type="hidden" id="classProject" name="proyectoId" value=""><input type="hidden" name="horaInicio" value="13:00"><input type="hidden" name="horaFin" value="14:00">
+            
             <div id="classAttendanceNotice" class="class-attendance-notice">Selecciona una fecha para cargar a los alumnos presentes.</div>
             <div class="form-grid two"><label>Nombre de la actividad<input name="actividad" placeholder="Ej. Identificamos los órganos del aparato digestivo" required></label><label>Cuaderno, libro o material<select name="material" required><option value="">Selecciona</option><optgroup label="Cuadernos"><option>Lenguajes</option><option>Saberes y Pensamiento Matemático</option><option>Saberes y Pensamiento Científico</option><option>Ética, Naturaleza y Sociedades</option><option>De lo Humano y lo Comunitario</option><option>Dibujo</option><option>Ortografía</option></optgroup><optgroup label="Libros"><option>Libro de Texto Gratuito (LTG)</option><option>La Guía Escolar</option><option>PRACMATICA</option><option>C.A.P. (Comprender, Aprender y Practicar)</option></optgroup><option>Hoja de trabajo</option><option>Otro material</option></select></label></div>
             <div class="form-grid three class-report-details"><label>Tipo de actividad<select name="tipoActividad"><option>Clase</option><option>Tarea para casa</option></select></label><label>Páginas realizadas<input name="paginas" placeholder="Ej. 42 y 43"></label><label class="class-instructions-field">Instrucciones completas<textarea name="instrucciones" rows="2" placeholder="Escribe las indicaciones que verá la familia en el reporte"></textarea></label></div>
@@ -131,7 +131,7 @@
           </article>
           <article id="classCompactSummary" class="class-compact-summary hidden-control"><div><span>ACTIVIDAD PREPARADA</span><strong id="classCompactName">Actividad</strong><small id="classCompactMeta">Fecha</small></div><button type="button" class="btn small" data-action="edit-class-setup">Editar datos</button></article>
           <article class="panel evaluation-panel">
-            <div class="section-head evaluation-heading"><div><h2>Evaluación del grupo</h2><p class="muted">Solo aparecen los alumnos con asistencia o retardo en la fecha seleccionada.</p></div><div class="button-row"><button type="button" class="btn small" data-action="open-observation-bank">Banco de observaciones</button><button type="button" class="btn small" data-action="all-complete">Todos entregaron</button><button type="button" class="btn small" data-action="all-adequate">Conducta adecuada</button></div></div>
+            <div class="section-head evaluation-heading"><div><h2>Evaluación del grupo</h2><p class="muted">Solo aparecen los alumnos con asistencia o retardo en la fecha seleccionada.</p></div><div class="button-row"><button type="button" class="btn small" data-action="all-complete">Todos entregaron</button><button type="button" class="btn small" data-action="all-adequate">Conducta adecuada</button></div></div>
             <div class="evaluation-legend"><span><b>Trabajo:</b> completo, incompleto o no trabajó</span><span><b>Participación:</b> alta, media o nula</span></div>
             <div id="evaluationList" class="evaluation-list"></div>
           </article>
@@ -173,13 +173,132 @@
         <article id="attendanceCycleReport" class="panel attendance-cycle-empty">Pulsa “Generar reporte” para consultar la asistencia general.</article>
       </section>
       <section id="observations" class="view">
-        <div class="page-head"><div><p class="eyebrow">SEGUIMIENTO SEMANAL</p><h1>Banco de observaciones</h1><p class="muted">Busca, registra y autoriza únicamente las observaciones que podrán aparecer en el reporte familiar.</p></div><button class="btn" data-action="refresh-observations">Actualizar</button></div>
+        <div class="page-head"><div><p class="eyebrow">SEGUIMIENTO INDIVIDUAL</p><h1>Observaciones de conducta</h1><p class="muted">Banco oficial de 1,500 observaciones formativas organizadas por categoría y nivel.</p></div><button class="btn" data-action="refresh-observations">Actualizar</button></div>
         <div class="observations-layout">
-          <article class="panel observation-bank-panel"><div class="form-grid three"><label>Buscar observación<input id="observationSearch" placeholder="Lectura, conducta, tareas…"></label><label>Categoría<select id="observationCategory"><option value="">Todas</option></select></label><label>Tipo<select id="observationType"><option value="">Todos</option><option>Positiva</option><option>En proceso</option><option>Requiere atención</option></select></label></div><div id="observationBank" class="observation-bank"></div></article>
-          <article class="panel observation-entry-panel"><h2>Registrar para un alumno</h2><form id="observationRecordForm"><input type="hidden" name="observacionId"><div class="form-grid two"><label>Alumno<select name="alumnoId" required></select></label><label>Fecha<input name="fecha" type="date" required></label><label>Categoría<input name="categoria" required></label><label>Tipo<select name="tipo" required><option>Positiva</option><option>En proceso</option><option>Requiere atención</option></select></label></div><label>Observación<textarea name="texto" rows="4" required placeholder="Selecciona una observación del banco o escribe una nueva"></textarea></label><label>Recomendación para la familia<textarea name="recomendacion" rows="2" placeholder="No se publicará hasta autorizar la observación"></textarea></label><label>Evidencia o detalle<textarea name="evidencia" rows="2" placeholder="Opcional"></textarea></label><label class="check"><input type="checkbox" name="favorita" value="true"> Marcar como favorita</label><div class="button-row"><button class="btn" type="button" data-action="save-custom-observation">Guardar en el banco</button><button class="btn primary" type="submit">Guardar observación</button></div></form></article>
+          <article class="panel observation-bank-panel"><div class="form-grid three"><label>Buscar observación<input id="observationSearch" placeholder="Lectura, conducta, tareas…"></label><label>Categoría<select id="observationCategory"><option value="">Todas</option></select></label><label>Tipo<select id="observationType"><option value="">Todos los niveles</option><option>Positiva</option><option>Seguimiento</option><option>Requiere apoyo</option></select></label></div><div id="observationBank" class="observation-bank"></div></article>
+          <article class="panel observation-entry-panel"><h2>Registrar para un alumno</h2><form id="observationRecordForm"><input type="hidden" name="observacionId"><div class="form-grid two"><label>Alumno<select name="alumnoId" required></select></label><label>Fecha<input name="fecha" type="date" required></label><label>Categoría<input name="categoria" required></label><label>Nivel / Tipo<select name="tipo" required><option>Positiva</option><option>Seguimiento</option><option>Requiere apoyo</option></select></label></div><label>Observación<textarea name="texto" rows="4" required placeholder="Selecciona una observación del banco o escribe una nueva"></textarea></label><label>Recomendación para la familia<textarea name="recomendacion" rows="2" placeholder="No se publicará hasta autorizar la observación"></textarea></label><label>Evidencia o detalle<textarea name="evidencia" rows="2" placeholder="Opcional"></textarea></label><label class="check"><input type="checkbox" name="favorita" value="true"> Marcar como favorita</label><div class="button-row"><button class="btn" type="button" data-action="save-custom-observation">Guardar en el banco</button><button class="btn primary" type="submit">Guardar observación</button></div></form></article>
         </div>
         <article class="panel"><div class="section-head"><div><h2>Observaciones e historial</h2><p class="muted">Autoriza solamente las que deban aparecer en el reporte familiar.</p></div><div class="button-row"><button class="btn small" data-action="observation-current-week">Semana seleccionada</button><button class="btn small" data-action="observation-full-history">Historial del alumno</button></div></div><div id="observationRecords" class="observation-records"></div></article>
       </section>
+      
+      <section id="pda-observations" class="view">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">NUEVA ESCUELA MEXICANA · 4.º GRADO</p>
+            <h1>Observaciones por PDA</h1>
+            <p class="muted">Banco oficial con 3,060 observaciones organizadas por los 4 campos formativos (15 por cada PDA).</p>
+          </div>
+          <button class="btn" type="button" data-action="reset-pda-filters">Restablecer filtros</button>
+        </div>
+        <div class="observations-layout">
+          <article class="panel observation-bank-panel">
+            <div class="form-grid two" style="margin-bottom:10px;">
+              <label>Campo Formativo
+                <select id="pdaFieldFilter" class="input">
+                  <option value="">Todos los campos formativos</option>
+                  <option value="Lenguajes">Lenguajes</option>
+                  <option value="Saberes y Pensamiento Científico">Saberes y Pensamiento Científico</option>
+                  <option value="Ética, Naturaleza y Sociedades">Ética, Naturaleza y Sociedades</option>
+                  <option value="De lo Humano y lo Comunitario">De lo Humano y lo Comunitario</option>
+                </select>
+              </label>
+              <label>Nivel de evaluación
+                <select id="pdaLevelFilter" class="input">
+                  <option value="">Todos los niveles (15 opciones)</option>
+                  <option value="Logrado">Logrado (5 opciones)</option>
+                  <option value="En proceso">En proceso (5 opciones)</option>
+                  <option value="Requiere apoyo">Requiere apoyo (5 opciones)</option>
+                </select>
+              </label>
+            </div>
+            <div class="form-grid one" style="margin-bottom:10px;">
+              <label>Contenido curricular
+                <select id="pdaContentFilter" class="input">
+                  <option value="">Todos los contenidos</option>
+                </select>
+              </label>
+            </div>
+            <div class="form-grid one" style="margin-bottom:10px;">
+              <label>PDA (Proceso de Desarrollo de Aprendizaje)
+                <select id="pdaSelectFilter" class="input">
+                  <option value="">Selecciona un PDA</option>
+                </select>
+              </label>
+            </div>
+            <div class="toolbar" style="margin-bottom:12px;">
+              <input id="pdaSearch" class="input" placeholder="Buscar por palabra clave, contenido o PDA…">
+            </div>
+            <div id="pdaActiveSummary" class="integration-note" style="display:none;margin-bottom:12px;"></div>
+            <div class="section-head" style="margin-bottom:8px;">
+              <div>
+                <h3 style="font-size:0.95rem;margin:0;">Observaciones disponibles</h3>
+                <span id="pdaCountBadge" class="muted" style="font-size:0.8rem;">Cargando catálogo…</span>
+              </div>
+            </div>
+            <div id="pdaObservationsList" class="observation-bank" style="max-height:480px;overflow-y:auto;display:grid;gap:8px;"></div>
+          </article>
+
+          <article class="panel observation-entry-panel">
+            <h2>Asignar observación a un alumno</h2>
+            <form id="pdaRecordForm">
+              <input type="hidden" name="observacionId" id="pdaFormObsId">
+              <div class="form-grid two">
+                <label>Alumno
+                  <select name="alumnoId" id="pdaStudentSelect" required>
+                    <option value="">Selecciona un alumno</option>
+                  </select>
+                </label>
+                <label>Fecha
+                  <input name="fecha" id="pdaRecordDate" type="date" required>
+                </label>
+              </div>
+              <div class="form-grid two">
+                <label>Campo formativo
+                  <input name="campo" id="pdaFormCampo" readonly style="background:#f4f7f9;cursor:default;">
+                </label>
+                <label>Nivel de desempeño
+                  <select name="nivel" id="pdaFormNivel" required>
+                    <option value="Logrado">Logrado</option>
+                    <option value="En proceso">En proceso</option>
+                    <option value="Requiere apoyo">Requiere apoyo</option>
+                  </select>
+                </label>
+              </div>
+              <label>PDA evaluado
+                <textarea name="pda" id="pdaFormPda" rows="2" readonly style="background:#f4f7f9;font-size:0.85rem;cursor:default;"></textarea>
+              </label>
+              <label>Observación para la familia (editable)
+                <textarea name="texto" id="pdaFormTexto" rows="4" required placeholder="Selecciona una observación del catálogo para editarla antes de guardar..."></textarea>
+              </label>
+              <label>Recomendación o acción de acompañamiento (opcional)
+                <textarea name="recomendacion" id="pdaFormRecomendacion" rows="2" placeholder="Recomendación formativa para el tutor..."></textarea>
+              </label>
+              <label class="check">
+                <input type="checkbox" name="autorizada" value="true" checked> Autorizar para incluir en el reporte familiar
+              </label>
+              <div class="button-row" style="margin-top:14px;">
+                <button class="btn" type="button" id="btnCopyPdaText" data-action="copy-pda-text">📋 Copiar texto</button>
+                <button class="btn primary" type="submit">Guardar en registro del alumno</button>
+              </div>
+            </form>
+          </article>
+        </div>
+
+        <article class="panel" style="margin-top:16px;">
+          <div class="section-head">
+            <div>
+              <h2>Historial de observaciones por PDA del alumno</h2>
+              <p class="muted">Consulta las observaciones asignadas al alumno seleccionado.</p>
+            </div>
+            <div class="button-row">
+              <button class="btn small" type="button" data-action="pda-history-current">Esta semana</button>
+              <button class="btn small" type="button" data-action="pda-history-all">Todo el ciclo</button>
+            </div>
+          </div>
+          <div id="pdaHistoryRecords" class="observation-records"></div>
+        </article>
+      </section>
+
       <section id="drafts" class="view">
         <div class="page-head"><div><p class="eyebrow">TRABAJO PROTEGIDO</p><h1>Borradores</h1><p class="muted">Recupera actividades, proyectos e instrumentos inconclusos o pendientes de sincronizar.</p></div><button class="btn" data-action="refresh-drafts">Actualizar</button></div>
         <div id="draftsNotice" class="integration-note">Los borradores locales pertenecen a este navegador y dispositivo.</div>
@@ -481,11 +600,15 @@
     <form method="dialog"><div class="modal-head"><div><p class="eyebrow">FICHA DIGITAL</p><h2 id="enrollmentAdminDialogTitle">Inscripción</h2></div><button type="button" class="icon-button" data-close="enrollmentAdminDialog">×</button></div><div id="enrollmentAdminDetail"></div><div class="modal-actions"><button type="button" class="btn" data-close="enrollmentAdminDialog">Cerrar</button><button type="button" class="btn" data-action="admin-print-enrollment">Imprimir ficha</button><button type="button" class="btn danger" data-action="admin-request-enrollment-correction">Solicitar corrección</button><button type="button" class="btn primary" data-action="admin-approve-enrollment">Aprobar inscripción</button></div></form>
   </dialog>
 
-  <script src="config.js" defer></script>
+    <script src="config.js" defer></script>
   <script src="planning-calendar.js" defer></script>
+  <script src="nem4-catalog.js" defer></script>
+  <script src="banco-conducta.js" defer></script>
+  <script src="banco-pda.js" defer></script>
   <script src="app.js" defer></script>
   <script src="enrollment.js" defer></script>
   <script src="enhancements.js" defer></script>
   <script src="academic-v2.js" defer></script>
+  <script src="pda-observations.js" defer></script>
 </body>
 </html>
