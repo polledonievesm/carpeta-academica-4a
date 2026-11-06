@@ -19,9 +19,51 @@
   async function scanDuplicates(){await runAction(async()=>{const result=await server('findTechnicalDuplicates'),host=$('#duplicateReview');host.innerHTML=result.groups.length?result.groups.map(group=>`<article class="duplicate-group"><div><span class="badge">${escapeHtml(group.type)}</span><h3>${escapeHtml(group.records[0].label)}</h3><p class="muted">${group.records.length} registros coincidentes. Revisa las fechas antes de eliminar una copia.</p></div><div class="duplicate-records">${group.records.map((row,index)=>`<label><input type="radio" name="keep-${escapeHtml(group.key)}" value="${escapeHtml(row.id)}" ${index===0?'checked':''}> Conservar · ${escapeHtml(row.id)} · ${escapeHtml(localDateTime(row.createdAt))}</label>`).join('')}</div><button class="btn danger" data-action="remove-duplicate-copy" data-type="${escapeHtml(group.type)}" data-key="${escapeHtml(group.key)}">Eliminar la otra copia</button></article>`).join(''):'<p class="success-note">No se encontraron duplicados técnicos exactos.</p>'})}
   async function removeDuplicate(button){const group=button.closest('.duplicate-group'),selected=group?.querySelector('input[type="radio"]:checked'),all=[...group.querySelectorAll('input[type="radio"]')];if(!selected||all.length!==2)return toast('Para eliminar desde esta vista debe haber exactamente dos copias.',true);const remove=all.find(input=>input.value!==selected.value);if(!confirm(`Se conservará ${selected.value} y se eliminará definitivamente ${remove.value}. ¿Continuar?`))return;await runAction(async()=>{const result=await server('removeTechnicalDuplicate',{type:button.dataset.type,keepId:selected.value,removeId:remove.value});toast(result.message);await scanDuplicates()})}
 
-  async function loadObservations(force=false){showView('observations');const select=$('#observationRecordForm select[name="alumnoId"]'),current=select?.value||'';if(select){select.innerHTML='<option value="">Selecciona un alumno</option>'+state.students.map(row=>`<option value="${escapeHtml(row.id)}">${escapeHtml(fullName(row))}</option>`).join('');select.value=current}if(observationBank.length&&!force){renderObservationBank();loadObservationRecords().catch(()=>{});if(Date.now()-observationBankLoadedAt>300000){server('getObservationBank').then(data=>{observationBank=data;observationBankLoadedAt=Date.now();renderObservationBank()}).catch(()=>{})}return}const ok=await runAction(async()=>{observationBank=await server('getObservationBank');observationBankLoadedAt=Date.now();renderObservationBank();await loadObservationRecords()});if(!ok&&!observationBank.length)$('#observationBank').innerHTML='<p class="muted">No fue posible cargar el banco. Usa Actualizar para reintentar.</p>'}
+  async function loadObservations(force=false){
+    showView('observations');
+    const form=$('#observationRecordForm');
+    if(form && form.elements.fecha && !form.elements.fecha.value){
+      form.elements.fecha.value = todayCancun();
+    }
+    const select=$('#observationRecordForm select[name="alumnoId"]'),current=select?.value||'';
+    if(select){
+      select.innerHTML='<option value="">Selecciona un alumno</option>'+state.students.map(row=>`<option value="${escapeHtml(row.id)}">${escapeHtml(fullName(row))}</option>`).join('');
+      select.value=current;
+    }
+    if(!observationBank.length || force){
+      if(window.BANCO_OBSERVACIONES_CONDUCTA && window.BANCO_OBSERVACIONES_CONDUCTA.length){
+        observationBank = window.BANCO_OBSERVACIONES_CONDUCTA.map((item, idx) => ({
+          id: 'COND-' + (item.numero || (idx + 1)),
+          categoria: item.categoria,
+          tipo: item.nivel,
+          nivel: item.nivel,
+          texto: item.texto,
+          recomendacion: '',
+          favorita: false
+        }));
+      } else {
+        observationBank = await server('getObservationBank');
+      }
+      observationBankLoadedAt = Date.now();
+    }
+    renderObservationBank();
+    if(current) await loadObservationRecords().catch(()=>{});
+  }
+  window.loadObservations = loadObservations;
   function observationCategories(){return [...new Set(observationBank.map(row=>row.categoria).filter(Boolean))]}
-  function renderObservationBank(){const category=$('#observationCategory'),current=category.value;if(category.options.length<=1){category.innerHTML='<option value="">Todas</option>'+observationCategories().map(value=>`<option>${escapeHtml(value)}</option>`).join('');category.value=current}const q=String($('#observationSearch').value||'').toLowerCase(),filter=category.value,type=$('#observationType').value;const rows=observationBank.filter(row=>(!filter||row.categoria===filter)&&(!type||row.tipo===type)&&(!q||`${row.categoria} ${row.tipo} ${row.texto} ${row.recomendacion||''}`.toLowerCase().includes(q)));$('#observationBank').innerHTML=rows.length?rows.map(row=>`<button type="button" class="observation-choice" data-action="select-observation" data-id="${escapeHtml(row.id)}"><span>${row.favorita===true||String(row.favorita)==='true'?'★ ':''}${escapeHtml(row.categoria)} · ${escapeHtml(row.tipo)}</span><b>${escapeHtml(row.texto)}</b>${row.recomendacion?`<small>${escapeHtml(row.recomendacion)}</small>`:''}</button>`).join(''):'<p class="muted">No se encontraron observaciones.</p>'}
+  function renderObservationBank(){
+    const category=$('#observationCategory'),current=category.value;
+    if(category.options.length<=1){
+      category.innerHTML='<option value="">Todas las categorías (5)</option>'+observationCategories().map(value=>`<option>${escapeHtml(value)}</option>`).join('');
+      category.value=current;
+    }
+    const q=String($('#observationSearch').value||'').toLowerCase();
+    const filter=category.value;
+    const type=$('#observationType').value;
+    const rows=observationBank.filter(row=>(!filter||row.categoria===filter)&&(!type||row.tipo===type||row.nivel===type)&&(!q||`${row.categoria} ${row.tipo||row.nivel} ${row.texto}`.toLowerCase().includes(q)));
+    const displayRows = (!q && !filter && !type) ? rows.slice(0, 50) : rows;
+    $('#observationBank').innerHTML=displayRows.length?displayRows.map(row=>`<button type="button" class="observation-choice" data-action="select-observation" data-id="${escapeHtml(row.id)}"><span>${row.favorita===true||String(row.favorita)==='true'?'★ ':''}${escapeHtml(row.categoria)} · ${escapeHtml(row.tipo||row.nivel)}</span><b>${escapeHtml(row.texto)}</b>${row.recomendacion?`<small>${escapeHtml(row.recomendacion)}</small>`:''}</button>`).join('') + (rows.length > displayRows.length ? `<p class="muted" style="text-align:center;padding:8px;font-size:0.8rem;">Mostrando 50 de ${rows.length} observaciones. Filtra por categoría o busca por palabra clave.</p>` : ''):'<p class="muted">No se encontraron observaciones coincidentes.</p>';
+  }
   function selectObservation(id){const row=observationBank.find(item=>String(item.id)===String(id)),form=$('#observationRecordForm');if(!row||!form)return;form.elements.observacionId.value=row.id;form.elements.categoria.value=row.categoria;form.elements.tipo.value=row.tipo;form.elements.texto.value=row.texto;form.elements.recomendacion.value=row.recomendacion||'';form.elements.favorita.checked=row.favorita===true||String(row.favorita)==='true';$$('.observation-choice').forEach(button=>button.classList.toggle('selected',String(button.dataset.id)===String(id)));form.scrollIntoView({behavior:'smooth',block:'center'})}
   async function saveCustomObservation(){const form=$('#observationRecordForm'),payload=formData(form);payload.favorita=form.elements.favorita.checked;const ok=await runAction(async()=>{const result=await server('saveObservationTemplate',payload);const index=observationBank.findIndex(row=>String(row.id)===String(result.observation.id));if(index<0)observationBank.unshift(result.observation);else observationBank[index]=result.observation;form.elements.observacionId.value=result.observation.id;renderObservationBank();toast(result.message)});return ok}
   async function saveObservation(event){event.preventDefault();const form=event.currentTarget;if(form.dataset.saving==='1')return;const payload=formData(form);setFormSaving(form,true);const ok=await runAction(async()=>{let result=await server('saveObservationOccurrence',payload);if(result.duplicate&&confirm(result.message)){payload.confirmarOcurrencia=true;result=await server('saveObservationOccurrence',payload)}if(result.duplicate)return;form.elements.evidencia.value='';toast(result.message);await loadObservationRecords()});setFormSaving(form,false);if(ok)form.elements.observacionId.value=''}
@@ -54,7 +96,7 @@
     const studentSelect=$('#observationRecordForm select[name="alumnoId"]');if(studentSelect)studentSelect.innerHTML='<option value="">Selecciona un alumno</option>'+state.students.map(row=>`<option value="${escapeHtml(row.id)}">${escapeHtml(fullName(row))}</option>`).join('');
     const date=$('#observationRecordForm input[name="fecha"]');if(date)date.value=todayCancun();
     $('#observationRecordForm')?.addEventListener('submit',saveObservation);
-    $('#observationSearch')?.addEventListener('input',renderObservationBank);$('#observationCategory')?.addEventListener('change',renderObservationBank);$('#observationType')?.addEventListener('change',renderObservationBank);
+    $('#observationSearch')?.addEventListener('input',renderObservationBank);$('#observationCategory')?.addEventListener('change',renderObservationBank);$('#observationRecordForm select[name="alumnoId"]')?.addEventListener('change',()=>loadObservationRecords());$('#observationRecordForm input[name="fecha"]')?.addEventListener('change',()=>loadObservationRecords());$('#observationType')?.addEventListener('change',renderObservationBank);
     $('#observationRecordForm select[name="alumnoId"]')?.addEventListener('change',()=>loadObservationRecords().catch(error=>toast(error.message,true)));
     $('#observationRecordForm input[name="fecha"]')?.addEventListener('change',()=>loadObservationRecords().catch(error=>toast(error.message,true)));
     $('#observationRecords')?.addEventListener('change',async event=>{const input=event.target.closest('[data-authorize-observation]');if(!input)return;await runAction(async()=>{const result=await server('authorizeObservation',input.dataset.authorizeObservation,input.checked);toast(result.message)})});
