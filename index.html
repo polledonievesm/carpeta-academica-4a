@@ -186,7 +186,7 @@
           <div>
             <p class="eyebrow">NUEVA ESCUELA MEXICANA · 4.º GRADO</p>
             <h1>Observaciones por PDA</h1>
-            <p class="muted">Banco oficial con 3,060 observaciones organizadas por los 4 campos formativos (15 por cada PDA).</p>
+            <p class="muted">Banco oficial con 6,060 observaciones: Campos Formativos de Fase 4 y Banco de Matemáticas (12 bloques · 200 temas).</p>
           </div>
           <button class="btn" type="button" data-action="reset-pda-filters">Restablecer filtros</button>
         </div>
@@ -198,13 +198,21 @@
                   <option value="">Todos los campos formativos</option>
                   <option value="Lenguajes">Lenguajes</option>
                   <option value="Saberes y Pensamiento Científico">Saberes y Pensamiento Científico</option>
+                  <option value="Saberes y Pensamiento Matemático">Saberes y Pensamiento Científico — Matemáticas</option>
                   <option value="Ética, Naturaleza y Sociedades">Ética, Naturaleza y Sociedades</option>
                   <option value="De lo Humano y lo Comunitario">De lo Humano y lo Comunitario</option>
                 </select>
               </label>
-              <label>Nivel de evaluación
+              <label id="pdaSubAreaWrap" style="display:none;">Disciplina / Área
+                <select id="pdaSubAreaFilter" class="input">
+                  <option value="todas">Todas (Ciencias + Matemáticas)</option>
+                  <option value="ciencias">Ciencias Naturales (PDA Sintético)</option>
+                  <option value="matematicas">Matemáticas (12 bloques · 200 temas)</option>
+                </select>
+              </label>
+              <label id="pdaLevelWrap">Nivel de evaluación
                 <select id="pdaLevelFilter" class="input">
-                  <option value="">Todos los niveles (15 opciones)</option>
+                  <option value="">Todos los niveles</option>
                   <option value="Logrado">Logrado (5 opciones)</option>
                   <option value="En proceso">En proceso (5 opciones)</option>
                   <option value="Requiere apoyo">Requiere apoyo (5 opciones)</option>
@@ -605,6 +613,7 @@
   <script src="nem4-catalog.js" defer></script>
   <script src="banco-conducta.js" defer></script>
   <script src="banco-pda.js" defer></script>
+  <script src="banco-matematicas.js" defer></script>
   <script src="app.js" defer></script>
   <script src="enrollment.js" defer></script>
   <script src="enhancements.js" defer></script>

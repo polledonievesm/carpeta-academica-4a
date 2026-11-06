@@ -1,5 +1,5 @@
 /* ==========================================================================
-   BANCO DE OBSERVACIONES POR PDA - FASE 4 (4.º GRADO)
+   BANCO DE OBSERVACIONES POR PDA Y MATEMÁTICAS - FASE 4 (4.º GRADO)
    Nueva Escuela Mexicana - Carpeta Académica
    ========================================================================== */
 
@@ -9,8 +9,27 @@
   let currentHistoryMode = 'current'; // 'current' (semana) o 'all' (todo el ciclo)
   let selectedObservationData = null;
 
+  const BLOQUES_MATEMATICAS_ORDEN = [
+    'Números y numeración',
+    'Fracciones',
+    'Números decimales',
+    'Suma y resta',
+    'Multiplicación y división',
+    'Líneas, ángulos y simetría',
+    'Figuras planas',
+    'Perímetro y área',
+    'Cuerpos geométricos',
+    'Ubicación espacial',
+    'Medidas',
+    'Estadística y datos'
+  ];
+
   function getBancoPda() {
     return Array.isArray(window.BANCO_OBSERVACIONES_PDA) ? window.BANCO_OBSERVACIONES_PDA : [];
+  }
+
+  function getBancoMatematicas() {
+    return Array.isArray(window.BANCO_OBSERVACIONES_MATEMATICAS) ? window.BANCO_OBSERVACIONES_MATEMATICAS : [];
   }
 
   function getStudents() {
@@ -45,7 +64,44 @@
       .replace(/'/g, '&#39;');
   }
 
-  // Inicializar o refrescar lista de alumnos en el formulario de PDA
+  // Comprobar si el filtro actual apunta exclusivamente a Matemáticas
+  function isMathMode() {
+    const fieldSelect = document.getElementById('pdaFieldFilter');
+    const field = fieldSelect ? fieldSelect.value.trim() : '';
+    if (field === 'Saberes y Pensamiento Matemático') return true;
+    if (field === 'Saberes y Pensamiento Científico') {
+      const subArea = document.getElementById('pdaSubAreaFilter')?.value;
+      if (subArea === 'matematicas') return true;
+    }
+    return false;
+  }
+
+  // Comprobar si incluye Matemáticas
+  function includesMath() {
+    const fieldSelect = document.getElementById('pdaFieldFilter');
+    const field = fieldSelect ? fieldSelect.value.trim() : '';
+    if (field === 'Saberes y Pensamiento Matemático') return true;
+    if (field === 'Saberes y Pensamiento Científico') {
+      const subArea = document.getElementById('pdaSubAreaFilter')?.value;
+      return subArea !== 'ciencias';
+    }
+    if (!field) return true; // "Todos los campos" incluye ambos
+    return false;
+  }
+
+  // Comprobar si incluye PDA generales
+  function includesGeneralPda() {
+    const fieldSelect = document.getElementById('pdaFieldFilter');
+    const field = fieldSelect ? fieldSelect.value.trim() : '';
+    if (field === 'Saberes y Pensamiento Matemático') return false;
+    if (field === 'Saberes y Pensamiento Científico') {
+      const subArea = document.getElementById('pdaSubAreaFilter')?.value;
+      return subArea !== 'matematicas';
+    }
+    return true; // Lenguajes, Ética, Humano o Todos
+  }
+
+  // Poblar selector de alumnos
   function populateStudentSelect() {
     const select = document.getElementById('pdaStudentSelect');
     if (!select) return;
@@ -61,9 +117,10 @@
     if (currentVal) select.value = currentVal;
   }
 
-  // Inicializar selectores de filtros curriculares
+  // Inicializar eventos de filtros curriculares
   function initCurricularFilters() {
     const fieldSelect = document.getElementById('pdaFieldFilter');
+    const subAreaSelect = document.getElementById('pdaSubAreaFilter');
     const contentSelect = document.getElementById('pdaContentFilter');
     const pdaSelect = document.getElementById('pdaSelectFilter');
     const levelSelect = document.getElementById('pdaLevelFilter');
@@ -71,20 +128,32 @@
 
     if (!fieldSelect || !contentSelect || !pdaSelect) return;
 
-    // Actualizar contenidos cuando cambia el campo formativo
     fieldSelect.addEventListener('change', () => {
+      const subWrap = document.getElementById('pdaSubAreaWrap');
+      if (subWrap) {
+        if (fieldSelect.value === 'Saberes y Pensamiento Científico') {
+          subWrap.style.display = 'block';
+        } else {
+          subWrap.style.display = 'none';
+          if (subAreaSelect) subAreaSelect.value = 'todas';
+        }
+      }
       updateContentOptions();
       updatePdaOptions();
       renderPdaObservations();
     });
 
-    // Actualizar PDAs cuando cambia el contenido
+    subAreaSelect?.addEventListener('change', () => {
+      updateContentOptions();
+      updatePdaOptions();
+      renderPdaObservations();
+    });
+
     contentSelect.addEventListener('change', () => {
       updatePdaOptions();
       renderPdaObservations();
     });
 
-    // Actualizar cuando cambia el PDA o el nivel
     pdaSelect.addEventListener('change', () => {
       renderPdaObservations();
     });
@@ -98,79 +167,212 @@
     });
   }
 
+  // Actualizar el primer selector secundario (Contenido curricular o Bloque matemático)
   function updateContentOptions() {
-    const fieldSelect = document.getElementById('pdaFieldFilter');
     const contentSelect = document.getElementById('pdaContentFilter');
+    const contentLabel = contentSelect?.parentElement;
     if (!contentSelect) return;
 
-    const selectedField = fieldSelect ? fieldSelect.value.trim() : '';
-    const banco = getBancoPda();
+    const mathActive = isMathMode();
+    const incMath = includesMath();
+    const incPda = includesGeneralPda();
 
-    const contenidosSet = new Set();
-    banco.forEach(item => {
-      if (!selectedField || item.campo === selectedField) {
-        if (item.contenido && !item.contenido.startsWith('(Continuación')) {
-          contenidosSet.add(item.contenido.trim());
+    // Actualizar texto del label descriptivo
+    if (contentLabel && contentLabel.firstChild) {
+      if (mathActive) {
+        contentLabel.childNodes[0].nodeValue = 'Bloque matemático (12 bloques)\n                ';
+      } else if (incMath && incPda) {
+        contentLabel.childNodes[0].nodeValue = 'Contenido curricular / Bloque matemático\n                ';
+      } else {
+        contentLabel.childNodes[0].nodeValue = 'Contenido curricular oficial\n                ';
+      }
+    }
+
+    let html = '';
+    if (mathActive) {
+      html = '<option value="">Todos los bloques matemáticos (12)</option>';
+      BLOQUES_MATEMATICAS_ORDEN.forEach(b => {
+        html += `<option value="BLOQUE:${escapeHtmlStr(b)}">${escapeHtmlStr(b)}</option>`;
+      });
+    } else {
+      const fieldSelect = document.getElementById('pdaFieldFilter');
+      const selectedField = fieldSelect ? fieldSelect.value.trim() : '';
+
+      html = '<option value="">Todos los contenidos curriculares</option>';
+
+      // Contenidos PDA
+      if (incPda) {
+        const bancoPda = getBancoPda();
+        const contenidosSet = new Set();
+        bancoPda.forEach(item => {
+          if (!selectedField || item.campo === selectedField || (selectedField === 'Saberes y Pensamiento Científico' && item.campo.includes('Saberes'))) {
+            if (item.contenido && !item.contenido.startsWith('(Continuación')) {
+              contenidosSet.add(item.contenido.trim());
+            }
+          }
+        });
+        const contenidos = Array.from(contenidosSet).sort((a, b) => a.localeCompare(b, 'es'));
+        if (contenidos.length) {
+          if (incMath) html += '<optgroup label="Contenidos SEP - Fase 4">';
+          contenidos.forEach(c => {
+            html += `<option value="${escapeHtmlStr(c)}">${escapeHtmlStr(c)}</option>`;
+          });
+          if (incMath) html += '</optgroup>';
         }
       }
-    });
 
-    const contenidos = Array.from(contenidosSet).sort((a, b) => a.localeCompare(b, 'es'));
-    let html = '<option value="">Todos los contenidos curriculares</option>';
-    contenidos.forEach(c => {
-      html += `<option value="${escapeHtmlStr(c)}">${escapeHtmlStr(c)}</option>`;
-    });
+      // Bloques de Matemáticas
+      if (incMath) {
+        html += '<optgroup label="Matemáticas - Bloques temáticos">';
+        BLOQUES_MATEMATICAS_ORDEN.forEach(b => {
+          html += `<option value="BLOQUE:${escapeHtmlStr(b)}">${escapeHtmlStr(b)}</option>`;
+        });
+        html += '</optgroup>';
+      }
+    }
+
     contentSelect.innerHTML = html;
   }
 
+  // Actualizar el segundo selector secundario (PDA o Tema evaluado)
   function updatePdaOptions() {
-    const fieldSelect = document.getElementById('pdaFieldFilter');
-    const contentSelect = document.getElementById('pdaContentFilter');
     const pdaSelect = document.getElementById('pdaSelectFilter');
+    const pdaLabel = pdaSelect?.parentElement;
+    const contentSelect = document.getElementById('pdaContentFilter');
     if (!pdaSelect) return;
 
-    const selectedField = fieldSelect ? fieldSelect.value.trim() : '';
-    const selectedContent = contentSelect ? contentSelect.value.trim() : '';
-    const banco = getBancoPda();
+    const mathActive = isMathMode();
+    const incMath = includesMath();
+    const incPda = includesGeneralPda();
+    const selectedContentVal = contentSelect ? contentSelect.value.trim() : '';
+    const isBlockSelected = selectedContentVal.startsWith('BLOQUE:');
+    const selectedBlock = isBlockSelected ? selectedContentVal.slice(7) : '';
 
-    const pdasSet = new Set();
-    banco.forEach(item => {
-      const matchField = !selectedField || item.campo === selectedField;
-      const matchContent = !selectedContent || item.contenido === selectedContent;
-      if (matchField && matchContent && item.pda) {
-        pdasSet.add(item.pda.trim());
+    if (pdaLabel && pdaLabel.firstChild) {
+      if (mathActive || isBlockSelected) {
+        pdaLabel.childNodes[0].nodeValue = 'Tema o aprendizaje evaluado (200 temas)\n                ';
+      } else {
+        pdaLabel.childNodes[0].nodeValue = 'PDA (Proceso de Desarrollo de Aprendizaje)\n                ';
       }
-    });
+    }
 
-    const pdasList = Array.from(pdasSet).sort((a, b) => a.localeCompare(b, 'es'));
-    let html = '<option value="">Todos los PDA del filtro seleccionado</option>';
-    pdasList.forEach(p => {
-      const shortText = p.length > 90 ? p.slice(0, 87) + '…' : p;
-      html += `<option value="${escapeHtmlStr(p)}">${escapeHtmlStr(shortText)}</option>`;
-    });
+    let html = '';
+    if (mathActive || isBlockSelected) {
+      html = '<option value="">Todos los temas de Matemáticas</option>';
+      const mathBanco = getBancoMatematicas();
+      const temasVistos = new Set();
+      const temasList = [];
+
+      mathBanco.forEach(item => {
+        if (!selectedBlock || item.bloque === selectedBlock) {
+          if (!temasVistos.has(item.tema)) {
+            temasVistos.add(item.tema);
+            temasList.push({ num: item.numero, tema: item.tema, bloque: item.bloque });
+          }
+        }
+      });
+
+      temasList.sort((a, b) => a.num - b.num);
+      temasList.forEach(t => {
+        const label = `${t.num}. ${t.tema}${!selectedBlock ? ` (${t.bloque})` : ''}`;
+        html += `<option value="TEMA:${escapeHtmlStr(t.tema)}">${escapeHtmlStr(label)}</option>`;
+      });
+    } else {
+      const fieldSelect = document.getElementById('pdaFieldFilter');
+      const selectedField = fieldSelect ? fieldSelect.value.trim() : '';
+
+      html = '<option value="">Todos los PDA del filtro seleccionado</option>';
+
+      if (incPda) {
+        const bancoPda = getBancoPda();
+        const pdasSet = new Set();
+        bancoPda.forEach(item => {
+          const matchField = !selectedField || item.campo === selectedField || (selectedField === 'Saberes y Pensamiento Científico' && item.campo.includes('Saberes'));
+          const matchContent = !selectedContentVal || item.contenido === selectedContentVal;
+          if (matchField && matchContent && item.pda) {
+            pdasSet.add(item.pda.trim());
+          }
+        });
+
+        const pdasList = Array.from(pdasSet).sort((a, b) => a.localeCompare(b, 'es'));
+        if (pdasList.length) {
+          if (incMath) html += '<optgroup label="PDA oficiales de 4.º">';
+          pdasList.forEach(p => {
+            const shortText = p.length > 95 ? p.slice(0, 92) + '…' : p;
+            html += `<option value="${escapeHtmlStr(p)}">${escapeHtmlStr(shortText)}</option>`;
+          });
+          if (incMath) html += '</optgroup>';
+        }
+      }
+
+      if (incMath && !selectedContentVal) {
+        html += '<optgroup label="Temas de Matemáticas">';
+        const mathBanco = getBancoMatematicas();
+        const temasVistos = new Set();
+        mathBanco.forEach(item => {
+          if (!temasVistos.has(item.tema)) {
+            temasVistos.add(item.tema);
+            html += `<option value="TEMA:${escapeHtmlStr(item.tema)}">${item.numero}. ${escapeHtmlStr(item.tema)} (${escapeHtmlStr(item.bloque)})</option>`;
+          }
+        });
+        html += '</optgroup>';
+      }
+    }
+
     pdaSelect.innerHTML = html;
   }
 
-  // Filtrar observaciones según los controles
+  // Filtrar observaciones combinadas
   function getFilteredObservations() {
-    const banco = getBancoPda();
+    const bancoPda = getBancoPda();
+    const bancoMath = getBancoMatematicas();
+
     const field = (document.getElementById('pdaFieldFilter')?.value || '').trim();
-    const content = (document.getElementById('pdaContentFilter')?.value || '').trim();
-    const pda = (document.getElementById('pdaSelectFilter')?.value || '').trim();
+    const contentVal = (document.getElementById('pdaContentFilter')?.value || '').trim();
+    const pdaVal = (document.getElementById('pdaSelectFilter')?.value || '').trim();
     const level = (document.getElementById('pdaLevelFilter')?.value || '').trim();
     const query = (document.getElementById('pdaSearch')?.value || '').trim().toLowerCase();
 
-    return banco.filter(row => {
-      if (field && row.campo !== field) return false;
-      if (content && row.contenido !== content) return false;
-      if (pda && row.pda !== pda) return false;
-      if (level && row.nivel !== level) return false;
-      if (query) {
-        const haystack = `${row.id} ${row.campo} ${row.contenido} ${row.pda} ${row.nivel} ${row.texto}`.toLowerCase();
-        if (!haystack.includes(query)) return false;
-      }
-      return true;
-    });
+    const isBlockFilter = contentVal.startsWith('BLOQUE:');
+    const selectedBlock = isBlockFilter ? contentVal.slice(7) : '';
+    const isTopicFilter = pdaVal.startsWith('TEMA:');
+    const selectedTopic = isTopicFilter ? pdaVal.slice(5) : '';
+
+    const results = [];
+
+    // 1. Filtrar PDA generales si corresponde
+    const allowPda = includesGeneralPda() && !isBlockFilter && !isTopicFilter;
+    if (allowPda) {
+      bancoPda.forEach(row => {
+        if (field && field !== 'Saberes y Pensamiento Científico' && row.campo !== field) return;
+        if (field === 'Saberes y Pensamiento Científico' && !row.campo.includes('Saberes')) return;
+        if (contentVal && row.contenido !== contentVal) return;
+        if (pdaVal && row.pda !== pdaVal) return;
+        if (level && row.nivel !== level) return;
+        if (query) {
+          const haystack = `${row.id} ${row.campo} ${row.contenido} ${row.pda} ${row.nivel} ${row.texto}`.toLowerCase();
+          if (!haystack.includes(query)) return false;
+        }
+        results.push(row);
+      });
+    }
+
+    // 2. Filtrar observaciones de Matemáticas si corresponde
+    const allowMath = includesMath() && (!contentVal || isBlockFilter);
+    if (allowMath) {
+      bancoMath.forEach(row => {
+        if (selectedBlock && row.bloque !== selectedBlock) return;
+        if (selectedTopic && row.tema !== selectedTopic) return;
+        if (level && row.nivel !== level) return;
+        if (query) {
+          const haystack = `${row.id} Matemáticas ${row.bloque} ${row.tema} ${row.nivel} ${row.texto}`.toLowerCase();
+          if (!haystack.includes(query)) return false;
+        }
+        results.push(row);
+      });
+    }
+
+    return results;
   }
 
   // Renderizar la lista de observaciones
@@ -181,14 +383,25 @@
     if (!listHost) return;
 
     const filtered = getFilteredObservations();
-    const totalBanco = getBancoPda().length;
-    const selectedPda = document.getElementById('pdaSelectFilter')?.value;
+    const totalCatalog = getBancoPda().length + getBancoMatematicas().length;
 
-    // Resumen activo
+    const contentVal = (document.getElementById('pdaContentFilter')?.value || '').trim();
+    const pdaVal = (document.getElementById('pdaSelectFilter')?.value || '').trim();
+    const isTopic = pdaVal.startsWith('TEMA:');
+    const isBlock = contentVal.startsWith('BLOQUE:');
+
+    // Resumen visual de lo seleccionado
     if (summary) {
-      if (selectedPda) {
+      if (isTopic) {
         summary.style.display = 'block';
-        summary.innerHTML = `<strong>PDA en evaluación:</strong> ${escapeHtmlStr(selectedPda)}`;
+        const topicName = pdaVal.slice(5);
+        summary.innerHTML = `<strong>Tema de Matemáticas en evaluación:</strong> ${escapeHtmlStr(topicName)} ${isBlock ? `· Bloque: ${escapeHtmlStr(contentVal.slice(7))}` : ''}`;
+      } else if (pdaVal) {
+        summary.style.display = 'block';
+        summary.innerHTML = `<strong>PDA oficial en evaluación:</strong> ${escapeHtmlStr(pdaVal)}`;
+      } else if (isBlock) {
+        summary.style.display = 'block';
+        summary.innerHTML = `<strong>Bloque matemático seleccionado:</strong> ${escapeHtmlStr(contentVal.slice(7))} (Filtra por tema para ver sus 5 observaciones por nivel)`;
       } else {
         summary.style.display = 'none';
         summary.innerHTML = '';
@@ -196,7 +409,7 @@
     }
 
     if (badge) {
-      badge.textContent = `${filtered.length} de ${totalBanco} observaciones`;
+      badge.textContent = `${filtered.length} de ${totalCatalog} observaciones`;
     }
 
     if (!filtered.length) {
@@ -204,23 +417,33 @@
       return;
     }
 
-    // Limit display to 60 items if no specific PDA is chosen to ensure smooth performance
-    const displayList = selectedPda ? filtered : filtered.slice(0, 60);
+    // Si hay un tema o PDA seleccionado, mostramos todas (normalmente 5 o 15). Si no, limitamos a 60 para máxima fluidez.
+    const isSpecificSelected = Boolean(pdaVal);
+    const displayList = isSpecificSelected ? filtered : filtered.slice(0, 60);
 
     let html = '';
     displayList.forEach(item => {
       const isSelected = selectedObservationData && selectedObservationData.id === item.id;
       const levelClass = item.nivel === 'Logrado' ? 'logrado' : (item.nivel === 'En proceso' ? 'en-proceso' : 'requiere-apoyo');
+      const isMath = Boolean(item.bloque || item.tema);
+
+      const headerLabel = isMath
+        ? `Matemáticas · ${escapeHtmlStr(item.bloque)} · Opción ${item.opcion} de 5`
+        : `${escapeHtmlStr(item.campo)} · Opción ${item.opcion} de 5`;
+
+      const metaText = isMath
+        ? `<b>Tema:</b> ${escapeHtmlStr(item.tema)}${item.contenido ? ` · <b>Contenido:</b> ${escapeHtmlStr(item.contenido)}` : ''}`
+        : `<b>PDA:</b> ${escapeHtmlStr(item.pda.length > 120 ? item.pda.slice(0, 117) + '…' : item.pda)}`;
 
       html += `
         <article class="observation-choice ${isSelected ? 'selected' : ''}" data-pda-id="${escapeHtmlStr(item.id)}" style="cursor:pointer;position:relative;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-            <span>${escapeHtmlStr(item.campo)} · Opción ${item.opcion} de 5</span>
+            <span style="color:#168f98;font-weight:700;">${headerLabel}</span>
             <span class="pda-level-badge ${levelClass}">${escapeHtmlStr(item.nivel)}</span>
           </div>
-          <b style="font-size:0.92rem;line-height:1.45;color:#17324d;">${escapeHtmlStr(item.texto)}</b>
+          <b style="font-size:0.92rem;line-height:1.45;color:#17324d;margin:4px 0 2px 0;">${escapeHtmlStr(item.texto)}</b>
           <small class="muted" style="display:block;font-size:0.75rem;line-height:1.3;margin-top:2px;">
-            <b>PDA:</b> ${escapeHtmlStr(item.pda.length > 120 ? item.pda.slice(0, 117) + '…' : item.pda)}
+            ${metaText}
           </small>
           <div class="button-row" style="margin-top:6px;gap:6px;">
             <button type="button" class="btn small primary" data-action="select-pda-obs" data-id="${escapeHtmlStr(item.id)}">Seleccionar</button>
@@ -231,16 +454,17 @@
     });
 
     if (filtered.length > displayList.length) {
-      html += `<p class="muted" style="text-align:center;font-size:0.8rem;padding:8px;">Mostrando las primeras 60 observaciones coincidentes. Filtra por Contenido o PDA para ver las 5 de cada nivel.</p>`;
+      html += `<p class="muted" style="text-align:center;font-size:0.8rem;padding:8px;">Mostrando las primeras 60 observaciones coincidentes. Selecciona un Bloque y Tema para ver sus 5 de cada nivel.</p>`;
     }
 
     listHost.innerHTML = html;
   }
 
-  // Cargar una observación en el formulario de la derecha
+  // Cargar observación en el formulario de asignación
   function selectPdaObservation(obsId) {
-    const banco = getBancoPda();
-    const item = banco.find(r => r.id === obsId);
+    const bancoPda = getBancoPda();
+    const bancoMath = getBancoMatematicas();
+    const item = bancoPda.find(r => r.id === obsId) || bancoMath.find(r => r.id === obsId);
     if (!item) return;
 
     selectedObservationData = item;
@@ -248,10 +472,12 @@
     const form = document.getElementById('pdaRecordForm');
     if (!form) return;
 
+    const isMath = Boolean(item.bloque || item.tema);
+
     form.elements.observacionId.value = item.id;
-    form.elements.campo.value = item.campo;
+    form.elements.campo.value = isMath ? 'Saberes y Pensamiento Científico' : item.campo;
     form.elements.nivel.value = item.nivel;
-    form.elements.pda.value = item.pda;
+    form.elements.pda.value = isMath ? `Matemáticas · ${item.bloque}: ${item.tema}` : item.pda;
     form.elements.texto.value = item.texto;
 
     // Sugerencia pedagógica para recomendación según nivel
@@ -270,7 +496,6 @@
       card.classList.toggle('selected', card.dataset.pdaId === item.id);
     });
 
-    // Si está en pantalla pequeña, hacer scroll suave al formulario
     if (window.innerWidth < 850) {
       form.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -302,7 +527,7 @@
     }
   }
 
-  // Guardar observación de PDA para el alumno
+  // Guardar observación para el alumno
   async function savePdaRecord(e) {
     e.preventDefault();
     const form = document.getElementById('pdaRecordForm');
@@ -316,9 +541,9 @@
     }
 
     const fecha = form.elements.fecha.value || getToday();
-    const campo = form.elements.campo.value || 'Lenguajes';
+    const campo = form.elements.campo.value || 'Saberes y Pensamiento Científico';
     const nivel = form.elements.nivel.value || 'Logrado';
-    const pda = form.elements.pda.value.trim();
+    const pdaOrTopic = form.elements.pda.value.trim();
     const texto = form.elements.texto.value.trim();
     const recomendacion = form.elements.recomendacion.value.trim();
     const autorizada = form.elements.autorizada.checked;
@@ -336,7 +561,7 @@
       tipo: nivel,
       texto: texto,
       recomendacion: recomendacion,
-      evidencia: pda ? `PDA: ${pda}` : '',
+      evidencia: pdaOrTopic ? `Aprendizaje: ${pdaOrTopic}` : '',
       observacionId: form.elements.observacionId.value || '',
       autorizada: autorizada
     };
@@ -369,7 +594,7 @@
       // Actualizar historial del alumno
       await loadPdaHistory(studentId);
     } catch (err) {
-      console.error('Error al guardar observación de PDA:', err);
+      console.error('Error al guardar observación:', err);
       showToast('Error al guardar: ' + (err.message || 'Intente de nuevo'), true);
     } finally {
       if (submitBtn) {
@@ -379,7 +604,7 @@
     }
   }
 
-  // Cargar historial de observaciones de PDA del alumno seleccionado
+  // Cargar historial de observaciones del alumno seleccionado
   async function loadPdaHistory(studentId) {
     const host = document.getElementById('pdaHistoryRecords');
     if (!host) return;
@@ -419,7 +644,7 @@
           <article class="observation-record" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:12px;background:#fff;border:1px solid #d7e1e9;border-radius:10px;">
             <div style="flex:1;">
               <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
-                <span class="badge">${escapeHtmlStr(row.categoria || 'PDA')}</span>
+                <span class="badge">${escapeHtmlStr(row.categoria || 'Curricular')}</span>
                 <span class="pda-level-badge ${row.tipo === 'Logrado' ? 'logrado' : (row.tipo === 'En proceso' ? 'en-proceso' : 'requiere-apoyo')}">${escapeHtmlStr(row.tipo || 'Evaluación')}</span>
               </div>
               <b style="color:#17324d;display:block;margin-bottom:4px;">${escapeHtmlStr(row.texto)}</b>
@@ -439,15 +664,20 @@
     }
   }
 
-  // Restablecer todos los filtros
+  // Restablecer filtros
   function resetPdaFilters() {
     const fieldSelect = document.getElementById('pdaFieldFilter');
+    const subAreaSelect = document.getElementById('pdaSubAreaFilter');
+    const subWrap = document.getElementById('pdaSubAreaWrap');
     const contentSelect = document.getElementById('pdaContentFilter');
     const pdaSelect = document.getElementById('pdaSelectFilter');
     const levelSelect = document.getElementById('pdaLevelFilter');
     const searchInput = document.getElementById('pdaSearch');
 
     if (fieldSelect) fieldSelect.value = '';
+    if (subAreaSelect) subAreaSelect.value = 'todas';
+    if (subWrap) subWrap.style.display = 'none';
+
     updateContentOptions();
     if (contentSelect) contentSelect.value = '';
     updatePdaOptions();
@@ -459,7 +689,7 @@
     showToast('Filtros restablecidos');
   }
 
-  // Función principal pública para abrir la vista de Observaciones por PDA
+  // Función pública para abrir la vista
   window.openPdaObservations = function () {
     if (typeof window.showView === 'function') {
       window.showView('pda-observations');
@@ -472,11 +702,8 @@
       dateInput.value = getToday();
     }
 
-    if (!document.getElementById('pdaContentFilter')?.options.length || document.getElementById('pdaContentFilter')?.options.length <= 1) {
-      updateContentOptions();
-      updatePdaOptions();
-    }
-
+    updateContentOptions();
+    updatePdaOptions();
     renderPdaObservations();
 
     const studentSelect = document.getElementById('pdaStudentSelect');
@@ -489,58 +716,48 @@
   document.addEventListener('DOMContentLoaded', () => {
     initCurricularFilters();
 
-    // Eventos del formulario
     const pdaForm = document.getElementById('pdaRecordForm');
     pdaForm?.addEventListener('submit', savePdaRecord);
 
-    // Botón de copiar en el formulario
     document.getElementById('btnCopyPdaText')?.addEventListener('click', () => {
       const text = document.getElementById('pdaFormTexto')?.value || '';
       copyText(text);
     });
 
-    // Cambio de alumno en formulario
     document.getElementById('pdaStudentSelect')?.addEventListener('change', e => {
       loadPdaHistory(e.target.value);
     });
 
-    // Cambio de fecha en formulario
     document.getElementById('pdaRecordDate')?.addEventListener('change', () => {
       const studentId = document.getElementById('pdaStudentSelect')?.value;
       if (studentId) loadPdaHistory(studentId);
     });
 
-    // Delegación de clics en la lista de observaciones
     document.addEventListener('click', e => {
-      // Seleccionar observación
       const selectBtn = e.target.closest('[data-action="select-pda-obs"]');
       if (selectBtn) {
         selectPdaObservation(selectBtn.dataset.id);
         return;
       }
 
-      // Copiar inline
       const copyBtn = e.target.closest('[data-action="copy-inline-pda"]');
       if (copyBtn) {
         copyText(copyBtn.dataset.text);
         return;
       }
 
-      // Clic en la tarjeta misma
       const card = e.target.closest('#pdaObservationsList .observation-choice');
       if (card && !e.target.closest('button')) {
         selectPdaObservation(card.dataset.pdaId);
         return;
       }
 
-      // Botón restablecer filtros
       const resetBtn = e.target.closest('[data-action="reset-pda-filters"]');
       if (resetBtn) {
         resetPdaFilters();
         return;
       }
 
-      // Historial esta semana vs todo el ciclo
       const histCurr = e.target.closest('[data-action="pda-history-current"]');
       if (histCurr) {
         currentHistoryMode = 'current';
