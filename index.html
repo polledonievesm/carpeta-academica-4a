@@ -116,7 +116,73 @@
       </section>
 
       <section id="daily" class="view">
-        <form id="classForm">
+      <div class="module-tabs" style="margin-bottom:14px;">
+        <button type="button" class="btn primary" id="btnModeJornada">Captura de jornada (Múltiples actividades)</button>
+        <button type="button" class="btn" id="btnModeSingleActivity">Actividad individual</button>
+      </div>
+
+      <div id="jornadaWrap">
+        <form id="jornadaForm">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">REGISTRO ÁGIL DE LA JORNADA</p>
+              <h1>Actividades del día</h1>
+              <p class="muted">Registra de 2 a 5 o más actividades del día y califica a todo el grupo en una sola pantalla.</p>
+            </div>
+            <div class="button-row">
+              <button type="button" class="btn" data-action="cancel-jornada">Limpiar</button>
+              <button type="submit" class="btn primary" id="btnSubmitJornadaTop">Guardar jornada completa</button>
+            </div>
+          </div>
+
+          <article class="panel">
+            <div class="form-grid two" style="margin-bottom:12px;">
+              <label style="max-width:240px;">Fecha de la jornada
+                <input type="date" id="jornadaDate" required>
+              </label>
+              <div id="jornadaAttendanceNotice" class="class-attendance-notice">Selecciona una fecha para cargar a los alumnos presentes.</div>
+            </div>
+
+            <div class="section-head" style="margin-bottom:8px;">
+              <div>
+                <h3 style="font-size:0.95rem;margin:0;">Materias y actividades realizadas</h3>
+                <span class="muted" style="font-size:0.8rem;">Define las actividades que anotaste en tu libreta o lista de papel</span>
+              </div>
+            </div>
+
+            <div id="jornadaActivitiesList"></div>
+
+            <div style="margin-top:10px;">
+              <button type="button" class="btn" id="btnAddJornadaActivity">+ Agregar otra actividad al día</button>
+            </div>
+          </article>
+
+          <article class="panel evaluation-panel" style="margin-top:14px;">
+            <div class="section-head evaluation-heading">
+              <div>
+                <h2>Evaluación del grupo</h2>
+                <p class="muted">Haz clic en cada pastilla para alternar: ✓ Entregó / ◐ Incompleto / ✕ No entregó.</p>
+              </div>
+              <div class="button-row">
+                <button type="button" class="btn small" data-action="jornada-all-complete">Todos entregaron todo</button>
+                <button type="button" class="btn small" data-action="jornada-all-adequate">Conducta adecuada a todos</button>
+              </div>
+            </div>
+            <div class="evaluation-legend">
+              <span><b>Entregas:</b> Haz clic en cada actividad para cambiar su estado</span>
+              <span><b>Conducta y participación:</b> Selección rápida por alumno</span>
+            </div>
+            <div id="jornadaEvaluationList" class="evaluation-list"></div>
+          </article>
+
+          <div class="sticky-save">
+            <span id="jornadaSaveProgress">0 alumnos · 2 actividades</span>
+            <button type="submit" class="btn primary" id="btnSubmitJornada">Guardar jornada completa</button>
+          </div>
+        </form>
+      </div>
+
+      <form id="classForm" class="hidden-control">
           <input type="hidden" name="id">
           <div class="page-head"><div><p class="eyebrow">REGISTRO ACADÉMICO</p><h1 id="classFormTitle">Registrar actividad</h1><p class="muted">Registra en una sola pantalla la tarea, conducta y participación.</p></div><div class="button-row"><button type="button" class="btn" data-action="cancel-class">Cancelar</button><button type="submit" class="btn primary">Guardar registro</button></div></div>
           <div id="classDraftStatus" class="draft-status hidden-control"><span>✓ Borrador guardado en este dispositivo</span><button type="button" data-action="discard-class-draft">Descartar borrador</button></div>
@@ -619,5 +685,6 @@
   <script src="enhancements.js" defer></script>
   <script src="academic-v2.js" defer></script>
   <script src="pda-observations.js" defer></script>
+  <script src="registro-jornada.js" defer></script>
 </body>
 </html>

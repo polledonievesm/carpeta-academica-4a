@@ -410,6 +410,11 @@ async function openClassForm(projectId='',classId=''){
   $('#classFormTitle').textContent=classId?'Editar actividad':'Registrar actividad';
   await loadClassAttendance(savedEvaluations);
   showView('daily');
+  if(!classId && typeof window.openJornadaCapture === 'function'){
+    window.openJornadaCapture();
+  } else if(classId) {
+    document.getElementById('btnModeSingleActivity')?.click();
+  }
   if(restoredDraft)toast('Se recuperó el borrador de la actividad.');
 }
 function defaultEvaluation(studentId){return {alumnoId:studentId,trabajo:'Completo',conducta:'Adecuada',participacion:'Media',desempeno:'',observacionLibre:''}}

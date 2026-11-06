@@ -211,3 +211,61 @@
   color: #c53030;
   border: 1px solid #f9bebe;
 }
+
+/* Captura Rapida de la Jornada - Estilos */
+.jornada-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  border: 1px solid transparent;
+  outline: none;
+}
+.jornada-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+.jornada-pill.status-completo {
+  background: #e6f9f0;
+  color: #0a8754;
+  border-color: #b7eed4;
+}
+.jornada-pill.status-incompleto {
+  background: #fff8e6;
+  color: #b7791f;
+  border-color: #fde2a8;
+}
+.jornada-pill.status-no-trabajo {
+  background: #fde8e8;
+  color: #c53030;
+  border-color: #f9bebe;
+}
+.jornada-activity-card {
+  position: relative;
+  background: #fdfefe;
+  border: 1px solid #d7e1e9;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.jornada-activity-card:hover {
+  border-color: #b6cddc;
+}
+.jornada-activity-badge {
+  display: inline-block;
+  background: #eaf3fa;
+  color: #0b315d;
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
