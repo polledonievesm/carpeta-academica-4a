@@ -119,6 +119,7 @@
       <div class="module-tabs" style="margin-bottom:14px;">
         <button type="button" class="btn primary" id="btnModeJornada">Captura de jornada (Múltiples actividades)</button>
         <button type="button" class="btn" id="btnModeSingleActivity">Actividad individual</button>
+        <button type="button" class="btn" id="btnModeConsulta">Consulta de actividades (Día y Semana)</button>
       </div>
 
       <div id="jornadaWrap">
@@ -203,7 +204,62 @@
           </article>
           <div class="sticky-save"><span id="evaluationProgress">0 de 35 alumnos</span><button type="submit" class="btn primary">Guardar actividad y evaluaciones</button></div>
         </form>
-      </section>
+      
+      <!-- Contenedor de Consulta de Actividades (Día y Semana) -->
+      <div id="dailyConsultaWrap" class="hidden-control">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">CONSULTA Y SEGUIMIENTO</p>
+            <h1>Historial de actividades</h1>
+            <p class="muted">Consulta las actividades realizadas en cualquier fecha del grupo o el concentrado semanal por alumno.</p>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <!-- Consulta Diaria Grupal -->
+          <article class="panel">
+            <div class="section-head">
+              <div>
+                <h2>Actividades del día (Grupal)</h2>
+                <p class="muted">Selecciona una fecha para ver las tareas y trabajos de todo el grupo.</p>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;">
+              <label style="margin:0;flex:1;">Fecha a consultar
+                <input type="date" id="consultaDailyDate" class="input">
+              </label>
+              <button type="button" class="btn primary" data-action="run-consult-daily">Consultar día</button>
+            </div>
+            <div id="consultaDailyResults"></div>
+          </article>
+
+          <!-- Consulta Semanal por Alumno -->
+          <article class="panel">
+            <div class="section-head">
+              <div>
+                <h2>Historial semanal por alumno</h2>
+                <p class="muted">Consulta de lunes a viernes todas las tareas entregadas por el alumno.</p>
+              </div>
+            </div>
+            <div class="form-grid two" style="margin-bottom:14px;">
+              <label>Alumno
+                <select id="consultaStudentSelect" class="input">
+                  <option value="">Selecciona un alumno</option>
+                </select>
+              </label>
+              <label>Semana de la fecha
+                <input type="date" id="consultaWeekDate" class="input">
+              </label>
+            </div>
+            <div style="margin-bottom:14px;">
+              <button type="button" class="btn primary" data-action="run-consult-weekly">Consultar semana del alumno</button>
+            </div>
+            <div id="consultaWeeklyResults"></div>
+          </article>
+        </div>
+      </div>
+
+    </section>
       <section id="instruments" class="view">
         <div class="page-head"><div><p class="eyebrow">EVALUACIÓN</p><h1>Instrumentos de evaluación</h1><p class="muted">Elige contenidos y PDA oficiales de 4.º; genera, adapta y reutiliza el instrumento que necesites.</p></div><button class="btn primary" data-action="new-instrument">+ Nuevo instrumento</button></div>
         <div class="toolbar"><input id="instrumentSearch" class="input" placeholder="Buscar por título, contenido o PDA"><select id="instrumentTypeFilter" class="input"><option value="">Todos</option><option value="RUBRICA">Rúbricas</option><option value="LISTA_COTEJO">Listas de cotejo</option><option value="ESCALA_VALORACION">Escalas de valoración</option><option value="EXAMEN">Exámenes</option><option value="CUESTIONARIO">Cuestionarios</option></select></div>

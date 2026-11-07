@@ -1,18 +1,19 @@
 /* ==========================================================================
-   CAPTURA RÁPIDA DE LA JORNADA (MÚLTIPLES ACTIVIDADES AL DÍA)
+   CAPTURA RÁPIDA DE LA JORNADA Y CONSULTA DE ACTIVIDADES
    Carpeta Académica - 4.º Grado
    ========================================================================== */
 
 (function () {
   'use strict';
 
+  let currentMode = 'jornada'; // 'jornada', 'single', 'consulta'
   let jornadaActivities = [
     { id: 'act-1', materia: 'Lenguajes', actividad: '', material: 'Lenguajes', tipoActividad: 'Clase', paginas: '' },
     { id: 'act-2', materia: 'Saberes y Pensamiento Científico', actividad: '', material: 'Saberes y Pensamiento Científico', tipoActividad: 'Clase', paginas: '' }
   ];
   let jornadaNextId = 3;
   let jornadaStudents = [];
-  let jornadaEvaluations = {}; // { [studentId]: { trabajos: { [actId]: 'Completo' }, conducta: 'Adecuada', participacion: 'Media', observacionLibre: '' } }
+  let jornadaEvaluations = {};
   let isSavingJornada = false;
 
   function getToday() {
@@ -40,6 +41,17 @@
       .replace(/'/g, '&#39;');
   }
 
+  function sortStudents(list) {
+    if (typeof window.sortStudentsAlphabetically === 'function') {
+      return window.sortStudentsAlphabetically(list);
+    }
+    return (list || []).slice().sort((a, b) => {
+      const nameA = String(a.name || a.nombreCompleto || '').trim();
+      const nameB = String(b.name || b.nombreCompleto || '').trim();
+      return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+    });
+  }
+
   function getSubjects() {
     if (window.state && Array.isArray(window.state.subjects) && window.state.subjects.length) {
       return window.state.subjects.map(s => s.nombre || s);
@@ -56,31 +68,37 @@
     ];
   }
 
-  // Alternar entre modo Jornada (Múltiple) y modo Individual
+  // Alternar entre: 'jornada' (Múltiple), 'single' (Individual) y 'consulta' (Historial)
   function switchMode(mode) {
+    currentMode = mode;
     const btnJornada = document.getElementById('btnModeJornada');
     const btnSingle = document.getElementById('btnModeSingleActivity');
+    const btnConsulta = document.getElementById('btnModeConsulta');
+
     const jornadaWrap = document.getElementById('jornadaWrap');
     const singleWrap = document.getElementById('classForm');
+    const consultaWrap = document.getElementById('dailyConsultaWrap');
 
-    if (!jornadaWrap || !singleWrap) return;
+    btnJornada?.classList.toggle('primary', mode === 'jornada');
+    btnSingle?.classList.toggle('primary', mode === 'single');
+    btnConsulta?.classList.toggle('primary', mode === 'consulta');
+
+    jornadaWrap?.classList.toggle('hidden-control', mode !== 'jornada');
+    singleWrap?.classList.toggle('hidden-control', mode !== 'single');
+    consultaWrap?.classList.toggle('hidden-control', mode !== 'consulta');
 
     if (mode === 'jornada') {
-      btnJornada?.classList.add('primary');
-      btnSingle?.classList.remove('primary');
-      jornadaWrap.classList.remove('hidden-control');
-      singleWrap.classList.add('hidden-control');
       initJornada();
-    } else {
-      btnSingle?.classList.add('primary');
-      btnJornada?.classList.remove('primary');
-      singleWrap.classList.remove('hidden-control');
-      jornadaWrap.classList.add('hidden-control');
-      if (typeof window.openClassForm === 'function') {
-        window.openClassForm();
-      }
+    } else if (mode === 'single') {
+      if (typeof window.renderClassOptions === 'function') window.renderClassOptions();
+      const dateEl = document.getElementById('classDate');
+      if (dateEl && !dateEl.value) dateEl.value = getToday();
+      if (typeof window.loadClassAttendance === 'function') window.loadClassAttendance();
+    } else if (mode === 'consulta') {
+      initConsultaView();
     }
   }
+  window.switchDailyMode = switchMode;
 
   // Agregar una nueva actividad a la jornada
   function addActivity() {
@@ -94,7 +112,6 @@
     };
     jornadaActivities.push(newAct);
 
-    // Inicializar el trabajo de esta nueva actividad como Completo para los alumnos
     jornadaStudents.forEach(st => {
       if (!jornadaEvaluations[st.id]) {
         jornadaEvaluations[st.id] = { trabajos: {}, conducta: 'Adecuada', participacion: 'Media', observacionLibre: '' };
@@ -192,7 +209,7 @@
     updateCounters();
   }
 
-  // Cargar asistencia y alumnos de la fecha
+  // Cargar asistencia y alumnos de la fecha (SOLO PRESENTES)
   async function loadAttendanceForDate(date) {
     const notice = document.getElementById('jornadaAttendanceNotice');
     if (!date) return;
@@ -213,9 +230,11 @@
       const presentIds = new Set(registeredIds.filter(id => existing[id].status === 'A' || existing[id].status === 'R'));
 
       const allStudents = (window.state && Array.isArray(window.state.students)) ? window.state.students : [];
-      jornadaStudents = allStudents.filter(s => presentIds.has(String(s.id)));
+      // Ordenar alfabéticamente estricto de la A a la Z
+      const sortedAll = sortStudents(allStudents);
+      jornadaStudents = sortedAll.filter(s => presentIds.has(String(s.id)));
 
-      // Inicializar evaluaciones si no existen
+      // Inicializar evaluaciones para los alumnos presentes
       jornadaStudents.forEach(st => {
         if (!jornadaEvaluations[st.id]) {
           const trabajos = {};
@@ -227,7 +246,6 @@
             observacionLibre: ''
           };
         } else {
-          // Asegurar que cada actividad existe
           if (!jornadaEvaluations[st.id].trabajos) jornadaEvaluations[st.id].trabajos = {};
           jornadaActivities.forEach(a => {
             if (!jornadaEvaluations[st.id].trabajos[a.id]) {
@@ -240,18 +258,18 @@
       if (!registeredIds.length) {
         if (notice) {
           notice.className = 'class-attendance-notice error';
-          notice.textContent = 'Primero guarda la asistencia de esta fecha para poder evaluar a los alumnos.';
+          notice.innerHTML = `⚠️ No se ha guardado el pase de lista del día ${escapeHtml(date)}. <button type="button" class="btn small primary" data-action="go-attendance-date" style="margin-left:8px;">Pasar lista ahora →</button>`;
         }
       } else if (!jornadaStudents.length) {
         if (notice) {
           notice.className = 'class-attendance-notice error';
-          notice.textContent = 'No hay alumnos con asistencia o retardo en esta fecha.';
+          notice.textContent = 'No hay alumnos con asistencia (A) o retardo (R) en esta fecha.';
         }
       } else {
         if (notice) {
           const absent = registeredIds.length - jornadaStudents.length;
           notice.className = 'class-attendance-notice success';
-          notice.textContent = `✓ ${jornadaStudents.length} alumnos presentes listos para calificar (${absent} ausentes no se incluirán).`;
+          notice.textContent = `✓ ${jornadaStudents.length} alumno(s) que asistieron listos para evaluar (${absent} ausentes no aparecen).`;
         }
       }
 
@@ -271,7 +289,7 @@
     if (!host) return;
 
     if (!jornadaStudents.length) {
-      host.innerHTML = '<div class="empty-history"><strong>No hay alumnos disponibles para evaluar</strong><p>Selecciona una fecha con asistencia guardada o registra la asistencia primero.</p></div>';
+      host.innerHTML = '<div class="empty-history"><strong>No hay alumnos disponibles para calificar</strong><p>Pasa lista primero en la sección de Asistencia para que aparezcan únicamente quienes asistieron.</p></div>';
       return;
     }
 
@@ -285,7 +303,6 @@
       };
       const stName = typeof window.fullName === 'function' ? window.fullName(student) : (student.name || student.nombre || student.id);
 
-      // Generar los botones pills para cada actividad
       const pillsHtml = jornadaActivities.map((act, actIndex) => {
         const status = evalData.trabajos[act.id] || 'Completo';
         let statusClass = 'status-completo';
@@ -313,7 +330,7 @@
       }).join('');
 
       html += `
-        <article class="evaluation-row" data-student="${escapeHtml(student.id)}" style="display:grid;grid-template-columns:190px 1fr auto;gap:12px;align-items:center;padding:12px 14px;margin-bottom:8px;background:#fff;border:1px solid #d7e1e9;border-radius:10px;">
+        <article class="evaluation-row" data-student="${escapeHtml(student.id)}" style="display:grid;grid-template-columns:200px 1fr auto;gap:12px;align-items:center;padding:12px 14px;margin-bottom:8px;background:#fff;border:1px solid #d7e1e9;border-radius:10px;">
           <div class="evaluation-student">
             <span style="font-weight:700;color:#168f98;margin-right:6px;">${index + 1}.</span>
             <strong style="color:#17324d;">${escapeHtml(stName)}</strong>
@@ -347,7 +364,7 @@
     host.innerHTML = html;
   }
 
-  // Alternar estado de la pastilla de trabajo (Completo -> Incompleto -> No trabajó -> Completo)
+  // Alternar estado de la pastilla de trabajo
   function togglePill(btn) {
     const studentId = btn.dataset.student;
     const actId = btn.dataset.actId;
@@ -369,7 +386,6 @@
 
     jornadaEvaluations[studentId].trabajos[actId] = next;
 
-    // Actualizar visualmente la pastilla sin recargar toda la lista
     btn.classList.remove('status-completo', 'status-incompleto', 'status-no-trabajo');
     const iconSpan = btn.querySelector('.j-icon');
 
@@ -388,7 +404,6 @@
     }
   }
 
-  // Acción rápida: Todos entregaron todas las actividades
   function markAllComplete() {
     jornadaStudents.forEach(st => {
       if (!jornadaEvaluations[st.id]) {
@@ -399,10 +414,9 @@
       });
     });
     renderEvaluationList();
-    showToast('✓ Todas las actividades marcadas como entregadas para todos los alumnos');
+    showToast('✓ Todas las actividades marcadas como entregadas');
   }
 
-  // Acción rápida: Conducta adecuada a todos
   function markAllAdequate() {
     jornadaStudents.forEach(st => {
       if (!jornadaEvaluations[st.id]) {
@@ -412,10 +426,9 @@
       jornadaEvaluations[st.id].participacion = 'Media';
     });
     renderEvaluationList();
-    showToast('✓ Conducta adecuada y participación media asignada a todos');
+    showToast('✓ Conducta adecuada asignada a todos');
   }
 
-  // Actualizar los contadores de la barra inferior
   function updateCounters() {
     const badge = document.getElementById('jornadaSaveProgress');
     const saveBtn = document.getElementById('btnSubmitJornada');
@@ -430,21 +443,20 @@
     }
   }
 
-  // Guardar la jornada completa en Google Sheets / sistema
+  // Guardar la jornada completa
   async function saveJornada(e) {
     e.preventDefault();
     if (isSavingJornada) return;
 
     if (!jornadaStudents.length) {
-      showToast('No hay alumnos presentes para calificar en la fecha seleccionada.', true);
+      showToast('No hay alumnos presentes para calificar en la fecha seleccionada. Pasa lista primero.', true);
       return;
     }
 
-    // Validar que todas las actividades tengan nombre
     for (let i = 0; i < jornadaActivities.length; i++) {
       const act = jornadaActivities[i];
       if (!act.actividad || !act.actividad.trim()) {
-        showToast(`Por favor escribe el nombre de la Actividad ${i + 1}.`, true);
+        showToast(`Escribe el nombre de la Actividad ${i + 1}.`, true);
         const card = document.querySelector(`.jornada-activity-card[data-act-id="${act.id}"] input[data-prop="actividad"]`);
         card?.focus();
         return;
@@ -453,16 +465,15 @@
 
     const date = document.getElementById('jornadaDate')?.value || getToday();
     const totalActs = jornadaActivities.length;
-    const confirmMsg = `¿Guardar la jornada del ${date} con ${totalActs} actividades para ${jornadaStudents.length} alumnos?`;
+    const confirmMsg = `¿Guardar la jornada del ${date} con ${totalActs} actividades para ${jornadaStudents.length} alumnos presentes?`;
 
     if (!confirm(confirmMsg)) return;
 
     isSavingJornada = true;
     const saveBtn = document.getElementById('btnSubmitJornada');
-    if (saveBtn) {
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Guardando actividades…';
-    }
+    const saveBtnTop = document.getElementById('btnSubmitJornadaTop');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Guardando…'; }
+    if (saveBtnTop) { saveBtnTop.disabled = true; }
 
     let savedCount = 0;
     try {
@@ -508,7 +519,6 @@
 
       showToast(`✓ Se guardaron exitosamente las ${savedCount} actividades de la jornada.`);
 
-      // Limpiar solo los nombres de actividades para la siguiente jornada
       jornadaActivities.forEach(a => {
         a.actividad = '';
         a.paginas = '';
@@ -522,13 +532,14 @@
       }
     } catch (err) {
       console.error('Error al guardar jornada:', err);
-      showToast(`Error al guardar: ${err.message || 'Intente nuevamente'}. Se guardaron ${savedCount} de ${totalActs}.`, true);
+      showToast(`Error al guardar: ${err.message || 'Intente de nuevo'}. Se guardaron ${savedCount} de ${totalActs}.`, true);
     } finally {
       isSavingJornada = false;
       if (saveBtn) {
         saveBtn.disabled = false;
         saveBtn.textContent = `Guardar jornada completa (${jornadaActivities.length} actividades)`;
       }
+      if (saveBtnTop) { saveBtnTop.disabled = false; }
     }
   }
 
@@ -543,28 +554,148 @@
     loadAttendanceForDate(date);
   }
 
-  // Eventos de DOM
+  // --- SECCIÓN DE CONSULTA DE ACTIVIDADES (DÍA Y SEMANAL) ---
+  function initConsultaView() {
+    const dailyDate = document.getElementById('consultaDailyDate');
+    const weekDate = document.getElementById('consultaWeekDate');
+    const studentSelect = document.getElementById('consultaStudentSelect');
+
+    if (dailyDate && !dailyDate.value) dailyDate.value = getToday();
+    if (weekDate && !weekDate.value) weekDate.value = getToday();
+
+    if (studentSelect) {
+      const allStudents = (window.state && Array.isArray(window.state.students)) ? window.state.students : [];
+      const sorted = sortStudents(allStudents);
+      let html = '<option value="">Selecciona un alumno</option>';
+      sorted.forEach(s => {
+        const name = typeof window.fullName === 'function' ? window.fullName(s) : (s.name || s.nombre);
+        html += `<option value="${escapeHtml(s.id)}">${escapeHtml(name)}</option>`;
+      });
+      studentSelect.innerHTML = html;
+    }
+
+    loadConsultaDaily();
+  }
+
+  async function loadConsultaDaily() {
+    const host = document.getElementById('consultaDailyResults');
+    const date = document.getElementById('consultaDailyDate')?.value || getToday();
+    if (!host || !date) return;
+
+    host.innerHTML = '<p class="muted" style="padding:16px;text-align:center;">Cargando actividades del día…</p>';
+
+    try {
+      let report = null;
+      if (typeof window.server === 'function') {
+        report = await window.server('getDailyAcademicReport', date);
+      }
+
+      if (!report || !report.activityCount) {
+        host.innerHTML = `<div class="panel" style="text-align:center;padding:24px;"><p class="muted">No hay actividades registradas en la fecha <b>${escapeHtml(date)}</b>.</p></div>`;
+        return;
+      }
+
+      const actsHtml = report.activities.map(a => `
+        <div style="background:#fff;border:1px solid #d7e1e9;border-radius:8px;padding:10px 14px;margin-bottom:8px;">
+          <span class="badge">${escapeHtml(a.subject || 'Materia')}</span>
+          <strong style="margin-left:6px;color:#17324d;">${escapeHtml(a.name || 'Actividad')}</strong>
+          <span class="muted" style="font-size:0.8rem;margin-left:8px;">(${escapeHtml(a.material || 'Clase')})</span>
+        </div>
+      `).join('');
+
+      host.innerHTML = `
+        <div class="stats" style="margin-bottom:14px;">
+          <div class="stat"><b>${report.activityCount}</b><span>Actividades</span></div>
+          <div class="stat"><b>${report.groups.complete.length}</b><span>Entregaron todo</span></div>
+          <div class="stat"><b>${report.groups.partial.length}</b><span>Incompletas</span></div>
+          <div class="stat"><b>${report.groups.none.length}</b><span>No trabajaron</span></div>
+        </div>
+        <h4 style="margin:12px 0 6px 0;">Actividades realizadas:</h4>
+        ${actsHtml}
+      `;
+    } catch (err) {
+      host.innerHTML = '<p class="muted" style="padding:16px;text-align:center;">No fue posible cargar el reporte del día.</p>';
+    }
+  }
+
+  async function loadConsultaWeekly() {
+    const host = document.getElementById('consultaWeeklyResults');
+    const studentSelect = document.getElementById('consultaStudentSelect');
+    const dateInput = document.getElementById('consultaWeekDate');
+    const studentId = studentSelect?.value;
+    const date = dateInput?.value || getToday();
+
+    if (!host) return;
+    if (!studentId) {
+      host.innerHTML = '<p class="muted" style="padding:16px;text-align:center;">Selecciona un alumno para consultar sus actividades de la semana.</p>';
+      return;
+    }
+
+    host.innerHTML = '<p class="muted" style="padding:16px;text-align:center;">Cargando historial semanal del alumno…</p>';
+
+    try {
+      let r = null;
+      if (typeof window.server === 'function') {
+        r = await window.server('getStudentAcademicReport', studentId, 'weekly', date);
+      }
+
+      if (!r || !r.activities || !r.activities.length) {
+        host.innerHTML = `<div class="panel" style="text-align:center;padding:24px;"><p class="muted">No hay actividades registradas para este alumno en la semana del <b>${escapeHtml(date)}</b>.</p></div>`;
+        return;
+      }
+
+      const actsHtml = r.activities.map(x => {
+        let statusBadge = 'badge';
+        if (x.work === 'Completo') statusBadge = 'badge success';
+        else if (x.work === 'Incompleto') statusBadge = 'badge warning';
+        else statusBadge = 'badge danger';
+
+        return `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fff;border:1px solid #d7e1e9;border-radius:8px;margin-bottom:8px;">
+            <div>
+              <span class="muted" style="font-size:0.75rem;">${escapeHtml(x.date)} · ${escapeHtml(x.subject)}</span>
+              <h4 style="margin:2px 0 0 0;color:#17324d;">${escapeHtml(x.activity)}</h4>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span class="${statusBadge}">${escapeHtml(x.work || 'Entregada')}</span>
+              <small class="muted">Conducta: <b>${escapeHtml(x.conduct || 'Adecuada')}</b></small>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      host.innerHTML = `
+        <div style="background:#eaf3fa;padding:12px;border-radius:10px;margin-bottom:14px;">
+          <h3 style="margin:0;color:#0b315d;">${escapeHtml(r.student.name)}</h3>
+          <p class="muted" style="margin:4px 0 0 0;font-size:0.85rem;">Semana del ${escapeHtml(r.period)} · ${r.summary.activities} actividades registradas (${r.summary.complete} completas · ${r.summary.partial} incompletas · ${r.summary.none} no entregadas)</p>
+        </div>
+        ${actsHtml}
+      `;
+    } catch (err) {
+      host.innerHTML = '<p class="muted" style="padding:16px;text-align:center;">No fue posible cargar el reporte semanal.</p>';
+    }
+  }
+
+  // Inicialización de eventos al cargar el DOM
   document.addEventListener('DOMContentLoaded', () => {
-    // Alternar modos
+    // Alternar los 3 modos
     document.getElementById('btnModeJornada')?.addEventListener('click', () => switchMode('jornada'));
     document.getElementById('btnModeSingleActivity')?.addEventListener('click', () => switchMode('single'));
+    document.getElementById('btnModeConsulta')?.addEventListener('click', () => switchMode('consulta'));
 
-    // Cambio de fecha
+    // Fechas y agregar actividad
     document.getElementById('jornadaDate')?.addEventListener('change', e => {
       loadAttendanceForDate(e.target.value);
     });
 
-    // Agregar actividad
     document.getElementById('btnAddJornadaActivity')?.addEventListener('click', addActivity);
-
-    // Formulario submit
     document.getElementById('jornadaForm')?.addEventListener('submit', saveJornada);
 
-    // Acciones de encabezado
+    // Botones rápidos
     document.querySelector('[data-action="jornada-all-complete"]')?.addEventListener('click', markAllComplete);
     document.querySelector('[data-action="jornada-all-adequate"]')?.addEventListener('click', markAllAdequate);
     document.querySelector('[data-action="cancel-jornada"]')?.addEventListener('click', () => {
-      if (confirm('¿Deseas limpiar las actividades de la jornada?')) {
+      if (confirm('¿Deseas reiniciar las actividades de la jornada?')) {
         jornadaActivities = [
           { id: 'act-1', materia: 'Lenguajes', actividad: '', material: 'Lenguajes', tipoActividad: 'Clase', paginas: '' },
           { id: 'act-2', materia: 'Saberes y Pensamiento Científico', actividad: '', material: 'Saberes y Pensamiento Científico', tipoActividad: 'Clase', paginas: '' }
@@ -574,24 +705,48 @@
       }
     });
 
-    // Delegación de clics y cambios en inputs
+    // Delegación de clics
     document.addEventListener('click', e => {
-      // Pastilla de trabajo de alumno
       const pill = e.target.closest('[data-action="toggle-pill"]');
       if (pill) {
         togglePill(pill);
         return;
       }
 
-      // Quitar actividad
       const removeBtn = e.target.closest('[data-action="remove-jornada-act"]');
       if (removeBtn) {
         removeActivity(removeBtn.dataset.id);
         return;
       }
+
+      const goAttBtn = e.target.closest('[data-action="go-attendance-date"]');
+      if (goAttBtn) {
+        if (typeof window.showView === 'function') {
+          window.showView('attendance');
+          const attDate = document.getElementById('attendanceDate');
+          const jDate = document.getElementById('jornadaDate');
+          if (attDate && jDate && jDate.value) {
+            attDate.value = jDate.value;
+            if (typeof window.loadAttendanceDay === 'function') window.loadAttendanceDay();
+          }
+        }
+        return;
+      }
+
+      const btnConsultDaily = e.target.closest('[data-action="run-consult-daily"]');
+      if (btnConsultDaily) {
+        loadConsultaDaily();
+        return;
+      }
+
+      const btnConsultWeekly = e.target.closest('[data-action="run-consult-weekly"]');
+      if (btnConsultWeekly) {
+        loadConsultaWeekly();
+        return;
+      }
     });
 
-    // Cambio de campos en las tarjetas de actividades
+    // Inputs de actividades
     document.addEventListener('input', e => {
       const field = e.target.closest('.j-field');
       if (field) {
@@ -601,9 +756,8 @@
         const act = jornadaActivities.find(a => a.id === actId);
         if (act && prop) {
           act[prop] = field.value;
-          // Si cambia el nombre de la actividad, refrescar texto de pastillas
           if (prop === 'actividad') {
-            document.querySelectorAll(`.jornada-pill[data-act-id="${actId}"] span:last-child`).forEach((labelSpan, index) => {
+            document.querySelectorAll(`.jornada-pill[data-act-id="${actId}"] span:last-child`).forEach((labelSpan) => {
               const actIndex = jornadaActivities.findIndex(a => a.id === actId);
               const actLabel = act.actividad ? (act.actividad.length > 20 ? act.actividad.slice(0, 18) + '…' : act.actividad) : `Act. ${actIndex + 1}`;
               labelSpan.textContent = `Act ${actIndex + 1}: ${actLabel}`;
@@ -612,7 +766,6 @@
         }
       }
 
-      // Cambio en campos de alumno (conducta, participación, nota)
       const stField = e.target.closest('.j-student-field');
       if (stField) {
         const stId = stField.dataset.student;
@@ -635,15 +788,6 @@
           if (prop === 'materia') {
             renderEvaluationList();
           }
-        }
-      }
-
-      const stField = e.target.closest('.j-student-field');
-      if (stField) {
-        const stId = stField.dataset.student;
-        const fieldName = stField.dataset.field;
-        if (stId && fieldName && jornadaEvaluations[stId]) {
-          jornadaEvaluations[stId][fieldName] = stField.value;
         }
       }
     });
