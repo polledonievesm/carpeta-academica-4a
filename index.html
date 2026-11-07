@@ -206,6 +206,68 @@
             </div>
           </article>
 
+          <!-- Panel de Asignación por Lote y Búsqueda Directa -->
+          <article class="panel batch-eval-panel" style="padding:14px 18px;margin-bottom:14px;background:#f0f9ff;border:1px solid #b9e6fe;border-radius:10px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:1.15rem;">⚡</span>
+                <strong style="color:#035388;font-size:0.95rem;">Calificar grupo de alumnos al mismo ritmo</strong>
+                <span class="muted" style="font-size:0.8rem;">(Escribe números de lista separados por coma o guion, ej: <b>2, 5, 7</b> o <b>1-4</b>)</span>
+              </div>
+              <!-- Buscador / Filtro rápido por número de lista o nombre -->
+              <div style="display:flex;align-items:center;gap:6px;">
+                <label for="evalQuickSearch" style="margin:0;font-size:0.8rem;font-weight:700;color:#0b315d;">🔍 Buscar:</label>
+                <input type="text" id="evalQuickSearch" placeholder="Núm. de lista o nombre..." style="width:200px;padding:5px 8px;font-size:0.82rem;border-radius:6px;border:1px solid #9ac2dc;background:#fff;">
+                <button type="button" class="btn small" id="btnClearQuickSearch" style="display:none;padding:4px 8px;font-size:0.75rem;" title="Mostrar todos">✕ Ver todos</button>
+              </div>
+            </div>
+
+            <div class="batch-eval-controls">
+              <label style="margin:0;font-size:0.78rem;font-weight:700;color:#17324d;">Números de lista
+                <input type="text" id="batchStudentNumbers" placeholder="Ej. 2, 5, 7 o 1-4" class="input" style="padding:6px 8px;font-size:0.85rem;font-weight:700;background:#fff;border-color:#70b0df;">
+              </label>
+
+              <label style="margin:0;font-size:0.78rem;font-weight:700;color:#17324d;">Entrega
+                <select id="batchEntrega" class="input" style="padding:6px 8px;font-size:0.82rem;font-weight:700;background:#fff;">
+                  <option value="Entregado" selected>Entregado</option>
+                  <option value="Incompleto">Incompleto</option>
+                  <option value="No entregado">No entregado</option>
+                  <option value="Pendiente">Pendiente</option>
+                </select>
+              </label>
+
+              <label style="margin:0;font-size:0.78rem;font-weight:700;color:#17324d;">Desempeño
+                <select id="batchDesempeno" class="input" style="padding:6px 8px;font-size:0.82rem;font-weight:700;background:#fff;">
+                  <option value="Logrado" selected>Logrado</option>
+                  <option value="En proceso">En proceso</option>
+                  <option value="Requiere apoyo">Requiere apoyo</option>
+                  <option value="Pendiente">Pendiente</option>
+                </select>
+              </label>
+
+              <label style="margin:0;font-size:0.78rem;font-weight:700;color:#17324d;">Observación del PDA
+                <select id="batchObservacion" class="input" style="padding:6px 8px;font-size:0.8rem;background:#fff;">
+                  <option value="">-- Misma observación del banco --</option>
+                </select>
+              </label>
+
+              <label style="margin:0;font-size:0.78rem;font-weight:700;color:#17324d;">Conducta diaria
+                <select id="batchConducta" class="input" style="padding:6px 8px;font-size:0.82rem;font-weight:700;background:#fff;">
+                  <option value="Positiva" selected>Positiva (10 pts)</option>
+                  <option value="Seguimiento">Seguimiento (8 pts)</option>
+                  <option value="Requiere apoyo">Requiere apoyo (5 pts)</option>
+                </select>
+              </label>
+
+              <div>
+                <button type="button" class="btn primary" id="btnApplyBatchGrading" style="padding:7px 14px;font-size:0.82rem;font-weight:700;white-space:nowrap;background:#0284c7;border-color:#0284c7;">
+                  ⚡ Aplicar a seleccionados
+                </button>
+              </div>
+            </div>
+            <div id="batchFeedback" style="font-size:0.78rem;margin-top:6px;color:#0369a1;min-height:16px;"></div>
+          </article>
+
           <!-- Lista de Alumnos para Calificar -->
           <article class="panel evaluation-panel">
             <div class="section-head evaluation-heading">

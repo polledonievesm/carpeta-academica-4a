@@ -360,13 +360,14 @@
           if (classData && Array.isArray(classData.evaluations)) {
             if (!jornadaEvaluations[actId]) jornadaEvaluations[actId] = {};
             classData.evaluations.forEach(row => {
+              const hasEntrega = Boolean(row.trabajo && row.trabajo !== 'Pendiente');
               jornadaEvaluations[actId][row.alumnoId] = {
-                entrega: row.trabajo === 'Completo' ? 'Entregado' : (row.trabajo === 'No trabajó' ? 'No entregado' : (row.trabajo || 'Entregado')),
-                desempeno: row.desempeno || 'Logrado',
+                entrega: row.trabajo === 'Completo' ? 'Entregado' : (row.trabajo === 'No trabajó' ? 'No entregado' : (row.trabajo || '')),
+                desempeno: row.desempeno || '',
                 observacion: row.observacionLibre || '',
-                conducta: row.conducta || 'Positiva',
+                conducta: row.conducta || '',
                 nota: '',
-                evaluated: Boolean(row.trabajo && row.trabajo !== 'Pendiente')
+                evaluated: hasEntrega
               };
             });
           }
@@ -512,13 +513,25 @@
             const att = dayAttendanceMap[st.id]?.status || '';
             const isJust = (att === 'J');
             jornadaEvaluations[act.id][st.id] = {
-              entrega: isJust ? 'Pendiente' : 'Entregado',
-              desempeno: isJust ? 'Pendiente' : 'Logrado',
+              entrega: isJust ? 'Pendiente' : '',
+              desempeno: isJust ? 'Pendiente' : '',
               observacion: isJust ? 'Pendiente de entrega (falta justificada con tolerancia de 5 días).' : '',
-              conducta: 'Positiva',
+              conducta: '',
               nota: '',
               evaluated: false
             };
+          } else {
+            // Si viene de un borrador previo no evaluado pero precargado con 'Entregado'
+            const e = jornadaEvaluations[act.id][st.id];
+            if (!e.evaluated && e.entrega === 'Entregado' && e.desempeno === 'Logrado' && e.conducta === 'Positiva') {
+              const att = dayAttendanceMap[st.id]?.status || '';
+              const isJust = (att === 'J');
+              e.entrega = isJust ? 'Pendiente' : '';
+              e.desempeno = isJust ? 'Pendiente' : '';
+              e.observacion = isJust ? 'Pendiente de entrega (falta justificada con tolerancia de 5 días).' : '';
+              e.conducta = '';
+              e.evaluated = false;
+            }
           }
         });
       });
@@ -576,10 +589,10 @@
       const att = dayAttendanceMap[st.id]?.status || '';
       const isJust = (att === 'J');
       jornadaEvaluations[newAct.id][st.id] = {
-        entrega: isJust ? 'Pendiente' : 'Entregado',
-        desempeno: isJust ? 'Pendiente' : 'Logrado',
+        entrega: isJust ? 'Pendiente' : '',
+        desempeno: isJust ? 'Pendiente' : '',
         observacion: isJust ? 'Pendiente de entrega (falta justificada con tolerancia de 5 días).' : '',
-        conducta: 'Positiva',
+        conducta: '',
         nota: '',
         evaluated: false
       };
@@ -608,20 +621,28 @@
     let incompletos = 0;
     let noEntregados = 0;
     let pendientes = 0;
+    let sinEvaluar = 0;
     let calificadosCount = 0;
 
     jornadaStudents.forEach(st => {
       const e = evals[st.id] || {};
-      const stEnt = e.entrega || 'Pendiente';
+      const att = dayAttendanceMap[st.id]?.status || '';
+      const isJust = (att === 'J');
+      const isEval = Boolean(e.evaluated && (e.entrega || e.desempeno || e.conducta));
 
-      if (e.evaluated || (stEnt !== 'Pendiente' && e.desempeno && e.desempeno !== 'Pendiente')) {
+      if (isEval) {
         calificadosCount++;
+        if (e.entrega === 'Entregado' || e.entrega === 'Completo') entregados++;
+        else if (e.entrega === 'Incompleto') incompletos++;
+        else if (e.entrega === 'No entregado' || e.entrega === 'No trabajó') noEntregados++;
+        else if (e.entrega === 'Pendiente') pendientes++;
+      } else {
+        if (isJust || e.entrega === 'Pendiente') {
+          pendientes++;
+        } else {
+          sinEvaluar++;
+        }
       }
-
-      if (stEnt === 'Entregado' || stEnt === 'Completo') entregados++;
-      else if (stEnt === 'Incompleto') incompletos++;
-      else if (stEnt === 'No entregado' || stEnt === 'No trabajó') noEntregados++;
-      else if (stEnt === 'Pendiente') pendientes++;
     });
 
     return {
@@ -629,6 +650,7 @@
       incompletos,
       noEntregados,
       pendientes,
+      sinEvaluar,
       calificados: calificadosCount,
       total: jornadaStudents.length
     };
@@ -736,9 +758,10 @@
               <span class="jornada-stat-pill status-incompleto">⚠️ ${stats.incompletos} Incompletos</span>
               <span class="jornada-stat-pill status-no-entrego">✕ ${stats.noEntregados} No entregaron</span>
               <span class="jornada-stat-pill status-pendiente">⏳ ${stats.pendientes} Pendientes</span>
+              ${stats.sinEvaluar > 0 ? `<span class="jornada-stat-pill" style="background:#fff8e6;color:#975a16;border:1px solid #fde2a8;">⚠️ ${stats.sinEvaluar} Sin calificar</span>` : ''}
             </div>
             <div>
-              <button type="button" class="btn small" data-action="open-eval-act" data-id="${escapeHtml(act.id)}" style="background:#f0f7fb;color:#0b315d;border-color:#c4dff0;">
+              <button type="button" class="btn small" data-action="open-eval-act" data-id="${escapeHtml(act.id)}" style="background:#f0f7fb;color:#0b315d;border-color:#c4dff0;font-weight:700;">
                 📊 Ver y calificar alumnos (${stats.calificados} de ${stats.total}) →
               </button>
             </div>
@@ -785,10 +808,10 @@
 
     jornadaStudents.forEach((student, index) => {
       const e = evals[student.id] || {
-        entrega: 'Entregado',
-        desempeno: 'Logrado',
+        entrega: '',
+        desempeno: '',
         observacion: '',
-        conducta: 'Positiva',
+        conducta: '',
         nota: '',
         evaluated: false
       };
@@ -798,7 +821,7 @@
       const isJustified = (attInfo === 'J');
 
       // Determinar si ya está calificado para resaltar en VERDE o ÁMBAR
-      const isEvaluated = Boolean(e.evaluated || (e.entrega && e.entrega !== 'Pendiente'));
+      const isEvaluated = Boolean(e.evaluated && (e.entrega || e.desempeno || e.conducta));
 
       let cardClass = 'eval-student-card';
       let statusBadge = '';
@@ -815,7 +838,7 @@
       }
 
       // Observaciones sugeridas según el nivel seleccionado
-      const observations = getObservationsForPda(act.materia, act.pdaTema, e.desempeno);
+      const observations = getObservationsForPda(act.materia, act.pdaTema, e.desempeno || 'Logrado');
       let obsOptionsHtml = '<option value="">-- Selecciona observación del banco --</option>';
       observations.forEach((obs, obsIdx) => {
         const isSel = (e.observacion === obs);
@@ -836,20 +859,22 @@
           <!-- Columna 2: Estado de Entrega -->
           <label style="margin:0;font-size:0.78rem;font-weight:700;">Entrega
             <select class="input j-eval-field" data-prop="entrega" style="padding:5px 8px;font-size:0.82rem;font-weight:700;">
-              <option ${e.entrega === 'Entregado' ? 'selected' : ''}>Entregado</option>
-              <option ${e.entrega === 'Incompleto' ? 'selected' : ''}>Incompleto</option>
-              <option ${e.entrega === 'No entregado' ? 'selected' : ''}>No entregado</option>
-              <option ${e.entrega === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
+              <option value="" ${!e.entrega ? 'selected' : ''}>-- Sin evaluar --</option>
+              <option value="Entregado" ${e.entrega === 'Entregado' ? 'selected' : ''}>Entregado</option>
+              <option value="Incompleto" ${e.entrega === 'Incompleto' ? 'selected' : ''}>Incompleto</option>
+              <option value="No entregado" ${e.entrega === 'No entregado' ? 'selected' : ''}>No entregado</option>
+              <option value="Pendiente" ${e.entrega === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
             </select>
           </label>
 
           <!-- Columna 3: Nivel de Desempeño -->
           <label style="margin:0;font-size:0.78rem;font-weight:700;">Desempeño
             <select class="input j-eval-field j-eval-nivel" data-prop="desempeno" style="padding:5px 8px;font-size:0.82rem;font-weight:700;">
-              <option ${e.desempeno === 'Logrado' ? 'selected' : ''}>Logrado</option>
-              <option ${e.desempeno === 'En proceso' ? 'selected' : ''}>En proceso</option>
-              <option ${e.desempeno === 'Requiere apoyo' ? 'selected' : ''}>Requiere apoyo</option>
-              <option ${e.desempeno === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
+              <option value="" ${!e.desempeno ? 'selected' : ''}>-- Sin evaluar --</option>
+              <option value="Logrado" ${e.desempeno === 'Logrado' ? 'selected' : ''}>Logrado</option>
+              <option value="En proceso" ${e.desempeno === 'En proceso' ? 'selected' : ''}>En proceso</option>
+              <option value="Requiere apoyo" ${e.desempeno === 'Requiere apoyo' ? 'selected' : ''}>Requiere apoyo</option>
+              <option value="Pendiente" ${e.desempeno === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
             </select>
           </label>
 
@@ -867,6 +892,7 @@
           <div style="display:flex;flex-direction:column;gap:4px;">
             <label style="margin:0;font-size:0.78rem;font-weight:700;">Conducta diaria
               <select class="input j-eval-field" data-prop="conducta" style="padding:4px 6px;font-size:0.8rem;font-weight:700;">
+                <option value="" ${!e.conducta ? 'selected' : ''}>-- Sin evaluar --</option>
                 <option value="Positiva" ${e.conducta === 'Positiva' ? 'selected' : ''}>Positiva (10 pts)</option>
                 <option value="Seguimiento" ${e.conducta === 'Seguimiento' ? 'selected' : ''}>Seguimiento (8 pts)</option>
                 <option value="Requiere apoyo" ${e.conducta === 'Requiere apoyo' ? 'selected' : ''}>Requiere apoyo (5 pts)</option>
@@ -879,6 +905,11 @@
     });
 
     host.innerHTML = html;
+    updateBatchObservations(actId);
+    const quickSearchVal = document.getElementById('evalQuickSearch')?.value;
+    if (quickSearchVal) {
+      applyQuickSearch(quickSearchVal);
+    }
   }
 
   // Actualizar los contadores superiores en tiempo real
@@ -893,11 +924,147 @@
       <span class="jornada-stat-pill status-incompleto" style="font-size:0.82rem;padding:4px 10px;">⚠️ ${stats.incompletos} Incompletos</span>
       <span class="jornada-stat-pill status-no-entrego" style="font-size:0.82rem;padding:4px 10px;">✕ ${stats.noEntregados} No entregaron</span>
       <span class="jornada-stat-pill status-pendiente" style="font-size:0.82rem;padding:4px 10px;">⏳ ${stats.pendientes} Pendientes</span>
+      ${stats.sinEvaluar > 0 ? `<span class="jornada-stat-pill" style="font-size:0.82rem;padding:4px 10px;background:#fff8e6;color:#975a16;border:1px solid #fde2a8;">⚠️ ${stats.sinEvaluar} Sin calificar</span>` : ''}
     `;
 
     if (progressEl) {
       progressEl.textContent = `${stats.calificados} de ${stats.total} alumnos calificados`;
     }
+  }
+
+  // Actualizar el selector de observaciones en el panel de lote según el PDA de la actividad
+  function updateBatchObservations(actId) {
+    const batchObsSelect = document.getElementById('batchObservacion');
+    if (!batchObsSelect) return;
+    const act = jornadaActivities.find(a => a.id === actId);
+    if (!act) return;
+
+    const batchDesempeno = document.getElementById('batchDesempeno')?.value || 'Logrado';
+    const observations = getObservationsForPda(act.materia, act.pdaTema, batchDesempeno);
+
+    let html = '<option value="">-- Misma observación del banco --</option>';
+    observations.forEach((obs, idx) => {
+      html += `<option value="${escapeHtml(obs)}">Opción ${idx + 1}: ${escapeHtml(obs)}</option>`;
+    });
+    batchObsSelect.innerHTML = html;
+  }
+
+  // Parsear texto de números de lista: "2, 5, 7" o "1-4, 8, 10" -> Set con [1, 2, 3, 4, 8, 10]
+  function parseStudentNumbers(inputStr) {
+    const nums = new Set();
+    if (!inputStr) return nums;
+    const cleaned = String(inputStr).replace(/\s*-\s*/g, '-');
+    const tokens = cleaned.split(/[,;\s]+/).map(t => t.trim()).filter(Boolean);
+    tokens.forEach(tok => {
+      if (tok.includes('-')) {
+        const parts = tok.split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parseInt(parts[1], 10);
+        if (!isNaN(start) && !isNaN(end) && start <= end) {
+          for (let n = start; n <= end; n++) nums.add(n);
+        }
+      } else {
+        const n = parseInt(tok, 10);
+        if (!isNaN(n)) nums.add(n);
+      }
+    });
+    return nums;
+  }
+
+  // Aplicar calificación masiva a alumnos específicos por número de lista
+  function applyBatchGrading(actId) {
+    if (!actId || !jornadaEvaluations[actId]) return;
+    const act = jornadaActivities.find(a => a.id === actId);
+    const numInput = document.getElementById('batchStudentNumbers');
+    const numbersSet = parseStudentNumbers(numInput?.value || '');
+
+    if (numbersSet.size === 0) {
+      showToast('Escribe al menos un número de lista (ej: 2, 5, 7 o 1-4).', true);
+      numInput?.focus();
+      return;
+    }
+
+    const entregaVal = document.getElementById('batchEntrega')?.value;
+    const desempenoVal = document.getElementById('batchDesempeno')?.value;
+    const observacionVal = document.getElementById('batchObservacion')?.value;
+    const conductaVal = document.getElementById('batchConducta')?.value;
+
+    let appliedCount = 0;
+    const appliedNames = [];
+
+    jornadaStudents.forEach((st, idx) => {
+      const studentNum = idx + 1;
+      if (numbersSet.has(studentNum) || numbersSet.has(Number(st.id))) {
+        const e = jornadaEvaluations[actId][st.id];
+        if (e) {
+          if (entregaVal) e.entrega = entregaVal;
+          if (desempenoVal) e.desempeno = desempenoVal;
+          if (observacionVal) {
+            e.observacion = observacionVal;
+          } else if (!e.observacion && act) {
+            const obs = getObservationsForPda(act.materia, act.pdaTema, e.desempeno || 'Logrado');
+            if (obs.length) e.observacion = obs[0];
+          }
+          if (conductaVal) e.conducta = conductaVal;
+          e.evaluated = true;
+          appliedCount++;
+          appliedNames.push(`#${studentNum} ${st.name || st.nombre || ''}`.trim());
+        }
+      }
+    });
+
+    if (appliedCount === 0) {
+      showToast(`No se encontraron alumnos con los números indicados en la lista del día.`, true);
+      return;
+    }
+
+    saveDraftToStorage();
+    renderEvaluationView(actId);
+
+    const feedback = document.getElementById('batchFeedback');
+    if (feedback) {
+      feedback.textContent = `✓ Calificación aplicada a ${appliedCount} alumno(s): ${appliedNames.slice(0, 3).join(', ')}${appliedNames.length > 3 ? '...' : ''}`;
+      setTimeout(() => { if (feedback) feedback.textContent = ''; }, 6000);
+    }
+    showToast(`✓ Se calificó exitosamente a ${appliedCount} alumno(s)`);
+    if (numInput) {
+      numInput.value = '';
+      numInput.focus();
+    }
+  }
+
+  // Búsqueda y filtrado rápido por número o nombre de alumno
+  function applyQuickSearch(filterText) {
+    const listContainer = document.getElementById('jornadaSingleEvaluationList');
+    if (!listContainer) return;
+    const cards = listContainer.querySelectorAll('.eval-student-card');
+    const clearBtn = document.getElementById('btnClearQuickSearch');
+    const q = (filterText || '').trim().toLowerCase();
+
+    if (!q) {
+      cards.forEach(card => card.style.display = '');
+      if (clearBtn) clearBtn.style.display = 'none';
+      return;
+    }
+
+    if (clearBtn) clearBtn.style.display = 'inline-block';
+    const isNum = !isNaN(parseInt(q, 10));
+
+    cards.forEach(card => {
+      const numSpan = card.querySelector('div:first-child span');
+      const numText = numSpan ? numSpan.textContent.replace('.', '').trim() : '';
+      const nameEl = card.querySelector('div:first-child strong');
+      const nameText = nameEl ? nameEl.textContent.toLowerCase() : '';
+
+      let match = false;
+      if (isNum && numText === q) {
+        match = true;
+      } else if (nameText.includes(q)) {
+        match = true;
+      }
+
+      card.style.display = match ? '' : 'none';
+    });
   }
 
   // Regla de las 5:20 PM: Cerrar y autocompletar no entregados
@@ -1013,7 +1180,7 @@
         let trabajoStandard = 'Completo';
         if (rawEntrega === 'Incompleto') trabajoStandard = 'Incompleto';
         else if (rawEntrega === 'No entregado') trabajoStandard = 'No trabajó';
-        else if (rawEntrega === 'Pendiente') trabajoStandard = 'Pendiente';
+        else if (rawEntrega === 'Pendiente' || !rawEntrega) trabajoStandard = 'Pendiente';
 
         return {
           alumnoId: st.id,
@@ -1021,7 +1188,7 @@
           conducta: e.conducta || 'Positiva',
           participacion: 'Media',
           desempeno: e.desempeno || 'Pendiente',
-          observacionLibre: e.observacion || (rawEntrega === 'Pendiente' ? 'Pendiente de entrega / regularización.' : '')
+          observacionLibre: e.observacion || (trabajoStandard === 'Pendiente' ? 'Pendiente de entrega / regularización.' : '')
         };
       });
 
@@ -1050,7 +1217,13 @@
       }
 
       act.saved = true;
-      clearDraftFromStorage(date);
+      saveDraftToStorage();
+
+      // Si todas las actividades de la jornada ya están guardadas en el servidor, limpiar el borrador local
+      const allSaved = jornadaActivities.every(a => a.saved);
+      if (allSaved) {
+        clearDraftFromStorage(date);
+      }
 
       // Notificar al sistema global que se guardó una actividad
       if (window.state && window.state.stats) {
@@ -1316,6 +1489,18 @@
     document.getElementById('btnEvalAllAdequate')?.addEventListener('click', () => markAllConductAdequate(currentEvaluatingActId));
     document.getElementById('btnAutoClose520')?.addEventListener('click', () => applyAutoClose520(currentEvaluatingActId));
 
+    // Asignación rápida por lotes y filtro de búsqueda (Paso 2)
+    document.getElementById('btnApplyBatchGrading')?.addEventListener('click', () => applyBatchGrading(currentEvaluatingActId));
+    document.getElementById('batchDesempeno')?.addEventListener('change', () => updateBatchObservations(currentEvaluatingActId));
+    document.getElementById('evalQuickSearch')?.addEventListener('input', e => applyQuickSearch(e.target.value));
+    document.getElementById('btnClearQuickSearch')?.addEventListener('click', () => {
+      const inp = document.getElementById('evalQuickSearch');
+      if (inp) {
+        inp.value = '';
+        applyQuickSearch('');
+      }
+    });
+
     // Delegación de clics
     document.addEventListener('click', e => {
       // Abrir calificación de una actividad
@@ -1415,19 +1600,19 @@
             evalItem[prop] = evalField.value;
           }
 
-          // Actualizar estado visual de la tarjeta (Verde si está calificado)
+          // Actualizar estado visual de la tarjeta (Verde si está calificado, Ámbar si sin calificar)
           const att = dayAttendanceMap[studentId]?.status || '';
           const isJustified = (att === 'J');
           if (!isJustified) {
-            if (evalItem.entrega && evalItem.entrega !== 'Pendiente') {
+            const hasData = Boolean(evalItem.entrega || evalItem.desempeno || evalItem.conducta);
+            const badgeWrap = row.querySelector('div:first-child > div:nth-child(2)');
+            if (evalItem.evaluated && hasData) {
               row.classList.add('is-evaluated');
               row.classList.remove('is-pending');
-              const badgeWrap = row.querySelector('div > div:last-child');
               if (badgeWrap) badgeWrap.innerHTML = '<span class="badge" style="background:#e6f9f0;color:#0a8754;border:1px solid #b7eed4;font-size:0.72rem;font-weight:700;">✓ Calificado</span>';
             } else {
               row.classList.add('is-pending');
               row.classList.remove('is-evaluated');
-              const badgeWrap = row.querySelector('div > div:last-child');
               if (badgeWrap) badgeWrap.innerHTML = '<span class="badge" style="background:#fff8e6;color:#b7791f;border:1px solid #fde2a8;font-size:0.72rem;font-weight:700;">⚠️ Sin calificar</span>';
             }
           }
