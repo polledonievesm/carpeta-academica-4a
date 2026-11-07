@@ -410,12 +410,20 @@ async function openClassForm(projectId='',classId=''){
   $('#classFormTitle').textContent=classId?'Editar actividad':'Registrar actividad';
   await loadClassAttendance(savedEvaluations);
   showView('daily');
-  if(!classId && typeof window.openJornadaCapture === 'function'){
-    window.openJornadaCapture();
-  } else if(classId) {
-    document.getElementById('btnModeSingleActivity')?.click();
+  if (classId) {
+    if (typeof window.switchDailyMode === 'function') {
+      window.switchDailyMode('single');
+    }
+  } else {
+    // Si no es edición y no se ha especificado modo, mantener modo actual o jornada
+    const singleWrap = document.getElementById('classForm');
+    if (singleWrap && !singleWrap.classList.contains('hidden-control')) {
+      // Usuario está en modo individual, no forzar cambio
+    } else if (typeof window.openJornadaCapture === 'function') {
+      window.openJornadaCapture();
+    }
   }
-  if(restoredDraft)toast('Se recuperó el borrador de la actividad.');
+  if(restoredDraft) toast('Se recuperó el borrador de la actividad.');
 }
 function defaultEvaluation(studentId){return {alumnoId:studentId,trabajo:'Completo',conducta:'Adecuada',participacion:'Media',desempeno:'',observacionLibre:''}}
 async function loadClassAttendance(savedEvaluations=null){
@@ -425,7 +433,7 @@ async function loadClassAttendance(savedEvaluations=null){
     const existing=state.classAttendanceDay.existing||{};
     const registeredIds=Object.keys(existing);
     const presentIds=new Set(registeredIds.filter(id=>existing[id].status==='A'||existing[id].status==='R'));
-    state.classStudents=state.students.filter(student=>presentIds.has(String(student.id)));
+    state.classStudents=sortStudentsAlphabetically(state.students.filter(student=>presentIds.has(String(student.id))));
     const previous=savedEvaluations||state.classEvaluations||{};
     state.classEvaluations={};
     state.classStudents.forEach(student=>state.classEvaluations[student.id]=previous[student.id]||defaultEvaluation(student.id));
@@ -469,16 +477,63 @@ function renderAttendance(){
   renderAttendanceSavedSummary();
   renderAttendanceList();
 }
-function prepareAttendanceRecords(){state.attendanceRecords={};(state.attendance?.students||[]).forEach(s=>{const saved=state.attendanceDay?.existing?.[s.id];state.attendanceRecords[s.id]=saved?{status:saved.status,note:saved.note||''}:{status:'',note:''}})}
+function prepareAttendanceRecords(){
+  state.attendanceRecords = {};
+  const students = sortStudentsAlphabetically(state.attendance?.students || []);
+  students.forEach(s => {
+    const saved = state.attendanceDay?.existing?.[s.id] || state.attendanceDay?.existing?.[String(s.id)];
+    state.attendanceRecords[s.id] = saved ? { status: String(saved.status || '').toUpperCase(), note: saved.note || '' } : { status: '', note: '' };
+  });
+}
 async function loadAttendanceDay(){const date=$('#attendanceDate').value;if(!date)return;state.attendanceSummary=null;renderAttendanceSavedSummary();await runAction(async()=>{state.attendanceDay=await server('getDayData',date);prepareAttendanceRecords();renderAttendanceList()})}
 function renderAttendanceList(){
-  const day=state.attendanceDay||{};$('#attendanceDisplayDate').textContent=day.displayDate||'Selecciona una fecha';$('#attendanceNotice').textContent=day.noClass?`Día sin clases: ${day.noClassReason}${day.noClassDetail?' · '+day.noClassDetail:''}`:'';
-  $('#attendanceList').innerHTML=(state.attendance?.students||[]).map((s,i)=>{const r=state.attendanceRecords[s.id]||{};return `<div class="attendance-row" data-student="${s.id}"><span class="attendance-number">${i+1}</span><strong>${escapeHtml(s.name)}</strong><div class="attendance-status">${['A','F','R','J'].map(x=>`<button type="button" class="status-button ${r.status===x?'selected':''}" data-status="${x}">${x}</button>`).join('')}</div><input class="attendance-note" value="${escapeHtml(r.note||'')}" placeholder="Observación opcional"></div>`}).join('')||'<p class="muted">No hay alumnos activos.</p>';
+  const day = state.attendanceDay || {};
+  $('#attendanceDisplayDate').textContent = day.displayDate || 'Selecciona una fecha';
+  $('#attendanceNotice').textContent = day.noClass ? `Día sin clases: ${day.noClassReason}${day.noClassDetail ? ' · ' + day.noClassDetail : ''}` : '';
+  const students = sortStudentsAlphabetically(state.attendance?.students || []);
+  $('#attendanceList').innerHTML = students.map((s, i) => {
+    const r = state.attendanceRecords[s.id] || {};
+    return `<div class="attendance-row" data-student="${s.id}">
+      <span class="attendance-number">${i+1}</span>
+      <strong>${escapeHtml(s.name)}</strong>
+      <div class="attendance-status">${['A','F','R','J'].map(x => `<button type="button" class="status-button ${r.status===x ? 'selected' : ''}" data-status="${x}">${x}</button>`).join('')}</div>
+      <input class="attendance-note" value="${escapeHtml(r.note||'')}" placeholder="Observación opcional">
+    </div>`;
+  }).join('') || '<p class="muted">No hay alumnos activos.</p>';
 }
 function selectAttendanceStatus(e){const b=e.target.closest('[data-status]');if(!b)return;const row=b.closest('[data-student]');state.attendanceRecords[row.dataset.student].status=b.dataset.status;renderAttendanceList()}
 function updateAttendanceNote(e){if(!e.target.classList.contains('attendance-note'))return;state.attendanceRecords[e.target.closest('[data-student]').dataset.student].note=e.target.value}
 function renderAttendanceSavedSummary(){const box=$('#attendanceSavedSummary'),r=state.attendanceSummary;if(!r){box.classList.add('hidden-control');box.innerHTML='';return}box.classList.remove('hidden-control');box.innerHTML=`<strong>Asistencia guardada</strong><span><b>${r.attended}</b> asistieron (A + R)</span><span><b>${r.absent}</b> faltaron (F + J)</span><small>A: ${r.counts.A} · R: ${r.counts.R} · F: ${r.counts.F} · J: ${r.counts.J}</small>`}
-async function saveAttendanceDay(){const students=state.attendance?.students||[];const pending=students.filter(s=>!state.attendanceRecords[s.id]?.status);if(pending.length)return toast(`Falta registrar a ${pending.length} alumno(s).`,true);if(!confirm('¿Guardar la asistencia de esta fecha?'))return;await runAction(async()=>{const payload={date:$('#attendanceDate').value,records:students.map(s=>({studentId:s.id,status:state.attendanceRecords[s.id].status,note:state.attendanceRecords[s.id].note||''}))};const r=await server('saveAttendance',payload);state.attendanceSummary=r;state.attendanceDay=await server('getDayData',payload.date);prepareAttendanceRecords();renderAttendanceList();renderAttendanceSavedSummary();window.dispatchEvent(new CustomEvent('attendance-updated'));toast(r.message)})}
+async function saveAttendanceDay(){
+  const rawStudents = state.attendance?.students || [];
+  const students = sortStudentsAlphabetically(rawStudents);
+  const pending = students.filter(s => !state.attendanceRecords[s.id]?.status);
+  if(pending.length) return toast(`Falta registrar la asistencia de ${pending.length} alumno(s).`, true);
+  if(!confirm('¿Guardar la asistencia de esta fecha?')) return;
+  await runAction(async()=>{
+    const payload = {
+      date: $('#attendanceDate').value || todayCancun(),
+      records: students.map(s => {
+        const rec = state.attendanceRecords[s.id] || {};
+        let st = String(rec.status || 'A').trim().toUpperCase();
+        if(!['A', 'F', 'R', 'J'].includes(st)) st = 'A';
+        return {
+          studentId: s.id,
+          status: st,
+          note: String(rec.note || '').trim()
+        };
+      })
+    };
+    const r = await server('saveAttendance', payload);
+    state.attendanceSummary = r;
+    state.attendanceDay = await server('getDayData', payload.date);
+    prepareAttendanceRecords();
+    renderAttendanceList();
+    renderAttendanceSavedSummary();
+    window.dispatchEvent(new CustomEvent('attendance-updated'));
+    toast(r.message || '✓ Asistencia guardada correctamente');
+  });
+}
 async function saveNoClassDay(){const reason=prompt('Motivo del día sin clases:','Consejo Técnico Escolar');if(!reason)return;const detail=prompt('Detalle opcional:','')||'';await runAction(async()=>{const r=await server('saveNoClass',{date:$('#attendanceDate').value,reason,detail});state.attendanceDay=await server('getDayData',$('#attendanceDate').value);prepareAttendanceRecords();renderAttendanceList();window.dispatchEvent(new CustomEvent('attendance-updated'));toast(r.message)})}
 function toggleAttendanceReportMode(){const weekly=$('#attendanceReportType').value==='weekly';$('#attendanceWeekControl').classList.toggle('hidden-control',!weekly);$('#attendanceMonthControl').classList.toggle('hidden-control',weekly)}
 async function loadAttendanceReport(){const studentId=$('#attendanceStudent').value;if(!studentId){showView('attendance');return toast('Selecciona un alumno para consultar el reporte.',true)}const weekly=$('#attendanceReportType').value==='weekly';await runAction(async()=>{const report=weekly?await server('getWeeklyAttendanceReport',studentId,$('#attendanceReportDate').value):await server('getIndividualReport',studentId,$('#attendancePeriod').value);weekly?renderWeeklyAttendanceReport(report):renderMonthlyAttendanceReport(report);showView('attendance')})}
@@ -825,6 +880,15 @@ function resetRequestKey(form){const input=form.elements.requestKey;if(input)inp
 function setFormSaving(form,saving){form.dataset.saving=saving?'1':'0';$$('button[type="submit"]',form).forEach(button=>{if(saving){button.dataset.originalText=button.textContent;button.textContent='Guardando…';button.disabled=true}else{button.textContent=button.dataset.originalText||button.textContent;button.disabled=false;delete button.dataset.originalText}})}
 function markDraftState(key,status,error=''){const draft=readDraft(key);if(!draft)return;draft.status=status;draft.error=error;draft.updatedAt=new Date().toISOString();localStorage.setItem(key,JSON.stringify(draft));window.dispatchEvent(new CustomEvent('drafts-updated'))}
 function showPendingSaveDialog(key){const draft=readDraft(key);toast(`La actividad quedó ${String(draft?.status||'pendiente').toLowerCase()}. Puedes reintentar desde Borradores.`,true)}
+function sortStudentsAlphabetically(list){
+  return (list || []).slice().sort((a, b) => {
+    const nameA = String(a.name || a.nombreCompleto || (typeof fullName === 'function' ? fullName(a) : '') || '').trim();
+    const nameB = String(b.name || b.nombreCompleto || (typeof fullName === 'function' ? fullName(b) : '') || '').trim();
+    return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+  });
+}
+window.sortStudentsAlphabetically = sortStudentsAlphabetically;
+
 function fullName(s){return s.nombreCompleto||[s.apellidoPaterno,s.apellidoMaterno,s.nombres].filter(Boolean).join(' ')}
 function setLoading(v,message='Cargando información…',retry=null){
   const legacy=$('#loading'),overlay=$('#operationLoader'),retryButton=$('#operationLoaderRetry');
