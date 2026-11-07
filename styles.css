@@ -359,3 +359,20 @@
   border-left: 5px solid #eab308;
   background: #fffdf0;
 }
+
+.batch-eval-controls {
+  display: grid;
+  grid-template-columns: 180px 140px 140px 1fr 160px auto;
+  gap: 10px;
+  align-items: flex-end;
+}
+@media (max-width: 1200px) {
+  .batch-eval-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 650px) {
+  .batch-eval-controls {
+    grid-template-columns: 1fr;
+  }
+}
