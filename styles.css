@@ -269,3 +269,80 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* ==========================================================================
+   REGISTRO DIARIO 2 PASOS, EVALUACIÓN POR PDA Y CONDUCTA SEMANAL
+   ========================================================================== */
+.jornada-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+.jornada-stat-pill.status-entregado {
+  background: #e6f9f0;
+  color: #0a8754;
+  border-color: #b7eed4;
+}
+.jornada-stat-pill.status-incompleto {
+  background: #fff8e6;
+  color: #b7791f;
+  border-color: #fde2a8;
+}
+.jornada-stat-pill.status-no-entrego {
+  background: #fde8e8;
+  color: #c53030;
+  border-color: #f9bebe;
+}
+.jornada-stat-pill.status-pendiente {
+  background: #edf2f7;
+  color: #4a5568;
+  border-color: #cbd5e0;
+}
+.jornada-pda-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eef7ff;
+  color: #035388;
+  border: 1px solid #bae3ff;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.eval-student-card {
+  display: grid;
+  grid-template-columns: 220px 140px 140px 1fr 180px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  background: #fff;
+  border: 1px solid #d7e1e9;
+  border-radius: 10px;
+  transition: border-color 0.15s ease;
+}
+.eval-student-card:hover {
+  border-color: #9ac2dc;
+}
+@media (max-width: 1200px) {
+  .eval-student-card {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .eval-student-card .eval-col-full {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 650px) {
+  .eval-student-card {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}

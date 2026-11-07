@@ -123,64 +123,106 @@
       </div>
 
       <div id="jornadaWrap">
-        <form id="jornadaForm">
-          <div class="page-head">
-            <div>
-              <p class="eyebrow">REGISTRO ÁGIL DE LA JORNADA</p>
-              <h1>Actividades del día</h1>
-              <p class="muted">Registra de 2 a 5 o más actividades del día y califica a todo el grupo en una sola pantalla.</p>
-            </div>
-            <div class="button-row">
-              <button type="button" class="btn" data-action="cancel-jornada">Limpiar</button>
-              <button type="submit" class="btn primary" id="btnSubmitJornadaTop">Guardar jornada completa</button>
-            </div>
-          </div>
-
-          <article class="panel">
-            <div class="form-grid two" style="margin-bottom:12px;">
-              <label style="max-width:240px;">Fecha de la jornada
-                <input type="date" id="jornadaDate" required>
-              </label>
-              <div id="jornadaAttendanceNotice" class="class-attendance-notice">Selecciona una fecha para cargar a los alumnos presentes.</div>
-            </div>
-
-            <div class="section-head" style="margin-bottom:8px;">
+        <!-- ========================================================
+             PASO 1: CREAR Y GESTIONAR ACTIVIDADES DEL DÍA (Limpio)
+             ======================================================== -->
+        <div id="jornadaActivitiesStep">
+          <form id="jornadaForm">
+            <div class="page-head">
               <div>
-                <h3 style="font-size:0.95rem;margin:0;">Materias y actividades realizadas</h3>
-                <span class="muted" style="font-size:0.8rem;">Define las actividades que anotaste en tu libreta o lista de papel</span>
-              </div>
-            </div>
-
-            <div id="jornadaActivitiesList"></div>
-
-            <div style="margin-top:10px;">
-              <button type="button" class="btn" id="btnAddJornadaActivity">+ Agregar otra actividad al día</button>
-            </div>
-          </article>
-
-          <article class="panel evaluation-panel" style="margin-top:14px;">
-            <div class="section-head evaluation-heading">
-              <div>
-                <h2>Evaluación del grupo</h2>
-                <p class="muted">Haz clic en cada pastilla para alternar: ✓ Entregó / ◐ Incompleto / ✕ No entregó.</p>
+                <p class="eyebrow">REGISTRO ÁGIL DE LA JORNADA</p>
+                <h1>Actividades del día</h1>
+                <p class="muted">Registra las actividades de la jornada, asocia su PDA y luego califica cada una de forma independiente.</p>
               </div>
               <div class="button-row">
-                <button type="button" class="btn small" data-action="jornada-all-complete">Todos entregaron todo</button>
-                <button type="button" class="btn small" data-action="jornada-all-adequate">Conducta adecuada a todos</button>
+                <button type="button" class="btn" id="btnLimpiarJornada" data-action="cancel-jornada">Limpiar</button>
+                <button type="submit" class="btn primary" id="btnSubmitJornadaTop">Guardar actividades del día</button>
               </div>
             </div>
-            <div class="evaluation-legend">
-              <span><b>Entregas:</b> Haz clic en cada actividad para cambiar su estado</span>
-              <span><b>Conducta y participación:</b> Selección rápida por alumno</span>
+
+            <article class="panel">
+              <!-- Navegador de Fecha (Ayer · Selector · Mañana · Hoy) -->
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line);">
+                <label style="margin:0;font-weight:700;display:flex;align-items:center;gap:6px;">
+                  <span>Fecha:</span>
+                  <button type="button" class="btn small" id="btnJornadaPrevDay" title="Día anterior" style="padding:4px 9px;">◀</button>
+                  <input type="date" id="jornadaDate" required style="font-weight:700;padding:5px 9px;">
+                  <button type="button" class="btn small" id="btnJornadaNextDay" title="Día siguiente" style="padding:4px 9px;">▶</button>
+                  <button type="button" class="btn small" id="btnJornadaToday" style="padding:4px 10px;">Hoy</button>
+                </label>
+                <div id="jornadaAttendanceNotice" class="class-attendance-notice" style="flex:1;margin:0;">Selecciona una fecha para cargar la asistencia.</div>
+              </div>
+
+              <!-- Alerta de Alumnos con Justificante (Tolerancia 5 días) -->
+              <div id="jornadaJustifiedAlert" class="hidden-control" style="background:#fffbe6;border:1px solid #ffe58f;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:0.85rem;color:#874d00;display:flex;align-items:center;justify-content:space-between;">
+                <span id="jornadaJustifiedText">⏳ Alumnos con justificante</span>
+              </div>
+
+              <div class="section-head" style="margin-bottom:10px;">
+                <div>
+                  <h3 style="font-size:1rem;margin:0;">Materias y actividades realizadas</h3>
+                  <span class="muted" style="font-size:0.82rem;">Define las materias, el nombre de la actividad, vincula el PDA y califica de manera independiente</span>
+                </div>
+              </div>
+
+              <!-- Lista dinámica de tarjetas de actividades -->
+              <div id="jornadaActivitiesList"></div>
+
+              <div style="margin-top:14px;display:flex;gap:10px;align-items:center;">
+                <button type="button" class="btn" id="btnAddJornadaActivity">+ Agregar otra actividad al día</button>
+                <button type="submit" class="btn primary" id="btnSubmitJornadaBottom">Guardar actividades del día</button>
+              </div>
+            </article>
+          </form>
+        </div>
+
+        <!-- ========================================================
+             PASO 2: MODO CALIFICAR ACTIVIDAD ENFOCADA (Con Banco de PDA)
+             ======================================================== -->
+        <div id="jornadaEvaluationStep" class="hidden-control">
+          <div class="page-head" style="align-items:flex-start;">
+            <div>
+              <button type="button" class="btn small" id="btnBackToJornadaActs" style="margin-bottom:8px;">◀ Volver a actividades del día</button>
+              <p class="eyebrow" id="evalStepEyebrow">EVALUACIÓN DE ACTIVIDAD</p>
+              <h1 id="evalStepActivityTitle" style="font-size:1.35rem;margin:2px 0;">Actividad</h1>
+              <p class="muted" id="evalStepActivityMeta" style="margin:2px 0;">Materia · PDA</p>
             </div>
-            <div id="jornadaEvaluationList" class="evaluation-list"></div>
+            <div class="button-row">
+              <button type="button" class="btn small" id="btnAutoClose520" title="Aplica regla de las 5:20 PM: marca 'No entregado' y 'Requiere apoyo' a alumnos presentes en blanco">⏰ Cierre 5:20 PM (Marcar no entregados)</button>
+              <button type="button" class="btn primary" id="btnSaveActivityEvaluationsTop">Guardar calificaciones</button>
+            </div>
+          </div>
+
+          <!-- Barra de Contadores en Vivo y Acciones Masivas -->
+          <article class="panel" style="padding:12px 16px;margin-bottom:12px;background:#f8fafc;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+              <!-- Contadores dinámicos -->
+              <div id="evalCountersBar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"></div>
+              <!-- Acciones Rápidas -->
+              <div class="button-row">
+                <button type="button" class="btn small" id="btnEvalAllComplete">✓ Todos entregaron (Logrado)</button>
+                <button type="button" class="btn small" id="btnEvalAllAdequate">⭐ Conducta Positiva (10)</button>
+              </div>
+            </div>
           </article>
 
+          <!-- Lista de Alumnos para Calificar -->
+          <article class="panel evaluation-panel">
+            <div class="section-head evaluation-heading">
+              <div>
+                <h2>Lista de alumnos del grupo</h2>
+                <p class="muted">Ordenados alfabéticamente A-Z. Selecciona el nivel de desempeño y la observación correspondiente de su PDA.</p>
+              </div>
+            </div>
+            <div id="jornadaSingleEvaluationList" class="evaluation-list"></div>
+          </article>
+
+          <!-- Barra flotante de Guardado -->
           <div class="sticky-save">
-            <span id="jornadaSaveProgress">0 alumnos · 2 actividades</span>
-            <button type="submit" class="btn primary" id="btnSubmitJornada">Guardar jornada completa</button>
+            <span id="evalStepProgress">0 de 25 alumnos calificados</span>
+            <button type="button" class="btn primary" id="btnSaveActivityEvaluations">Guardar calificaciones de la actividad</button>
           </div>
-        </form>
+        </div>
       </div>
 
       <form id="classForm" class="hidden-control">
