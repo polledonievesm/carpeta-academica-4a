@@ -346,3 +346,16 @@
     gap: 8px;
   }
 }
+
+.eval-student-card.is-evaluated {
+  border-left: 5px solid #10b981;
+  background: #f7fdf9;
+}
+.eval-student-card.is-pending {
+  border-left: 5px solid #f59e0b;
+  background: #fffdfa;
+}
+.eval-student-card.is-justified {
+  border-left: 5px solid #eab308;
+  background: #fffdf0;
+}
