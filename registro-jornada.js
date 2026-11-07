@@ -227,12 +227,43 @@
 
       const existing = dayData?.existing || {};
       const registeredIds = Object.keys(existing);
-      const presentIds = new Set(registeredIds.filter(id => existing[id].status === 'A' || existing[id].status === 'R'));
+      const presentIds = new Set();
+      registeredIds.forEach(id => {
+        const val = existing[id];
+        const st = String(typeof val === 'object' ? (val?.status || '') : val).trim().toUpperCase();
+        if (st === 'A' || st === 'R' || st === 'PRESENTE' || st === 'RETARDO') {
+          presentIds.add(String(id));
+          const num = Number(id);
+          if (!isNaN(num)) presentIds.add(String(num));
+        }
+      });
 
-      const allStudents = (window.state && Array.isArray(window.state.students)) ? window.state.students : [];
+      let allStudents = (window.state && Array.isArray(window.state.students) && window.state.students.length > 0)
+        ? window.state.students
+        : (window.state?.attendance?.students || []);
+
+      if (!allStudents.length && typeof window.server === 'function') {
+        try {
+          const boot = await window.server('getBootstrapDataLite');
+          if (boot?.students?.length) {
+            window.state = Object.assign(window.state || {}, boot);
+            allStudents = boot.students;
+          }
+        } catch (e) {
+          console.warn('Carga diferida de alumnos:', e);
+        }
+      }
+
       // Ordenar alfabéticamente estricto de la A a la Z
       const sortedAll = sortStudents(allStudents);
-      jornadaStudents = sortedAll.filter(s => presentIds.has(String(s.id)));
+      jornadaStudents = sortedAll.filter((s, idx) => {
+        const sid = String(s.id);
+        const snum = Number(s.id);
+        if (presentIds.has(sid) || (!isNaN(snum) && presentIds.has(String(snum))) || presentIds.has(s.id)) return true;
+        if (s.studentId && (presentIds.has(String(s.studentId)) || presentIds.has(s.studentId))) return true;
+        if (presentIds.has(String(idx + 1))) return true;
+        return false;
+      });
 
       // Inicializar evaluaciones para los alumnos presentes
       jornadaStudents.forEach(st => {

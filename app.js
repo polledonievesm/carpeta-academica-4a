@@ -432,8 +432,25 @@ async function loadClassAttendance(savedEvaluations=null){
     state.classAttendanceDay=await server('getDayData',date);
     const existing=state.classAttendanceDay.existing||{};
     const registeredIds=Object.keys(existing);
-    const presentIds=new Set(registeredIds.filter(id=>existing[id].status==='A'||existing[id].status==='R'));
-    state.classStudents=sortStudentsAlphabetically(state.students.filter(student=>presentIds.has(String(student.id))));
+    const presentIds=new Set();
+    registeredIds.forEach(id=>{
+      const val=existing[id];
+      const st=String(typeof val==='object'?(val?.status||''):val).trim().toUpperCase();
+      if(st==='A'||st==='R'||st==='PRESENTE'||st==='RETARDO'){
+        presentIds.add(String(id));
+        const num=Number(id);
+        if(!isNaN(num))presentIds.add(String(num));
+      }
+    });
+    let allStudents=(state.students&&state.students.length)?state.students:(state.attendance?.students||[]);
+    state.classStudents=sortStudentsAlphabetically(allStudents.filter((student,idx)=>{
+      const sid=String(student.id);
+      const snum=Number(student.id);
+      if(presentIds.has(sid)||(!isNaN(snum)&&presentIds.has(String(snum)))||presentIds.has(student.id))return true;
+      if(student.studentId&&(presentIds.has(String(student.studentId))||presentIds.has(student.studentId)))return true;
+      if(presentIds.has(String(idx+1)))return true;
+      return false;
+    }));
     const previous=savedEvaluations||state.classEvaluations||{};
     state.classEvaluations={};
     state.classStudents.forEach(student=>state.classEvaluations[student.id]=previous[student.id]||defaultEvaluation(student.id));
