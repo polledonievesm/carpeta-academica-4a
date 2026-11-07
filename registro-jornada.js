@@ -6,6 +6,7 @@
 (function () {
   'use strict';
 
+  const DRAFT_JORNADA_KEY = 'carpeta_academica_jornada_draft_v2';
   let currentDailyMode = 'jornada'; // 'jornada', 'single', 'consulta'
   let currentStep = 'activities'; // 'activities' (Paso 1) o 'evaluation' (Paso 2)
   let currentEvaluatingActId = null;
@@ -39,7 +40,7 @@
   let allGroupStudents = [];
   let dayAttendanceMap = {}; // id -> { status: 'A'|'F'|'R'|'J', note: '' }
   let jornadaStudents = []; // Alumnos a evaluar (presentes + justificados)
-  let jornadaEvaluations = {}; // actId -> { studentId -> { entrega, desempeno, observacion, conducta, nota } }
+  let jornadaEvaluations = {}; // actId -> { studentId -> { entrega, desempeno, observacion, conducta, nota, evaluated } }
   let isSavingJornada = false;
 
   function getToday() {
@@ -92,6 +93,99 @@
       'Educación Física',
       'Artes'
     ];
+  }
+
+  // Resolver ID de proyecto válido obligatorio para Google Sheets
+  async function resolveValidProjectId(materia) {
+    let projects = window.state?.projects || [];
+    if (!projects.length && typeof window.server === 'function') {
+      try {
+        const boot = await window.server('getBootstrapDataLite');
+        if (boot?.projects?.length) {
+          window.state = Object.assign(window.state || {}, boot);
+          projects = boot.projects;
+        }
+      } catch (e) {
+        console.warn('Carga de proyectos para vinculación:', e);
+      }
+    }
+
+    if (!projects.length) {
+      return '';
+    }
+
+    const normMat = String(materia || '').trim().toLowerCase();
+
+    // 1. Proyecto activo que coincida exactamente con la materia o campo formativo
+    const matchActive = projects.find(p => p.estado === 'Activo' && (
+      String(p.campoFormativo || '').toLowerCase() === normMat ||
+      String(p.materia || '').toLowerCase() === normMat ||
+      (normMat.includes('matemát') && String(p.campoFormativo || '').toLowerCase().includes('científico'))
+    ));
+    if (matchActive) return String(matchActive.id);
+
+    // 2. Cualquier proyecto que coincida con el campo formativo
+    const matchAny = projects.find(p => (
+      String(p.campoFormativo || '').toLowerCase() === normMat ||
+      String(p.materia || '').toLowerCase() === normMat ||
+      (normMat.includes('matemát') && String(p.campoFormativo || '').toLowerCase().includes('científico'))
+    ));
+    if (matchAny) return String(matchAny.id);
+
+    // 3. Primer proyecto activo disponible
+    const anyActive = projects.find(p => p.estado === 'Activo');
+    if (anyActive) return String(anyActive.id);
+
+    // 4. Primer proyecto cualquiera del grupo
+    return String(projects[0].id);
+  }
+
+  // Guardado continuo automático en borrador (localStorage)
+  function saveDraftToStorage() {
+    try {
+      const dateInput = document.getElementById('jornadaDate');
+      const date = dateInput?.value || getToday();
+      const draft = {
+        date,
+        activities: jornadaActivities,
+        evaluations: jornadaEvaluations,
+        updatedAt: new Date().toISOString()
+      };
+      localStorage.setItem(DRAFT_JORNADA_KEY + '_' + date, JSON.stringify(draft));
+      showAutosaveIndicator();
+    } catch (e) {
+      console.warn('Error al guardar borrador local:', e);
+    }
+  }
+
+  function restoreDraftFromStorage(date) {
+    try {
+      const raw = localStorage.getItem(DRAFT_JORNADA_KEY + '_' + date);
+      if (!raw) return false;
+      const draft = JSON.parse(raw);
+      if (draft && draft.activities && draft.evaluations) {
+        jornadaActivities = draft.activities;
+        jornadaEvaluations = draft.evaluations;
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function clearDraftFromStorage(date) {
+    try {
+      localStorage.removeItem(DRAFT_JORNADA_KEY + '_' + date);
+    } catch (e) {}
+  }
+
+  function showAutosaveIndicator() {
+    const indicator = document.getElementById('jornadaAutosaveBadge');
+    if (indicator) {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      indicator.innerHTML = `<span style="color:#0a8754;font-weight:700;">✓ Borrador guardado automáticamente (${timeStr})</span>`;
+      indicator.classList.remove('hidden-control');
+    }
   }
 
   // Obtener lista de PDAs / Temas disponibles según la materia
@@ -351,23 +445,29 @@
         return isPres || isJust;
       });
 
-      // Inicializar evaluaciones para cada actividad y alumno
-      jornadaActivities.forEach(act => {
-        if (!jornadaEvaluations[act.id]) jornadaEvaluations[act.id] = {};
-        jornadaStudents.forEach(st => {
-          if (!jornadaEvaluations[act.id][st.id]) {
-            const att = dayAttendanceMap[st.id]?.status || '';
-            const isJust = att === 'J';
-            jornadaEvaluations[act.id][st.id] = {
-              entrega: isJust ? 'Pendiente' : 'Entregado',
-              desempeno: isJust ? 'Pendiente' : 'Logrado',
-              observacion: isJust ? 'Pendiente de entrega (falta justificada con tolerancia de 5 días).' : '',
-              conducta: 'Positiva',
-              nota: ''
-            };
-          }
+      // Intentar restaurar borrador guardado localmente si existe
+      const hasDraft = restoreDraftFromStorage(date);
+
+      // Si no había borrador, inicializar evaluaciones para cada actividad y alumno
+      if (!hasDraft) {
+        jornadaActivities.forEach(act => {
+          if (!jornadaEvaluations[act.id]) jornadaEvaluations[act.id] = {};
+          jornadaStudents.forEach(st => {
+            if (!jornadaEvaluations[act.id][st.id]) {
+              const att = dayAttendanceMap[st.id]?.status || '';
+              const isJust = att === 'J';
+              jornadaEvaluations[act.id][st.id] = {
+                entrega: isJust ? 'Pendiente' : 'Entregado',
+                desempeno: isJust ? 'Pendiente' : 'Logrado',
+                observacion: isJust ? 'Pendiente de entrega (falta justificada con tolerancia de 5 días).' : '',
+                conducta: 'Positiva',
+                nota: '',
+                evaluated: false // Marcado como evaluado por el maestro
+              };
+            }
+          });
         });
-      });
+      }
 
       // Actualizar avisos de asistencia
       if (!registeredIds.length) {
@@ -427,10 +527,12 @@
         desempeno: isJust ? 'Pendiente' : 'Logrado',
         observacion: isJust ? 'Pendiente de entrega (falta justificada con tolerancia de 5 días).' : '',
         conducta: 'Positiva',
-        nota: ''
+        nota: '',
+        evaluated: false
       };
     });
 
+    saveDraftToStorage();
     renderActivitiesList();
   }
 
@@ -442,6 +544,7 @@
     }
     jornadaActivities = jornadaActivities.filter(a => a.id !== actId);
     delete jornadaEvaluations[actId];
+    saveDraftToStorage();
     renderActivitiesList();
   }
 
@@ -452,17 +555,30 @@
     let incompletos = 0;
     let noEntregados = 0;
     let pendientes = 0;
+    let calificadosCount = 0;
 
     jornadaStudents.forEach(st => {
       const e = evals[st.id] || {};
-      const stEnt = e.entrega || 'Entregado';
+      const stEnt = e.entrega || 'Pendiente';
+
+      if (e.evaluated || (stEnt !== 'Pendiente' && e.desempeno && e.desempeno !== 'Pendiente')) {
+        calificadosCount++;
+      }
+
       if (stEnt === 'Entregado' || stEnt === 'Completo') entregados++;
       else if (stEnt === 'Incompleto') incompletos++;
       else if (stEnt === 'No entregado' || stEnt === 'No trabajó') noEntregados++;
       else if (stEnt === 'Pendiente') pendientes++;
     });
 
-    return { entregados, incompletos, noEntregados, pendientes, total: jornadaStudents.length };
+    return {
+      entregados,
+      incompletos,
+      noEntregados,
+      pendientes,
+      calificados: calificadosCount,
+      total: jornadaStudents.length
+    };
   }
 
   // Renderizar tarjetas de actividades del día (Paso 1)
@@ -569,7 +685,7 @@
             </div>
             <div>
               <button type="button" class="btn small" data-action="open-eval-act" data-id="${escapeHtml(act.id)}" style="background:#f0f7fb;color:#0b315d;border-color:#c4dff0;">
-                📊 Ver y evaluar alumnos (${stats.total}) →
+                📊 Ver y calificar alumnos (${stats.calificados} de ${stats.total}) →
               </button>
             </div>
           </div>
@@ -598,6 +714,7 @@
       metaEl.innerHTML = `
         <b>${escapeHtml(act.materia)}</b> · ${escapeHtml(act.material)} ${act.paginas ? '(' + escapeHtml(act.paginas) + ')' : ''}
         ${act.pdaTema ? `<br><span class="jornada-pda-badge">🎯 PDA: ${escapeHtml(act.pdaTema)}</span>` : ''}
+        <span id="jornadaAutosaveBadge" style="margin-left:8px;font-size:0.75rem;"></span>
       `;
     }
 
@@ -618,12 +735,30 @@
         desempeno: 'Logrado',
         observacion: '',
         conducta: 'Positiva',
-        nota: ''
+        nota: '',
+        evaluated: false
       };
 
       const stName = typeof window.fullName === 'function' ? window.fullName(student) : (student.name || student.nombre || student.id);
       const attInfo = dayAttendanceMap[student.id]?.status || 'A';
-      const isJustified = attInfo === 'J';
+      const isJustified = (attInfo === 'J');
+
+      // Determinar si ya está calificado para resaltar en VERDE o ÁMBAR
+      const isEvaluated = Boolean(e.evaluated || (e.entrega && e.entrega !== 'Pendiente'));
+
+      let cardClass = 'eval-student-card';
+      let statusBadge = '';
+
+      if (isJustified) {
+        cardClass += ' is-justified';
+        statusBadge = '<span class="badge" style="background:#fffbe6;color:#874d00;border:1px solid #ffe58f;font-size:0.7rem;">⏳ Justificado (5 días)</span>';
+      } else if (isEvaluated) {
+        cardClass += ' is-evaluated';
+        statusBadge = '<span class="badge" style="background:#e6f9f0;color:#0a8754;border:1px solid #b7eed4;font-size:0.72rem;font-weight:700;">✓ Calificado</span>';
+      } else {
+        cardClass += ' is-pending';
+        statusBadge = '<span class="badge" style="background:#fff8e6;color:#b7791f;border:1px solid #fde2a8;font-size:0.72rem;font-weight:700;">⚠️ Sin calificar</span>';
+      }
 
       // Observaciones sugeridas según el nivel seleccionado
       const observations = getObservationsForPda(act.materia, act.pdaTema, e.desempeno);
@@ -634,14 +769,14 @@
       });
 
       html += `
-        <article class="eval-student-card" data-student="${escapeHtml(student.id)}">
-          <!-- Columna 1: Nombre del alumno y asistencia -->
+        <article class="${cardClass}" data-student="${escapeHtml(student.id)}">
+          <!-- Columna 1: Nombre del alumno y estatus -->
           <div>
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
               <span style="font-weight:800;color:#168f98;font-size:0.85rem;">${index + 1}.</span>
               <strong style="color:#17324d;font-size:0.9rem;">${escapeHtml(stName)}</strong>
             </div>
-            ${isJustified ? '<span class="badge" style="background:#fffbe6;color:#874d00;border:1px solid #ffe58f;font-size:0.7rem;">⏳ Justificado (5 días)</span>' : '<span style="font-size:0.75rem;color:#0a8754;">✓ Presente</span>'}
+            <div>${statusBadge}</div>
           </div>
 
           <!-- Columna 2: Estado de Entrega -->
@@ -707,7 +842,7 @@
     `;
 
     if (progressEl) {
-      progressEl.textContent = `${stats.entregados + stats.incompletos + stats.noEntregados} de ${stats.total} alumnos calificados`;
+      progressEl.textContent = `${stats.calificados} de ${stats.total} alumnos calificados`;
     }
   }
 
@@ -722,14 +857,16 @@
       const isJustified = (att === 'J');
 
       // Si el alumno estuvo presente y no se le marcó entrega o estaba sin evaluar
-      if (!isJustified && (!e.entrega || e.entrega === 'Pendiente' || e.entrega === '')) {
+      if (!isJustified && (!e.evaluated || e.entrega === 'Pendiente' || !e.entrega)) {
         e.entrega = 'No entregado';
         e.desempeno = 'Requiere apoyo';
         e.observacion = 'No presentó la actividad en la fecha programada.';
+        e.evaluated = true;
         modified++;
       }
     });
 
+    saveDraftToStorage();
     renderEvaluationView(actId);
     showToast(`✓ Cierre aplicado: se marcaron ${modified} alumno(s) como 'No entregado' y 'Requiere apoyo'.`);
   }
@@ -745,11 +882,13 @@
         const e = jornadaEvaluations[actId][st.id];
         e.entrega = 'Entregado';
         e.desempeno = 'Logrado';
+        e.evaluated = true;
         const obsList = getObservationsForPda(act?.materia, act?.pdaTema, 'Logrado');
         e.observacion = obsList[0] || 'Alcanzó satisfactoriamente el aprendizaje esperado del día.';
       }
     });
 
+    saveDraftToStorage();
     renderEvaluationView(actId);
     showToast('✓ Todos los alumnos presentes marcados como Entregado (Logrado)');
   }
@@ -761,6 +900,7 @@
       const e = jornadaEvaluations[actId][st.id];
       e.conducta = 'Positiva';
     });
+    saveDraftToStorage();
     renderEvaluationView(actId);
     showToast('✓ Conducta Positiva (10 pts) asignada a todos los alumnos');
   }
@@ -784,6 +924,7 @@
       }
     }
 
+    saveDraftToStorage();
     showToast(`✓ Se guardó la configuración de las ${jornadaActivities.length} actividades del día ${date}. Ahora puedes calificar cada una.`);
     renderActivitiesList();
   }
@@ -806,28 +947,39 @@
     if (saveBtnTop) { saveBtnTop.disabled = true; }
 
     try {
+      // 1. Obtener ID de proyecto obligatorio para evitar "Selecciona un proyecto válido"
+      const projectId = await resolveValidProjectId(act.materia);
+
       const evals = jornadaEvaluations[act.id] || {};
       const evaluacionesPayload = jornadaStudents.map(st => {
         const e = evals[st.id] || {};
+        const rawEntrega = e.entrega || 'Pendiente';
+
+        // Mapear al estándar que reconoce Google Sheets
+        let trabajoStandard = 'Completo';
+        if (rawEntrega === 'Incompleto') trabajoStandard = 'Incompleto';
+        else if (rawEntrega === 'No entregado') trabajoStandard = 'No trabajó';
+        else if (rawEntrega === 'Pendiente') trabajoStandard = 'Pendiente';
+
         return {
           alumnoId: st.id,
-          trabajo: e.entrega || 'Entregado',
+          trabajo: trabajoStandard,
           conducta: e.conducta || 'Positiva',
           participacion: 'Media',
-          desempeno: e.desempeno || 'Logrado',
-          observacionLibre: e.observacion || ''
+          desempeno: e.desempeno || 'Pendiente',
+          observacionLibre: e.observacion || (rawEntrega === 'Pendiente' ? 'Pendiente de entrega / regularización.' : '')
         };
       });
 
       const payload = {
         materia: act.materia,
         fecha: date,
-        actividad: act.actividad.trim(),
-        material: act.material,
+        actividad: act.actividad.trim() || 'Actividad del día',
+        material: act.material || act.materia,
         tipoActividad: act.tipoActividad || 'Clase',
         paginas: act.paginas || '',
         instrucciones: act.pdaTema ? ('PDA: ' + act.pdaTema) : '',
-        proyectoId: '',
+        proyectoId: projectId || '', // ID de proyecto válido
         horaInicio: '13:00',
         horaFin: '14:00',
         requestKey: `ACT-${Date.now()}-${act.id}`,
@@ -839,6 +991,7 @@
       }
 
       act.saved = true;
+      clearDraftFromStorage(date);
       showToast(`✓ Calificaciones guardadas exitosamente para: ${act.actividad}`);
 
       // Regresar al Paso 1 con contadores actualizados
@@ -1067,6 +1220,7 @@
         jornadaActivities = [
           { id: 'act-1', materia: 'Lenguajes', actividad: '', material: 'Lenguajes', tipoActividad: 'Clase', paginas: '', pdaTema: '', saved: false }
         ];
+        saveDraftToStorage();
         renderActivitiesList();
       }
     });
@@ -1145,6 +1299,7 @@
           if (prop === 'materia') {
             renderActivitiesList();
           }
+          saveDraftToStorage();
         }
       }
 
@@ -1157,6 +1312,7 @@
 
         if (studentId && jornadaEvaluations[currentEvaluatingActId]?.[studentId]) {
           const evalItem = jornadaEvaluations[currentEvaluatingActId][studentId];
+          evalItem.evaluated = true; // Marcado explícitamente
 
           if (prop === 'observacionSelect') {
             evalItem.observacion = evalField.value;
@@ -1185,6 +1341,24 @@
             evalItem[prop] = evalField.value;
           }
 
+          // Actualizar estado visual de la tarjeta (Verde si está calificado)
+          const att = dayAttendanceMap[studentId]?.status || '';
+          const isJustified = (att === 'J');
+          if (!isJustified) {
+            if (evalItem.entrega && evalItem.entrega !== 'Pendiente') {
+              row.classList.add('is-evaluated');
+              row.classList.remove('is-pending');
+              const badgeWrap = row.querySelector('div > div:last-child');
+              if (badgeWrap) badgeWrap.innerHTML = '<span class="badge" style="background:#e6f9f0;color:#0a8754;border:1px solid #b7eed4;font-size:0.72rem;font-weight:700;">✓ Calificado</span>';
+            } else {
+              row.classList.add('is-pending');
+              row.classList.remove('is-evaluated');
+              const badgeWrap = row.querySelector('div > div:last-child');
+              if (badgeWrap) badgeWrap.innerHTML = '<span class="badge" style="background:#fff8e6;color:#b7791f;border:1px solid #fde2a8;font-size:0.72rem;font-weight:700;">⚠️ Sin calificar</span>';
+            }
+          }
+
+          saveDraftToStorage();
           updateEvaluationCounters(currentEvaluatingActId);
         }
       }
