@@ -336,7 +336,7 @@
   window.switchDailyMode = switchMode;
 
   // Mostrar Paso 1 (actividades) o Paso 2 (calificar actividad)
-  function showStep(step, actId = null) {
+  async function showStep(step, actId = null) {
     currentStep = step;
     currentEvaluatingActId = actId;
 
@@ -351,6 +351,30 @@
     } else if (step === 'evaluation') {
       stepActivities?.classList.add('hidden-control');
       stepEvaluation?.classList.remove('hidden-control');
+
+      // Si la actividad ya estaba guardada en el servidor y no tenemos sus evaluaciones en memoria, cargarlas
+      const act = jornadaActivities.find(a => a.id === actId);
+      if (act && act.saved && act.serverClassId && typeof window.server === 'function') {
+        try {
+          const classData = await window.server('getClassRecord', act.serverClassId);
+          if (classData && Array.isArray(classData.evaluations)) {
+            if (!jornadaEvaluations[actId]) jornadaEvaluations[actId] = {};
+            classData.evaluations.forEach(row => {
+              jornadaEvaluations[actId][row.alumnoId] = {
+                entrega: row.trabajo === 'Completo' ? 'Entregado' : (row.trabajo === 'No trabajó' ? 'No entregado' : (row.trabajo || 'Entregado')),
+                desempeno: row.desempeno || 'Logrado',
+                observacion: row.observacionLibre || '',
+                conducta: row.conducta || 'Positiva',
+                nota: '',
+                evaluated: Boolean(row.trabajo && row.trabajo !== 'Pendiente')
+              };
+            });
+          }
+        } catch (e) {
+          console.warn('Carga de evaluaciones de la actividad:', e);
+        }
+      }
+
       renderEvaluationView(actId);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -370,7 +394,7 @@
     loadAttendanceForDate(input.value);
   }
 
-  // Cargar asistencia de la fecha y filtrar alumnos
+  // Cargar asistencia y actividades existentes de la fecha
   async function loadAttendanceForDate(date) {
     const notice = document.getElementById('jornadaAttendanceNotice');
     const justAlert = document.getElementById('jornadaJustifiedAlert');
@@ -379,13 +403,20 @@
 
     if (notice) {
       notice.className = 'class-attendance-notice';
-      notice.textContent = 'Consultando asistencia de la fecha…';
+      notice.textContent = 'Consultando asistencia y actividades de la fecha…';
     }
 
     try {
       let dayData = null;
+      let dailyReport = null;
+
       if (typeof window.server === 'function') {
-        dayData = await window.server('getDayData', date);
+        const [dData, dRep] = await Promise.all([
+          window.server('getDayData', date).catch(() => null),
+          window.server('getDailyAcademicReport', date).catch(() => null)
+        ]);
+        dayData = dData;
+        dailyReport = dRep;
       }
 
       const existing = dayData?.existing || {};
@@ -445,29 +476,52 @@
         return isPres || isJust;
       });
 
-      // Intentar restaurar borrador guardado localmente si existe
-      const hasDraft = restoreDraftFromStorage(date);
-
-      // Si no había borrador, inicializar evaluaciones para cada actividad y alumno
-      if (!hasDraft) {
-        jornadaActivities.forEach(act => {
-          if (!jornadaEvaluations[act.id]) jornadaEvaluations[act.id] = {};
-          jornadaStudents.forEach(st => {
-            if (!jornadaEvaluations[act.id][st.id]) {
-              const att = dayAttendanceMap[st.id]?.status || '';
-              const isJust = att === 'J';
-              jornadaEvaluations[act.id][st.id] = {
-                entrega: isJust ? 'Pendiente' : 'Entregado',
-                desempeno: isJust ? 'Pendiente' : 'Logrado',
-                observacion: isJust ? 'Pendiente de entrega (falta justificada con tolerancia de 5 días).' : '',
-                conducta: 'Positiva',
-                nota: '',
-                evaluated: false // Marcado como evaluado por el maestro
-              };
-            }
-          });
+      // 1. Si el servidor tiene actividades registradas en esta fecha, cargarlas
+      if (dailyReport && Array.isArray(dailyReport.activities) && dailyReport.activities.length > 0) {
+        jornadaActivities = dailyReport.activities.map((a, i) => {
+          const pdaStr = a.instrucciones ? String(a.instrucciones).replace(/^PDA:s*/i, '').trim() : '';
+          return {
+            id: 'srv-act-' + (a.id || i + 1),
+            serverClassId: a.id || '',
+            materia: a.subject || 'Lenguajes',
+            actividad: a.name || 'Actividad del día',
+            material: a.material || a.subject || 'Lenguajes',
+            tipoActividad: a.tipoActividad || 'Clase',
+            paginas: a.paginas || '',
+            pdaTema: pdaStr || a.name || '',
+            saved: true
+          };
         });
+      } else {
+        // Intentar restaurar borrador guardado localmente si existe
+        const hasDraft = restoreDraftFromStorage(date);
+        if (!hasDraft) {
+          // Inicialización por defecto para día nuevo
+          jornadaActivities = [
+            { id: 'act-1', materia: 'Lenguajes', actividad: '', material: 'Lenguajes', tipoActividad: 'Clase', paginas: '', pdaTema: '', saved: false },
+            { id: 'act-2', materia: 'Saberes y Pensamiento Científico', actividad: '', material: 'Saberes y Pensamiento Científico', tipoActividad: 'Clase', paginas: '', pdaTema: '', saved: false }
+          ];
+        }
       }
+
+      // Asegurar que existen evaluaciones para cada alumno en cada actividad
+      jornadaActivities.forEach(act => {
+        if (!jornadaEvaluations[act.id]) jornadaEvaluations[act.id] = {};
+        jornadaStudents.forEach(st => {
+          if (!jornadaEvaluations[act.id][st.id]) {
+            const att = dayAttendanceMap[st.id]?.status || '';
+            const isJust = (att === 'J');
+            jornadaEvaluations[act.id][st.id] = {
+              entrega: isJust ? 'Pendiente' : 'Entregado',
+              desempeno: isJust ? 'Pendiente' : 'Logrado',
+              observacion: isJust ? 'Pendiente de entrega (falta justificada con tolerancia de 5 días).' : '',
+              conducta: 'Positiva',
+              nota: '',
+              evaluated: false
+            };
+          }
+        });
+      });
 
       // Actualizar avisos de asistencia
       if (!registeredIds.length) {
@@ -517,11 +571,10 @@
     };
     jornadaActivities.push(newAct);
 
-    // Inicializar evaluaciones para esta nueva actividad
     jornadaEvaluations[newAct.id] = {};
     jornadaStudents.forEach(st => {
       const att = dayAttendanceMap[st.id]?.status || '';
-      const isJust = att === 'J';
+      const isJust = (att === 'J');
       jornadaEvaluations[newAct.id][st.id] = {
         entrega: isJust ? 'Pendiente' : 'Entregado',
         desempeno: isJust ? 'Pendiente' : 'Logrado',
@@ -612,6 +665,7 @@
             <div style="display:flex;align-items:center;gap:8px;">
               <span class="jornada-activity-badge">Actividad ${index + 1} de la jornada</span>
               <span class="badge" style="background:#e8f4f8;color:#0b315d;font-weight:700;">${escapeHtml(act.materia)}</span>
+              ${act.saved ? '<span class="badge" style="background:#e6f9f0;color:#0a8754;font-size:0.7rem;font-weight:700;">✓ Guardada en Google</span>' : ''}
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
               <button type="button" class="btn primary small" data-action="open-eval-act" data-id="${escapeHtml(act.id)}" style="padding:5px 12px;font-weight:700;">
@@ -972,6 +1026,7 @@
       });
 
       const payload = {
+        id: act.serverClassId || '', // Si ya existía, actualiza
         materia: act.materia,
         fecha: date,
         actividad: act.actividad.trim() || 'Actividad del día',
@@ -986,12 +1041,24 @@
         evaluaciones: evaluacionesPayload
       };
 
+      let result = null;
       if (typeof window.server === 'function') {
-        await window.server('saveClassRecord', payload);
+        result = await window.server('saveClassRecord', payload);
+        if (result && result.activity && result.activity.id) {
+          act.serverClassId = result.activity.id;
+        }
       }
 
       act.saved = true;
       clearDraftFromStorage(date);
+
+      // Notificar al sistema global que se guardó una actividad
+      if (window.state && window.state.stats) {
+        window.state.stats.activities = Number(window.state.stats.activities || 0) + (act.serverClassId ? 0 : 1);
+        if (typeof window.renderStats === 'function') window.renderStats();
+      }
+      window.dispatchEvent(new CustomEvent('class-saved', { detail: payload }));
+
       showToast(`✓ Calificaciones guardadas exitosamente para: ${act.actividad}`);
 
       // Regresar al Paso 1 con contadores actualizados
@@ -1194,6 +1261,13 @@
 
   // Enlazar eventos de la interfaz
   function bindEvents() {
+    // Sincronización automática cuando se guarde o actualice la asistencia en otra pestaña
+    window.addEventListener('attendance-updated', () => {
+      const dateInput = document.getElementById('jornadaDate');
+      const curDate = dateInput?.value || getToday();
+      loadAttendanceForDate(curDate);
+    });
+
     // Modo tabs en Registro Diario
     document.getElementById('btnModeJornada')?.addEventListener('click', () => switchMode('jornada'));
     document.getElementById('btnModeSingleActivity')?.addEventListener('click', () => switchMode('single'));
