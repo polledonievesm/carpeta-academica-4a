@@ -1,0 +1,496 @@
+/* ==========================================================================
+   MÓDULO AISLADO DEL MENÚ LATERAL: "IA POLLEDO" (DISEÑO APROBADO DEFINITIVO)
+   ========================================================================== */
+:root {
+  --sidebar-top: #073B61;
+  --sidebar-bottom: #052D4A;
+  --menu-active: #12B8B5;
+  --menu-hover: #174F70;
+  --menu-text-main: #ffffff;
+  --menu-text-sub: #dcecf6;
+  --menu-accent-yellow: #facc15;
+  --menu-accent-coral: #fb7185;
+  --menu-accent-teal: #12B8B5;
+  --menu-accent-sky: #38bdf8;
+}
+
+/* 1. ARQUITECTURA EN DOS FILAS (ENCABEZADO FIJO + NAVEGACIÓN CON SCROLL) */
+.sidebar,
+.app-sidebar {
+  position: fixed !important;
+  inset: 0 auto 0 0 !important;
+  width: 238px !important;
+  height: 100vh !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  background: linear-gradient(180deg, var(--sidebar-top) 0%, var(--sidebar-bottom) 100%) !important;
+  color: var(--menu-text-main) !important;
+  padding: 12px 10px 16px !important;
+  z-index: 20 !important;
+  overflow: hidden !important;
+  box-shadow: 4px 0 20px rgba(4, 28, 48, 0.35) !important;
+  box-sizing: border-box !important;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s ease !important;
+}
+
+.main {
+  transition: margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* 2. ENCABEZADO DE MARCA: IA POLLEDO */
+.sidebar-brand,
+.sidebar .brand {
+  position: relative !important;
+  flex-shrink: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 28px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: 68px !important;
+  padding: 4px 4px 12px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  margin-bottom: 10px !important;
+  overflow: visible !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-top: 0 !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-radius: 0 !important;
+}
+
+.sidebar-brand__identity,
+.brand-identity {
+  display: flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
+  gap: 8px !important;
+  text-decoration: none !important;
+  overflow: visible !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  cursor: pointer !important;
+}
+
+/* Símbolo con contorno sutil de iluminación para contraste sobre fondo azul marino */
+.sidebar-brand__symbol,
+.brand-symbol {
+  width: 52px !important;
+  height: 52px !important;
+  flex: 0 0 52px !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  display: block !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+  filter:
+    drop-shadow(1px 0 0 rgba(255, 255, 255, 0.45))
+    drop-shadow(-1px 0 0 rgba(255, 255, 255, 0.45))
+    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.45))
+    drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.45))
+    drop-shadow(0 3px 5px rgba(0, 0, 0, 0.28)) !important;
+}
+
+.sidebar-brand__text,
+.brand-name-wrap {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 0 !important;
+  flex: 0 1 auto !important;
+}
+
+.sidebar-brand__name,
+.brand-name {
+  color: #ffffff !important;
+  font-family: 'Nunito', 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif !important;
+  font-size: 19px !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.3px !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.35) !important;
+  user-select: none !important;
+}
+
+.sidebar-brand__underline,
+.brand-underline {
+  width: 88% !important;
+  height: 6px !important;
+  margin-top: 2px !important;
+  display: block !important;
+  overflow: visible !important;
+  flex-shrink: 0 !important;
+}
+
+/* Botón de contraer/expandir menú */
+.sidebar-toggle,
+.sidebar-collapse {
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  width: 28px !important;
+  height: 28px !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  transition: all 0.2s ease !important;
+  flex-shrink: 0 !important;
+  margin-left: auto !important;
+  padding: 0 !important;
+}
+.sidebar-toggle:hover,
+.sidebar-collapse:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+/* 3. CONTENEDOR DE NAVEGACIÓN SCROLLABLE */
+.sidebar-navigation,
+.sidebar .nav {
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  padding-right: 2px !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent !important;
+}
+.sidebar-navigation::-webkit-scrollbar,
+.sidebar .nav::-webkit-scrollbar {
+  width: 4px !important;
+}
+.sidebar-navigation::-webkit-scrollbar-thumb,
+.sidebar .nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18) !important;
+  border-radius: 4px !important;
+}
+
+/* 4. DIMENSIONAMIENTO ESTRICTO DE ICONOS SVG LUCIDE (AISLADOS DEL RESTO DE LA APP) */
+.sidebar .nav-icon {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  min-height: 22px !important;
+  max-width: 22px !important;
+  max-height: 22px !important;
+  flex: 0 0 22px !important;
+  stroke-width: 2 !important;
+  stroke: currentColor !important;
+  display: block !important;
+  transition: transform 0.2s ease, filter 0.2s ease !important;
+}
+
+.sidebar .nav-sub-icon {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  flex: 0 0 18px !important;
+  stroke-width: 2 !important;
+  stroke: currentColor !important;
+  display: block !important;
+  transition: transform 0.2s ease, filter 0.2s ease !important;
+}
+
+/* 5. COLORES DE ACENTO APROBADOS DE LOS ICONOS */
+.sidebar .icon-teal {
+  color: var(--menu-accent-teal) !important;
+  stroke: var(--menu-accent-teal) !important;
+}
+.sidebar .icon-coral {
+  color: var(--menu-accent-coral) !important;
+  stroke: var(--menu-accent-coral) !important;
+}
+.sidebar .icon-yellow {
+  color: var(--menu-accent-yellow) !important;
+  stroke: var(--menu-accent-yellow) !important;
+}
+.sidebar .icon-sky {
+  color: var(--menu-accent-sky) !important;
+  stroke: var(--menu-accent-sky) !important;
+}
+
+/* Icono de casa blanco para Inicio */
+.sidebar .nav-item[data-view="dashboard"] .nav-icon {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+/* 6. BOTONES DE NAVEGACIÓN Y SUBMENÚS */
+.sidebar .nav-item,
+.sidebar .nav-external {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--menu-text-sub) !important;
+  border-radius: 8px !important;
+  padding: 8px 10px !important;
+  min-height: 44px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  text-align: left !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  line-height: 1.25 !important;
+  cursor: pointer !important;
+  width: 100% !important;
+  position: relative !important;
+  text-decoration: none !important;
+  box-sizing: border-box !important;
+  transition: background 180ms cubic-bezier(0.4, 0, 0.2, 1),
+              color 180ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1),
+              transform 180ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Hover aprobado */
+@media (hover: hover) and (pointer: fine) {
+  .sidebar .nav-item:not(.active):hover,
+  .sidebar .nav-external:hover {
+    background: var(--menu-hover) !important;
+    color: #ffffff !important;
+    box-shadow: inset 3px 0 0 var(--menu-active) !important;
+    transform: translateX(2px) !important;
+  }
+  .sidebar .nav-item:hover .nav-icon,
+  .sidebar .nav-item:hover .nav-sub-icon,
+  .sidebar .nav-external:hover .nav-sub-icon {
+    filter: brightness(1.22) !important;
+  }
+}
+
+/* Opción Activa aprobada (fondo turquesa #12B8B5) */
+.sidebar .nav-item.active {
+  background: var(--menu-active) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 3px 12px rgba(18, 184, 181, 0.35) !important;
+  transform: none !important;
+  border-left: 0 !important;
+}
+.sidebar .nav-item.active .nav-icon,
+.sidebar .nav-item.active .nav-sub-icon {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  filter: none !important;
+}
+
+/* 7. CATEGORÍAS DESPLEGABLES (ACORDEÓN) */
+.sidebar .nav-group {
+  margin: 3px 0 !important;
+  border-radius: 8px !important;
+}
+
+.sidebar .nav-group summary {
+  list-style: none !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 10px 10px !important;
+  min-height: 44px !important;
+  color: #d2e7f5 !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  cursor: pointer !important;
+  border-radius: 8px !important;
+  user-select: none !important;
+  transition: background 180ms ease, color 180ms ease !important;
+  box-sizing: border-box !important;
+}
+.sidebar .nav-group summary::-webkit-details-marker {
+  display: none !important;
+}
+.sidebar .nav-group summary:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #ffffff !important;
+}
+
+/* Flecha rotatoria aprobada */
+.sidebar .nav-group summary::after {
+  content: '›' !important;
+  margin-left: auto !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  display: inline-block !important;
+  transform: rotate(0deg) !important;
+  transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1), color 180ms ease !important;
+  line-height: 1 !important;
+}
+.sidebar .nav-group[open] summary::after {
+  transform: rotate(90deg) !important;
+  color: var(--menu-active) !important;
+}
+
+/* Línea conectora vertical de los submenús */
+.sidebar .nav-group > div {
+  display: grid !important;
+  gap: 2px !important;
+  padding: 4px 0 6px !important;
+  margin-left: 20px !important;
+  padding-left: 8px !important;
+  border-left: 1.5px solid rgba(255, 255, 255, 0.14) !important;
+}
+.sidebar .nav-group .nav-item,
+.sidebar .nav-group .nav-external {
+  padding: 7px 10px !important;
+  font-size: 13px !important;
+  min-height: 38px !important;
+}
+
+.sidebar .nav-count {
+  margin-left: auto !important;
+  background: #fb7185 !important;
+  color: #ffffff !important;
+  border-radius: 999px !important;
+  padding: 2px 7px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1.3 !important;
+}
+
+/* Resaltar categoría si contiene el submenú activo */
+.sidebar .nav-group.has-active summary {
+  color: #ffffff !important;
+  font-weight: 900 !important;
+}
+
+/* 8. MODO CONTRAÍDO (COLLAPSED) */
+.sidebar.collapsed {
+  width: 76px !important;
+  padding: 12px 8px 16px !important;
+}
+.main.sidebar-collapsed {
+  margin-left: 76px !important;
+}
+
+.sidebar.collapsed .sidebar-brand,
+.sidebar.collapsed .brand {
+  grid-template-columns: 1fr !important;
+  justify-content: center !important;
+  padding: 4px 0 12px !important;
+}
+.sidebar.collapsed .sidebar-brand__text,
+.sidebar.collapsed .brand-name-wrap,
+.sidebar.collapsed .sidebar-brand__underline,
+.sidebar.collapsed .brand-underline {
+  display: none !important;
+}
+.sidebar.collapsed .sidebar-brand__symbol,
+.sidebar.collapsed .brand-symbol {
+  width: 44px !important;
+  height: 44px !important;
+  flex: 0 0 44px !important;
+  margin: 0 auto !important;
+}
+.sidebar.collapsed .sidebar-toggle,
+.sidebar.collapsed .sidebar-collapse {
+  position: absolute !important;
+  right: -10px !important;
+  top: 14px !important;
+  transform: rotate(180deg) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+  z-index: 25 !important;
+}
+
+.sidebar.collapsed .nav-item span,
+.sidebar.collapsed .nav-external span,
+.sidebar.collapsed .nav-group summary span,
+.sidebar.collapsed .nav-group summary::after,
+.sidebar.collapsed .nav-count {
+  display: none !important;
+}
+.sidebar.collapsed .nav-group > div {
+  display: none !important;
+}
+.sidebar.collapsed .nav-group {
+  margin: 3px 0 !important;
+}
+.sidebar.collapsed .nav-group summary,
+.sidebar.collapsed .nav-item,
+.sidebar.collapsed .nav-external {
+  justify-content: center !important;
+  padding: 11px 0 !important;
+  min-height: 44px !important;
+  margin: 0 auto !important;
+  border-radius: 8px !important;
+}
+.sidebar.collapsed .nav-icon {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  flex: 0 0 24px !important;
+}
+
+/* Tooltip flotante en modo contraído */
+@media (min-width: 901px) {
+  .sidebar.collapsed .nav-item[data-tooltip]:hover::after,
+  .sidebar.collapsed .nav-external[data-tooltip]:hover::after,
+  .sidebar.collapsed summary[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: calc(100% + 12px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: #073B61;
+    color: #ffffff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(18, 184, 181, 0.45);
+    z-index: 1000;
+    pointer-events: none;
+    animation: sidebarTooltipIn 0.16s ease-out;
+  }
+}
+@keyframes sidebarTooltipIn {
+  from { opacity: 0; transform: translateY(-50%) translateX(-4px); }
+  to { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
+/* 9. COMPORTAMIENTO RESPONSIVO (MÓVIL / CELULAR) */
+@media (max-width: 900px) {
+  .sidebar,
+  .app-sidebar {
+    transform: translateX(-100%) !important;
+    width: 260px !important;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+  .sidebar.open {
+    transform: translateX(0) !important;
+  }
+  .sidebar-toggle,
+  .sidebar-collapse {
+    display: none !important;
+  }
+  .sidebar .nav-item,
+  .sidebar .nav-external,
+  .sidebar .nav-group summary {
+    min-height: 44px !important;
+    font-size: 14.5px !important;
+  }
+}
