@@ -1,0 +1,195 @@
+/* ==========================================================================
+   MÓDULO: REGISTRO DIARIO, CALIFICACIÓN POR PDA Y EVALUACIÓN POR LOTE
+   ========================================================================== */
+/* Banco de Observaciones por PDA - Fase 4 (4.° grado) */
+.pda-level-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+.pda-level-badge.logrado {
+  background: #e6f9f0;
+  color: #0a8754;
+  border: 1px solid #b7eed4;
+}
+.pda-level-badge.en-proceso {
+  background: #fff8e6;
+  color: #b7791f;
+  border: 1px solid #fde2a8;
+}
+.pda-level-badge.requiere-apoyo {
+  background: #fde8e8;
+  color: #c53030;
+  border: 1px solid #f9bebe;
+}
+
+/* Captura Rapida de la Jornada - Estilos */
+.jornada-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  border: 1px solid transparent;
+  outline: none;
+}
+.jornada-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+.jornada-pill.status-completo {
+  background: #e6f9f0;
+  color: #0a8754;
+  border-color: #b7eed4;
+}
+.jornada-pill.status-incompleto {
+  background: #fff8e6;
+  color: #b7791f;
+  border-color: #fde2a8;
+}
+.jornada-pill.status-no-trabajo {
+  background: #fde8e8;
+  color: #c53030;
+  border-color: #f9bebe;
+}
+.jornada-activity-card {
+  position: relative;
+  background: #fdfefe;
+  border: 1px solid #d7e1e9;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.jornada-activity-card:hover {
+  border-color: #b6cddc;
+}
+.jornada-activity-badge {
+  display: inline-block;
+  background: #eaf3fa;
+  color: #0b315d;
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ==========================================================================
+   REGISTRO DIARIO 2 PASOS, EVALUACIÓN POR PDA Y CONDUCTA SEMANAL
+   ========================================================================== */
+.jornada-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+.jornada-stat-pill.status-entregado {
+  background: #e6f9f0;
+  color: #0a8754;
+  border-color: #b7eed4;
+}
+.jornada-stat-pill.status-incompleto {
+  background: #fff8e6;
+  color: #b7791f;
+  border-color: #fde2a8;
+}
+.jornada-stat-pill.status-no-entrego {
+  background: #fde8e8;
+  color: #c53030;
+  border-color: #f9bebe;
+}
+.jornada-stat-pill.status-pendiente {
+  background: #edf2f7;
+  color: #4a5568;
+  border-color: #cbd5e0;
+}
+.jornada-pda-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eef7ff;
+  color: #035388;
+  border: 1px solid #bae3ff;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.eval-student-card {
+  display: grid;
+  grid-template-columns: 220px 140px 140px 1fr 180px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  background: #fff;
+  border: 1px solid #d7e1e9;
+  border-radius: 10px;
+  transition: border-color 0.15s ease;
+}
+.eval-student-card:hover {
+  border-color: #9ac2dc;
+}
+@media (max-width: 1200px) {
+  .eval-student-card {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .eval-student-card .eval-col-full {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 650px) {
+  .eval-student-card {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+.eval-student-card.is-evaluated {
+  border-left: 5px solid #10b981;
+  background: #f7fdf9;
+}
+.eval-student-card.is-pending {
+  border-left: 5px solid #f59e0b;
+  background: #fffdfa;
+}
+.eval-student-card.is-justified {
+  border-left: 5px solid #eab308;
+  background: #fffdf0;
+}
+
+.batch-eval-controls {
+  display: grid;
+  grid-template-columns: 180px 140px 140px 1fr 160px auto;
+  gap: 10px;
+  align-items: flex-end;
+}
+@media (max-width: 1200px) {
+  .batch-eval-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 650px) {
+  .batch-eval-controls {
+    grid-template-columns: 1fr;
+  }
+}
+

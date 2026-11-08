@@ -5,8 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b315d">
   <title>Carpeta Académica</title>
+    <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/sidebar.css">
-  <link rel="stylesheet" href="css/app-core.css">
+  <link rel="stylesheet" href="css/registro-diario.css">
+  <link rel="stylesheet" href="css/calificaciones.css">
+  <link rel="stylesheet" href="css/familias.css">
+  <link rel="stylesheet" href="css/inscripcion.css">
+  <link rel="stylesheet" href="css/modales.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&display=swap" rel="stylesheet">
@@ -968,10 +973,23 @@
     <script src="config.js" defer></script>
   <script src="planning-calendar.js" defer></script>
   <script src="nem4-catalog.js" defer></script>
-  <script src="banco-conducta.js" defer></script>
-  <script src="banco-pda.js" defer></script>
-  <script src="banco-matematicas.js" defer></script>
-  <script src="app.js" defer></script>
+    <!-- Banco de Datos Optimizado (Carga en inactividad/demanda) -->
+  <script src="js/core/bancos-loader.js" defer></script>
+
+  <!-- Lógica Central Modular -->
+  <script src="js/core/state-api.js" defer></script>
+  <script src="js/core/auth-boot.js" defer></script>
+  <script src="js/core/navigation.js" defer></script>
+  <script src="js/core/utils.js" defer></script>
+
+  <!-- Controladores Modulares por Vista -->
+  <script src="js/vistas/dashboard.js" defer></script>
+  <script src="js/vistas/registro-diario.js" defer></script>
+  <script src="js/vistas/asistencia.js" defer></script>
+  <script src="js/vistas/academico.js" defer></script>
+  <script src="js/vistas/familias.js" defer></script>
+  <script src="js/vistas/pagos.js" defer></script>
+  <script src="js/vistas/calificaciones.js" defer></script>
   <script src="enrollment.js" defer></script>
   <script src="enhancements.js" defer></script>
   <script src="academic-v2.js" defer></script>

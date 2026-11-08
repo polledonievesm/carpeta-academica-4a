@@ -1,6 +1,11 @@
 /* ==========================================================================
-   CARPETA ACADÉMICA - ARQUITECTURA MODULAR
-   Cada módulo es independiente para evitar efectos colaterales al modificar.
+   CARPETA ACADÉMICA - ARQUITECTURA MODULAR DE ESTILOS
+   Cada submódulo e interfaz está aislado en su propio archivo dentro de css/
    ========================================================================== */
+@import url('css/base.css');
 @import url('css/sidebar.css');
-@import url('css/app-core.css');
+@import url('css/registro-diario.css');
+@import url('css/calificaciones.css');
+@import url('css/familias.css');
+@import url('css/inscripcion.css');
+@import url('css/modales.css');
