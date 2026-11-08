@@ -30,7 +30,7 @@ let gasSyncFadeTimer=null;
 const familyAccessSelection=new Set();
 const paymentEventCache=new Map();
 const gradeReportCache=new Map();
-const VIEW_TITLES={dashboard:'Inicio',students:'Lista de alumnos',styles:'Estilos de aprendizaje',projects:'Proyectos','project-detail':'Proyecto',daily:'Registro diario',attendance:'Asistencia','attendance-reports':'Reportes de asistencia',reports:'Reportes',grades:'Calificaciones',instruments:'Instrumentos',observations:'Observaciones de conducta','pda-observations':'Observaciones por PDA',drafts:'Borradores',directory:'Directorio familiar','family-access':'Accesos familiares',payments:'Control de pagos',settings:'Configuración','enrollment-admin':'Inscripción'};
+const VIEW_TITLES={dashboard:'Inicio',students:'Lista de alumnos','student-record':'Expediente del alumno',styles:'Estilos de aprendizaje',projects:'Proyectos','project-detail':'Proyecto',daily:'Registro diario',attendance:'Asistencia','attendance-reports':'Reportes de asistencia',reports:'Reportes',grades:'Calificaciones',instruments:'Instrumentos',observations:'Observaciones de conducta','pda-observations':'Observaciones por PDA',drafts:'Borradores',directory:'Directorio familiar','family-access':'Accesos familiares',payments:'Control de pagos',settings:'Configuración','enrollment-admin':'Inscripción'};
 document.addEventListener('DOMContentLoaded',()=>{bindUI();$('#bootRetry')?.addEventListener('click',()=>loadApp());$('#operationLoaderRetry')?.addEventListener('click',()=>{const retry=lastActionRetry;setLoading(false);if(retry)retry()});startApp()});
 window.addEventListener('message',receiveApiMessage);
 

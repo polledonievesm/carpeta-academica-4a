@@ -1,3 +1,66 @@
+
+function checkAndNotifyIncompleteFamilyProfile() {
+  const data = familyPortalData;
+  if (!data) return;
+  const p = data.profile || {};
+  // Si ya tiene teléfono, domicilio y contacto de emergencia, o complete === true: NO mostrar pop up
+  const isComplete = Boolean(data.complete || (p.tutorTelefono && (p.tutorDomicilio || p.calle) && (p.contactoEmergenciaNombre || p.contactoEmergencia)));
+  if (isComplete) return;
+
+  // Si tiene datos incompletos: mostrar el modal pop-up amigable
+  const dialog = document.getElementById('familyIncompleteNoticeDialog');
+  if (dialog) {
+    const nameEl = document.getElementById('familyIncompleteStudentName');
+    if (nameEl) nameEl.textContent = data.student?.name || 'su hijo(a)';
+
+    const btnGo = document.getElementById('btnGoToFamilyProfileNotice');
+    if (btnGo) {
+      btnGo.onclick = () => {
+        if (dialog.close) dialog.close();
+        else dialog.removeAttribute('open');
+        const tabBtn = document.querySelector('[data-family-view="familyProfile"]');
+        if (tabBtn) tabBtn.click();
+      };
+    }
+
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  }
+}
+window.checkAndNotifyIncompleteFamilyProfile = checkAndNotifyIncompleteFamilyProfile;
+
+
+async function regenerateAllFamilyPasswordsNoExpiry(){
+  const rows = state.directory?.rows || [];
+  if (!rows.length) return toast('No hay alumnos registrados en el directorio.', true);
+  if (!confirm(`Se generarán contraseñas permanentes (SIN CADUCIDAD) para todos los alumnos (${rows.length}).\n\nLos nombres de usuario se mantendrán iguales y las contraseñas no expirarán.\n\n¿Deseas continuar?`)) return;
+
+  await runAction(async () => {
+    const credentials = [];
+    rows.forEach((row, idx) => {
+      const studentId = String(row.student.id);
+      const studentNum = row.student.numeroLista || (idx + 1);
+      const username = row.account?.username || ('fam_' + (row.student.nombres || row.student.name || 'alumno').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) + studentNum);
+      const randomPin = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const password = 'H4A' + studentNum + randomPin;
+
+      credentials.push({
+        studentId: studentId,
+        studentName: row.student.name,
+        username: username,
+        password: password,
+        expiresAt: 0
+      });
+    });
+
+    state.familyCredentials = credentials;
+    applyFamilyCredentials(credentials);
+    renderFamilyAccess();
+    toast(`✓ Se generaron ${credentials.length} contraseñas permanentes sin caducidad para todas las familias.`);
+  });
+}
+window.regenerateAllFamilyPasswordsNoExpiry = regenerateAllFamilyPasswordsNoExpiry;
+
 /* ==========================================================================
    MÓDULO DE VISTA: FAMILIAS (DIRECTORIO, ACCESOS, PORTAL FAMILIAR Y AJUSTES)
    ========================================================================== */
@@ -12,7 +75,7 @@ function familyAccessFilteredRows(){
 }
 function renderFamilyAccess(){
   if(!state.directory)return;const rows=state.directory.rows||[],validIds=new Set(rows.map(row=>String(row.student.id))),filtered=familyAccessFilteredRows();Array.from(familyAccessSelection).forEach(id=>{if(!validIds.has(id))familyAccessSelection.delete(id)});
-  $('#familyAccessTable').innerHTML=filtered.length?filtered.map(row=>{const a=row.account;const status=!a?'Sin cuenta':a.accessRevoked?'Acceso revocado':!a.active?'Bloqueada':a.mustChangePassword||!a.dataConfirmedAt?'Primer acceso pendiente':'Activa y confirmada';const recovery=a?[a.email,a.phone].filter(Boolean).join(' · ')||'Sin configurar':'—';const password=a?.temporaryPassword||'';const credential=a?`<div class="family-credential-cell"><code>${escapeHtml(a.username||'Sin usuario')}</code>${password?`<span><b data-family-password="${escapeHtml(row.student.id)}">••••••••••</b><button type="button" class="password-mini-button" data-action="toggle-family-password" data-id="${escapeHtml(row.student.id)}" data-password="${escapeHtml(password)}">Ver</button></span><small>Temporal hasta ${escapeHtml(new Date(a.temporaryExpiresAt).toLocaleDateString('es-MX'))}</small>`:`<small>${a.accessRevoked?'Sin contraseña activa':'Contraseña personal protegida'}</small>`}</div>`:'—';return `<tr><td><input type="checkbox" data-family-access-student value="${escapeHtml(row.student.id)}" ${familyAccessSelection.has(String(row.student.id))?'checked':''} aria-label="Seleccionar a ${escapeHtml(row.student.name)}"></td><td><strong>${escapeHtml(row.student.name)}</strong></td><td>${credential}</td><td>${escapeHtml(recovery)}</td><td><span class="directory-state ${!a?'muted-state':a.accessRevoked||!a.active?'danger':a.mustChangePassword||!a.dataConfirmedAt?'warning':'success'}">${escapeHtml(status)}</span></td><td>${a?.lastAccess?escapeHtml(new Date(a.lastAccess).toLocaleString('es-MX')):'—'}</td><td><button class="btn small" data-action="manage-family-access" data-id="${escapeHtml(row.student.id)}">Administrar</button></td></tr>`}).join(''):'<tr><td colspan="7">No se encontraron cuentas con esos filtros.</td></tr>';
+  $('#familyAccessTable').innerHTML=filtered.length?filtered.map(row=>{const a=row.account;const status=!a?'Sin cuenta':a.accessRevoked?'Acceso revocado':!a.active?'Bloqueada':a.mustChangePassword||!a.dataConfirmedAt?'Primer acceso pendiente':'Activa y confirmada';const recovery=a?[a.email,a.phone].filter(Boolean).join(' · ')||'Sin configurar':'—';const password=a?.temporaryPassword||'';const credential=a?`<div class="family-credential-cell"><code>${escapeHtml(a.username||'Sin usuario')}</code>${password?`<span><b data-family-password="${escapeHtml(row.student.id)}">••••••••••</b><button type="button" class="password-mini-button" data-action="toggle-family-password" data-id="${escapeHtml(row.student.id)}" data-password="${escapeHtml(password)}">Ver</button></span>${a.temporaryExpiresAt && a.temporaryExpiresAt > 0 ? `<small>Temporal hasta ${escapeHtml(new Date(a.temporaryExpiresAt).toLocaleDateString('es-MX'))}</small>` : `<small style="color:#0f766e;font-weight:700;">● Permanente (Sin caducidad)</small>`}`:`<small>${a.accessRevoked?'Sin contraseña activa':'Contraseña personal protegida'}</small>`}</div>`:'—';return `<tr><td><input type="checkbox" data-family-access-student value="${escapeHtml(row.student.id)}" ${familyAccessSelection.has(String(row.student.id))?'checked':''} aria-label="Seleccionar a ${escapeHtml(row.student.name)}"></td><td><strong>${escapeHtml(row.student.name)}</strong></td><td>${credential}</td><td>${escapeHtml(recovery)}</td><td><span class="directory-state ${!a?'muted-state':a.accessRevoked||!a.active?'danger':a.mustChangePassword||!a.dataConfirmedAt?'warning':'success'}">${escapeHtml(status)}</span></td><td>${a?.lastAccess?escapeHtml(new Date(a.lastAccess).toLocaleString('es-MX')):'—'}</td><td><button class="btn small" data-action="manage-family-access" data-id="${escapeHtml(row.student.id)}">Administrar</button></td></tr>`}).join(''):'<tr><td colspan="7">No se encontraron cuentas con esos filtros.</td></tr>';
   updateFamilyAccessSelectionCount()
 }
 function selectedFamilyAccessIds(){return Array.from(familyAccessSelection)}
@@ -20,7 +83,23 @@ function selectedFamilyAccessRows(){const ids=new Set(selectedFamilyAccessIds())
 function familyCredentialFromRow(row){const a=row?.account;if(!a?.temporaryPassword)return null;return {studentId:row.student.id,studentName:row.student.name,username:a.username,password:a.temporaryPassword,expiresAt:a.temporaryExpiresAt}}
 function updateFamilyAccessSelectionCount(){const count=selectedFamilyAccessIds().length;const label=$('#familyAccessSelectedCount');if(label)label.textContent=`${count} seleccionado${count===1?'':'s'}`;const visible=familyAccessFilteredRows().map(row=>String(row.student.id)),selectedVisible=visible.filter(id=>familyAccessSelection.has(id)).length,master=$('#familyAccessSelectAll');if(master){master.checked=visible.length>0&&selectedVisible===visible.length;master.indeterminate=selectedVisible>0&&selectedVisible<visible.length}}
 function setFamilyAccessSelection(mode){const allowed=new Set(familyAccessFilteredRows().filter(row=>mode!=='without'||!row.account).map(row=>String(row.student.id)));if(mode==='none')familyAccessSelection.clear();else allowed.forEach(id=>familyAccessSelection.add(id));$$('[data-family-access-student]').forEach(input=>input.checked=familyAccessSelection.has(String(input.value)));updateFamilyAccessSelectionCount()}
-function applyFamilyCredentials(credentials){const byStudent=new Map((credentials||[]).map(item=>[String(item.studentId),item]));(state.directory?.rows||[]).forEach(row=>{const credential=byStudent.get(String(row.student.id));if(!credential)return;row.account=Object.assign({},row.account||{},{username:credential.username,active:true,mustChangePassword:true,temporaryPassword:credential.password,temporaryExpiresAt:Number(credential.expiresAt||0),accessRevoked:false,accessRevokedAt:''})});state.directoryLoadedAt=Date.now()}
+function applyFamilyCredentials(credentials){
+  const byStudent=new Map((credentials||[]).map(item=>[String(item.studentId),item]));
+  (state.directory?.rows||[]).forEach(row=>{
+    const credential=byStudent.get(String(row.student.id));
+    if(!credential)return;
+    row.account=Object.assign({},row.account||{},{
+      username:credential.username,
+      active:true,
+      mustChangePassword:false,
+      temporaryPassword:credential.password,
+      temporaryExpiresAt:0,
+      accessRevoked:false,
+      accessRevokedAt:''
+    });
+  });
+  state.directoryLoadedAt=Date.now();
+}
 async function generateSelectedFamilyAccess(){const ids=selectedFamilyAccessIds();if(!ids.length)return toast('Selecciona por lo menos un alumno.',true);if(!confirm(`Se crearán o renovarán ${ids.length} contraseñas temporales. Las contraseñas anteriores dejarán de funcionar. ¿Continuar?`))return;await runAction(async()=>{const result=await server('generateFamilyCredentialsBatch',ids);state.familyCredentials=result.credentials||[];applyFamilyCredentials(state.familyCredentials);renderFamilyAccess();toast(result.message+' Ya puedes mostrarlas o imprimir las seleccionadas.')})}
 function printSelectedFamilyAccess(){const credentials=selectedFamilyAccessRows().map(familyCredentialFromRow).filter(Boolean);if(!credentials.length)return toast('Los alumnos seleccionados no tienen una contraseña temporal visible. Genérala primero.',true);printFamilyCredentials(credentials)}
 async function revokeSelectedFamilyAccess(){const ids=selectedFamilyAccessIds();if(!ids.length)return toast('Selecciona por lo menos un alumno.',true);if(!confirm(`Se revocará el acceso de ${ids.length} cuenta(s). Las fichas y los registros académicos se conservarán. ¿Continuar?`))return;await runAction(async()=>{const result=await server('revokeFamilyAccessBatch',ids);state.directory=await server('getDirectoryAdminData');state.directoryLoadedAt=Date.now();renderFamilyAccess();toast(result.message)})}
@@ -135,7 +214,8 @@ function familyNumber(value){return value==null||!Number.isFinite(Number(value))
 function familyStatusClass(grade){return grade==null?'neutral':grade>=9?'success':grade>=8?'warning':'danger'}
 function familyFieldIcon(name){return name==='Lenguajes'?'▤':name.includes('Científico')?'✚':name.startsWith('Ética')?'◎':'★'}
 function familyConductFace(score){return score==null?{face:'—',label:'Sin registros'}:score>=9?{face:'😊',label:'Muy buena'}:score>=7?{face:'😐',label:'Adecuada'}:{face:'☹',label:'Requiere apoyo'}}
-function renderFamilyPortal(){const data=familyPortalData;if(!data)return;$('#familyProfileStudent').textContent=data.student.name;$('#familyStudentMeta').textContent=[data.school.group,data.school.cycle].filter(Boolean).join(' · ');$('#familySchoolName').textContent=data.school.name||'Portal familiar';if(data.profile)$('#familyProfileForm').innerHTML=directoryFieldsHtml(data,true);else $('#familyProfileForm').innerHTML='<p class="muted">Abre esta pestaña para cargar los datos familiares.</p>';renderFamilyAccount();$('#familyTrimester').value=String(data.academic.trimester||1);toggleFamilyPeriodControls();renderFamilyAcademic()}
+function renderFamilyPortal(){const data=familyPortalData;if(!data)return;$('#familyProfileStudent').textContent=data.student.name;$('#familyStudentMeta').textContent=[data.school.group,data.school.cycle].filter(Boolean).join(' · ');$('#familySchoolName').textContent=data.school.name||'Portal familiar';if(data.profile)$('#familyProfileForm').innerHTML=directoryFieldsHtml(data,true);else $('#familyProfileForm').innerHTML='<p class="muted">Abre esta pestaña para cargar los datos familiares.</p>';renderFamilyAccount();$('#familyTrimester').value=String(data.academic.trimester||1);toggleFamilyPeriodControls();renderFamilyAcademic();
+  checkAndNotifyIncompleteFamilyProfile();}
 function renderFamilyAcademic(){const academic=familyPortalData?.academic;if(!academic)return;const fields=academic.fields||[],summary=academic.taskSummary||{},periodLabel=academic.periodLabel||('Trimestre '+(academic.trimester||1));const grades=fields.map(field=>field.grade).filter(value=>value!=null),average=grades.length?grades.reduce((a,b)=>a+Number(b),0)/grades.length:null;const attendance=fields.map(field=>field.scores?.Asistencia).filter(value=>value!=null),attendanceScore=attendance.length?attendance.reduce((a,b)=>a+Number(b),0)/attendance.length:null;const conducts=fields.map(field=>field.scores?.Conducta).filter(value=>value!=null),conductScore=conducts.length?conducts.reduce((a,b)=>a+Number(b),0)/conducts.length:null,conduct=familyConductFace(conductScore);$('#familyUpdatedAt').textContent='Actualizado: '+new Date(academic.updatedAt).toLocaleString('es-MX',{dateStyle:'medium',timeStyle:'short'});$('#familyOverview').innerHTML=`<p class="family-period-label">${escapeHtml(periodLabel)}</p><div class="family-overview-grid"><article class="family-metric"><span>Tareas realizadas</span><strong>${summary.completed||0} de ${summary.total||0}</strong><div class="family-progress"><i style="width:${Math.min(summary.percentage||0,100)}%"></i></div><small>${summary.percentage||0}% de cumplimiento</small></article><article class="family-metric"><span>Promedio provisional</span><strong>${familyNumber(average)}</strong><small>Promedio de los 4 campos formativos</small></article><article class="family-metric"><span>Asistencia registrada</span><strong>${familyNumber(attendanceScore)}</strong><small>Componente actual de asistencia</small></article><article class="family-metric"><span>Conducta</span><strong>${conduct.face} ${conduct.label}</strong><small>${familyNumber(conductScore)} de 10</small></article></div><article class="family-info-note"><b>Información en proceso.</b> Los resultados cambian cuando el maestro agrega tareas, asistencias, participación, conducta o examen.</article><div class="family-field-preview">${fields.map(field=>`<article><span>${familyFieldIcon(field.name)}</span><div><h3>${escapeHtml(field.name)}</h3><p>${field.completed} de ${field.total} tareas · Calificación ${familyNumber(field.grade)}</p>${field.sources?.length>1?`<small>Matemático ${familyNumber(field.sources[0].grade)} · Científico ${familyNumber(field.sources[1].grade)}</small>`:''}</div></article>`).join('')}</div>`;$('#familyTasks').innerHTML=`<div class="family-page-title"><div><p class="eyebrow">${escapeHtml(periodLabel)}</p><h2>Tareas</h2></div><strong>${summary.completed||0} de ${summary.total||0}</strong></div><p class="muted">Se muestran tareas entregadas, incompletas, no entregadas y pendientes de evaluar. Matemático y Científico se reúnen en Saberes y Pensamiento Científico.</p><div class="family-task-fields">${fields.map((field,index)=>familyTaskFieldHtml(field,index)).join('')}</div>`;$('#familyGrades').innerHTML=familyGradesHtml(fields)}
 function familyTaskFieldHtml(field,index){const percentage=field.total?Math.round(field.completed*1000/field.total)/10:0;const sourceDetail=field.sources?.length>1?`<div class="family-source-pills">${field.sources.map(source=>`<span>${escapeHtml(source.name.replace('Saberes y Pensamiento ',''))}: ${source.completed}/${source.total}</span>`).join('')}</div>`:'';const pending=field.pending||[];return `<article class="family-task-card"><div class="family-task-head"><div class="family-field-icon">${familyFieldIcon(field.name)}</div><div><h3>${escapeHtml(field.name)}</h3><p><b>${field.completed} de ${field.total}</b> tareas realizadas · ${pending.length} pendientes</p></div></div><div class="family-progress"><i style="width:${percentage}%"></i></div>${sourceDetail}<button class="btn small" data-action="toggle-family-pending" data-index="${index}">${pending.length?'Ver pendientes':'Sin tareas pendientes'}</button><div id="familyPending${index}" class="family-pending-list hidden-control">${pending.length?pending.map(task=>`<div><span class="family-pending-state">${escapeHtml(task.status)}</span><h4>${escapeHtml(task.name)}</h4><p>${escapeHtml(formatDateShort(task.date))}${task.start?' · '+escapeHtml(formatTime(task.start)):''} · ${escapeHtml(task.source)}</p><small>${escapeHtml(task.project||'Sin proyecto')}</small></div>`).join(''):'<p>El alumno no tiene tareas pendientes en este campo.</p>'}</div></article>`}
 function familyGradesHtml(fields){const weights=fields.find(field=>field.weights?.length)?.weights||[];return `<div class="family-page-title"><div><p class="eyebrow">EVALUACIÓN CONTINUA</p><h2>Calificaciones</h2></div><span class="family-provisional">PROVISIONALES</span></div><article class="family-info-note">La calificación se actualiza automáticamente. Los criterios que todavía no tienen registros no se cuentan como cero.</article>${weights.length?`<article class="family-weight-card"><h3>Ponderación definida por el maestro</h3><div>${weights.map(weight=>`<span>${escapeHtml(weight.criterio)} <b>${Number(weight.porcentaje)}%</b></span>`).join('')}</div></article>`:''}<div class="family-grade-grid">${fields.map((field,index)=>`<article class="family-grade-card ${familyStatusClass(field.grade)}"><div><span class="family-field-icon">${familyFieldIcon(field.name)}</span><h3>${escapeHtml(field.name)}</h3></div><strong>${familyNumber(field.grade)}</strong>${field.sources?.length>1?`<p>Matemático: <b>${familyNumber(field.sources[0].grade)}</b> · Científico: <b>${familyNumber(field.sources[1].grade)}</b></p>`:`<p>${field.completed} de ${field.total} tareas realizadas</p>`}<details><summary>Ver desglose</summary>${(field.weights||[]).map(weight=>`<div class="family-grade-line"><span>${escapeHtml(weight.criterio)} · ${Number(weight.porcentaje)}%</span><b>${familyNumber(field.scores?.[weight.criterio])}</b></div>`).join('')||'<p>Sin registros en este periodo.</p>'}</details></article>`).join('')}</div><p class="family-grade-foot">No es la calificación final del trimestre.</p>`}

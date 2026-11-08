@@ -112,18 +112,50 @@ function bindUI(){
   // Soporte para botón Atrás del navegador y celular (Android / PC)
   window.addEventListener('popstate', (e) => {
     const stateView = e.state?.view;
-    const hashView = window.location.hash.replace(/^#/, '');
-    const viewToRestore = stateView || hashView || 'dashboard';
+    const rawHash = window.location.hash.replace(/^#/, '');
+    const cleanHash = rawHash.split('?')[0];
+    const viewToRestore = stateView || cleanHash || 'dashboard';
     showView(viewToRestore, false);
   });
 
   // Restaurar vista desde hash en URL si existe al abrir el sistema
-  const initialHash = window.location.hash.replace(/^#/, '');
-  if (initialHash && VIEW_TITLES[initialHash]) {
-    setTimeout(() => showView(initialHash, false), 60);
+  const rawInitial = window.location.hash.replace(/^#/, '');
+  const cleanInitial = rawInitial.split('?')[0];
+  if (cleanInitial && VIEW_TITLES[cleanInitial]) {
+    setTimeout(() => showView(cleanInitial, false), 60);
   }
 }
 const actions={
+  'open-student-record': btn => window.openStudentRecord && window.openStudentRecord(btn.dataset.id),
+  'view-student-in-directory': btn => {
+    const studentId = btn.dataset.id;
+    const student = (state.students || []).find(s => String(s.id) === String(studentId));
+    if (student) {
+      if (typeof openDirectory === 'function') openDirectory();
+      else showView('directory');
+      const search = document.getElementById('directorySearch');
+      if (search) {
+        search.value = student.apellidoPaterno || student.nombres || student.nombre || '';
+        if (typeof renderDirectory === 'function') renderDirectory();
+      }
+    }
+  },
+  'open-student-attendance': btn => {
+    if (typeof openAttendance === 'function') openAttendance();
+    else showView('attendance');
+    const select = document.getElementById('attendanceStudent');
+    if (select) {
+      select.value = btn.dataset.id;
+      if (typeof toggleAttendanceReportMode === 'function') toggleAttendanceReportMode();
+    }
+  },
+  'open-student-observations': () => {
+    showView('observations');
+    if (typeof window.loadObservations === 'function') window.loadObservations();
+  },
+  'open-styles-student': () => {
+    showView('styles');
+  },
   'logout':()=>logout(),
   'download-backup': () => window.downloadGroupBackup && window.downloadGroupBackup(),
   'test-supabase': async () => {
@@ -158,6 +190,7 @@ const actions={
     }
   },
   'send-whatsapp-student': btn => window.openWhatsappDialog && window.openWhatsappDialog(btn.dataset.id, btn.dataset.phone, btn.dataset.name),
+  'open-import-attendance-dialog': () => window.openImportAttendanceDialog && window.openImportAttendanceDialog(),
   'new-student':()=>openStudent(),
   'new-project':()=>openProject(),
   'go-daily':()=>openClassForm(),
@@ -218,6 +251,7 @@ const actions={
   'select-all-family-access':()=>setFamilyAccessSelection('visible'),
   'select-without-family-access':()=>setFamilyAccessSelection('without'),
   'clear-family-access':()=>setFamilyAccessSelection('none'),
+  'regenerate-all-family-passwords-no-expiry': () => window.regenerateAllFamilyPasswordsNoExpiry && window.regenerateAllFamilyPasswordsNoExpiry(),
   'generate-selected-family-access':generateSelectedFamilyAccess,
   'print-selected-family-access':printSelectedFamilyAccess,
   'revoke-selected-family-access':revokeSelectedFamilyAccess,
@@ -257,8 +291,8 @@ function showView(id, pushHistory = true){
     id = 'dashboard';
   }
 
-  $('.view').forEach(v=>v.classList.toggle('active',v.id===id));
-  $('.nav-item').forEach(b=>{
+  $$('.view').forEach(v=>v.classList.toggle('active',v.id===id));
+  $$('.nav-item').forEach(b=>{
     const isActive=b.dataset.view===id;
     b.classList.toggle('active',isActive);
     if(isActive){
@@ -266,9 +300,10 @@ function showView(id, pushHistory = true){
       if(parentGroup) parentGroup.open=true;
     }
   });
-  $('.nav-group').forEach(grp=>{
+  $$('.nav-group').forEach(grp=>{
     grp.classList.toggle('has-active',Boolean(grp.querySelector('.nav-item.active')));
   });
+  if (id === 'student-record' && window.initStudentRecordModule) window.initStudentRecordModule();
   if (id === 'settings' && window.updateSettingsStats) window.updateSettingsStats();
   const title=$('#currentViewTitle');
   if(title)title.textContent=VIEW_TITLES[id]||'Carpeta Académica';
