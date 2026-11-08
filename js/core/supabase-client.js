@@ -30,7 +30,6 @@ async function testSupabaseConnection() {
   const latency = Math.round(performance.now() - startTime);
 
   if (error) {
-    // Si la tabla aún no existe
     if (error.code === 'PGRST205') {
       return {
         ok: false,
@@ -54,7 +53,7 @@ async function testSupabaseConnection() {
 async function syncStudentsToSupabase() {
   const sb = getSupabase();
   if (!sb) throw new Error('Supabase no disponible');
-  const students = state.students || [];
+  const students = (typeof state !== 'undefined' && state.students) ? state.students : [];
   if (!students.length) throw new Error('No hay alumnos cargados en memoria para sincronizar.');
 
   const payload = students.map((s, idx) => ({
@@ -76,7 +75,44 @@ async function syncStudentsToSupabase() {
   return payload.length;
 }
 
+// Acciones directas para la interfaz de usuario (evita problemas de caché de scripts)
+async function testSupabaseConnectionUI() {
+  const el = document.getElementById('supabaseConnectionStatus');
+  if (el) el.innerHTML = '<span class="status-indicator warning"></span> Probando conexión con Supabase...';
+  try {
+    const res = await testSupabaseConnection();
+    if (el) {
+      if (res.ok) {
+        el.innerHTML = '<span class="status-indicator success" style="background:#10b981;display:inline-block;width:10px;height:10px;border-radius:50%;"></span> <span style="color:#059669;font-weight:700;">✓ Conectado (' + res.latency + ' ms) · En línea</span>';
+        if (typeof window.toast === 'function') window.toast('✓ ' + res.message);
+        else alert('✓ ' + res.message);
+      } else if (res.needsSchema) {
+        el.innerHTML = '<span class="status-indicator warning" style="background:#f59e0b;display:inline-block;width:10px;height:10px;border-radius:50%;"></span> <span style="color:#d97706;font-weight:700;">⚠️ Conectado · Falta ejecutar tablas</span>';
+        if (typeof window.toast === 'function') window.toast('⚠️ ' + res.message, true);
+        else alert('⚠️ ' + res.message);
+      }
+    }
+  } catch (err) {
+    if (el) el.innerHTML = '<span class="status-indicator danger" style="background:#ef4444;display:inline-block;width:10px;height:10px;border-radius:50%;"></span> <span style="color:#dc2626;font-weight:700;">❌ Error de conexión: ' + err.message + '</span>';
+    alert('Error al conectar con Supabase: ' + err.message);
+  }
+}
+
+async function syncStudentsToSupabaseUI() {
+  try {
+    if (typeof window.toast === 'function') window.toast('Sincronizando alumnos con Supabase...');
+    const count = await syncStudentsToSupabase();
+    const msg = '✓ ¡Éxito! ' + count + ' alumnos sincronizados y respaldados en la nube de Supabase.';
+    if (typeof window.toast === 'function') window.toast(msg);
+    alert(msg);
+  } catch (err) {
+    alert('Aviso de sincronización: ' + err.message);
+  }
+}
+
 window.SUPABASE_CONFIG = SUPABASE_CONFIG;
 window.getSupabase = getSupabase;
 window.testSupabaseConnection = testSupabaseConnection;
 window.syncStudentsToSupabase = syncStudentsToSupabase;
+window.testSupabaseConnectionUI = testSupabaseConnectionUI;
+window.syncStudentsToSupabaseUI = syncStudentsToSupabaseUI;

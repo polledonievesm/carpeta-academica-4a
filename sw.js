@@ -1,7 +1,7 @@
 /* ==========================================================================
    SERVICE WORKER - CARPETA ACADÉMICA (MODO OFFLINE Y CACHÉ)
    ========================================================================== */
-const CACHE_NAME = 'carpeta-academica-v2.1';
+const CACHE_NAME = 'carpeta-academica-v2.2';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -26,6 +26,7 @@ const STATIC_ASSETS = [
   './js/core/utils.js',
   './js/core/backup.js',
   './js/core/pwa-manager.js',
+  './js/core/supabase-client.js',
   './js/vistas/dashboard.js',
   './js/vistas/registro-diario.js',
   './js/vistas/asistencia.js',
