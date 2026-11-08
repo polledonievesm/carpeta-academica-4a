@@ -856,10 +856,10 @@
               </div>
             </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;">
-              <button type="button" class="btn secondary" data-action="test-supabase" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;font-size:13px;">
+              <button type="button" class="btn secondary" id="btnTestSupabase" onclick="window.testSupabaseConnectionUI && window.testSupabaseConnectionUI()" data-action="test-supabase" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;font-size:13px;">
                 <span>🔌</span> Probar Conexión
               </button>
-              <button type="button" class="btn primary" data-action="sync-supabase" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;font-size:13px;">
+              <button type="button" class="btn primary" id="btnSyncSupabase" onclick="window.syncStudentsToSupabaseUI && window.syncStudentsToSupabaseUI()" data-action="sync-supabase" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;font-size:13px;">
                 <span>☁️</span> Sincronizar Alumnos a la Nube
               </button>
             </div>
