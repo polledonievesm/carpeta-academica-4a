@@ -25,6 +25,11 @@ function bindUI(){
   $('#evaluationList').addEventListener('change',updateClassEvaluation);
   $('#evaluationList').addEventListener('input',updateClassEvaluation);
   $('#loginForm').addEventListener('submit',login);
+  $('#backupFileInput')?.addEventListener('change', e => {
+    if (e.target.files && e.target.files[0]) {
+      window.restoreGroupBackupFromFile(e.target.files[0]);
+    }
+  });
   $('#paymentEventForm').addEventListener('submit',createPaymentEvent);
   $('#studentPaymentForm').addEventListener('submit',saveStudentPayment);
   $('#paymentCutForm').addEventListener('submit',savePaymentCut);
@@ -65,6 +70,39 @@ function bindUI(){
 }
 const actions={
   'logout':()=>logout(),
+  'download-backup': () => window.downloadGroupBackup && window.downloadGroupBackup(),
+  'test-supabase': async () => {
+    const el = document.getElementById('supabaseConnectionStatus');
+    if (el) el.innerHTML = '<span class="status-indicator warning"></span> Probando conexión con Supabase...';
+    try {
+      if (typeof window.testSupabaseConnection !== 'function') throw new Error('Cliente no disponible');
+      const res = await window.testSupabaseConnection();
+      if (el) {
+        if (res.ok) {
+          el.innerHTML = '<span class="status-indicator success" style="background:#10b981;"></span> <span style="color:#059669;">Conectado (' + res.latency + ' ms) · Listo</span>';
+          if (typeof window.toast === 'function') window.toast('✓ ' + res.message);
+        } else if (res.needsSchema) {
+          el.innerHTML = '<span class="status-indicator warning" style="background:#f59e0b;"></span> <span style="color:#d97706;">Conectado · Tablas pendientes en SQL Editor</span>';
+          if (typeof window.toast === 'function') window.toast('⚠️ ' + res.message, true);
+        }
+      }
+    } catch (err) {
+      if (el) el.innerHTML = '<span class="status-indicator danger" style="background:#ef4444;"></span> <span style="color:#dc2626;">Error de conexión</span>';
+      if (typeof window.toast === 'function') window.toast('Error Supabase: ' + err.message, true);
+    }
+  },
+  'sync-supabase': async () => {
+    try {
+      if (typeof window.syncStudentsToSupabase !== 'function') throw new Error('Cliente no disponible');
+      if (typeof window.toast === 'function') window.toast('Sincronizando alumnos con Supabase...');
+      const count = await window.syncStudentsToSupabase();
+      if (typeof window.toast === 'function') window.toast('✓ ' + count + ' alumnos sincronizados en la nube.');
+    } catch (err) {
+      if (typeof window.toast === 'function') window.toast('Error al sincronizar: ' + err.message, true);
+      alert('Aviso de sincronización: ' + err.message);
+    }
+  },
+  'send-whatsapp-student': btn => window.openWhatsappDialog && window.openWhatsappDialog(btn.dataset.id, btn.dataset.phone, btn.dataset.name),
   'new-student':()=>openStudent(),
   'new-project':()=>openProject(),
   'go-daily':()=>openClassForm(),
@@ -170,6 +208,7 @@ function showView(id){
   $$('.nav-group').forEach(grp=>{
     grp.classList.toggle('has-active',Boolean(grp.querySelector('.nav-item.active')));
   });
+  if (id === 'settings' && window.updateSettingsStats) window.updateSettingsStats();
   const title=$('#currentViewTitle');
   if(title)title.textContent=VIEW_TITLES[id]||'Carpeta Académica';
   $('#sidebar').classList.remove('open');

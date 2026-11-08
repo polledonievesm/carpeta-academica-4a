@@ -3,7 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b315d">
+    <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#073B61">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="IA Polledo">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <title>Carpeta Académica</title>
     <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/sidebar.css">
@@ -183,7 +188,10 @@
           <span class="sync-dot"></span>
           <span id="gasSyncText">Conectando con Google…</span>
         </div>
-        <div class="teacher"><button class="avatar" data-action="logout" title="Cerrar sesión" aria-label="Cerrar sesión">M</button></div>
+        <div class="teacher">
+        <button id="pwaInstallBtn" class="btn primary small" style="display:none;align-items:center;gap:6px;padding:6px 12px;font-size:12px;background:#12B8B5;border-color:#12B8B5;color:#ffffff;font-weight:700;border-radius:8px;">
+          <span>📲</span> Instalar App
+        </button><button class="avatar" data-action="logout" title="Cerrar sesión" aria-label="Cerrar sesión">M</button></div>
       </header>
 
       <div id="loading" class="loading hidden" aria-hidden="true">Preparando tu carpeta académica…</div>
@@ -777,8 +785,86 @@
         <article class="panel"><div class="section-head"><div><h2>Fichas recibidas</h2><p class="muted">Borradores, fichas enviadas, correcciones y aprobaciones.</p></div><input id="enrollmentAdminSearch" class="input compact-input" placeholder="Buscar alumno, CURP o correo"></div><div id="enrollmentAdminList" class="enrollment-admin-list"></div></article>
       </section>
 
-      <section id="settings" class="view empty-view">
-        <div class="empty-icon">⚙</div><h1>Configuración</h1><p>Ciclo escolar, grupo, catálogos, rúbricas y parámetros del sistema.</p><span class="badge">Base instalada</span>
+      <section id="settings" class="view">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">SISTEMA Y SEGURIDAD</p>
+            <h1>Configuración y Copias de Seguridad</h1>
+            <p class="muted">Administra el ciclo escolar, respaldos en 1 clic y estado del almacenamiento local.</p>
+          </div>
+          <span class="badge">v2.1 Modular</span>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="panel">
+            <h2 style="display:flex;align-items:center;gap:8px;">
+              <span>💾</span> Copia de Seguridad del Grupo (Respaldo en 1 Clic)
+            </h2>
+            <p class="muted" style="margin-bottom:18px;">
+              Descarga un archivo seguro con todos tus alumnos, asistencias, tareas calificadas, proyectos y configuraciones. Puedes guardarlo en tu computadora o memoria USB como respaldo intocable.
+            </p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+              <button type="button" class="btn primary" data-action="download-backup" style="display:inline-flex;align-items:center;gap:8px;padding:12px 18px;font-size:14px;">
+                <span>📥</span> Descargar Copia de Seguridad (.json)
+              </button>
+              <label class="btn" style="display:inline-flex;align-items:center;gap:8px;padding:12px 18px;font-size:14px;cursor:pointer;">
+                <span>📤</span> Restaurar desde Respaldo
+                <input type="file" id="backupFileInput" accept=".json" style="display:none;" data-action="restore-backup-file">
+              </label>
+            </div>
+            <div id="backupStatusNote" class="integration-note" style="display:none;"></div>
+          </div>
+
+          <div class="panel">
+            <h2 style="display:flex;align-items:center;gap:8px;">
+              <span>📊</span> Estado del Sistema
+            </h2>
+            <div class="quick-panel" id="settingsSystemStats">
+              <div style="padding:10px;border:1px solid var(--line);border-radius:10px;display:flex;justify-content:space-between;align-items:center;">
+                <span class="muted">Alumnos en memoria:</span>
+                <strong id="settingsStudentCount">0</strong>
+              </div>
+              <div style="padding:10px;border:1px solid var(--line);border-radius:10px;display:flex;justify-content:space-between;align-items:center;">
+                <span class="muted">Proyectos registrados:</span>
+                <strong id="settingsProjectCount">0</strong>
+              </div>
+              <div style="padding:10px;border:1px solid var(--line);border-radius:10px;display:flex;justify-content:space-between;align-items:center;">
+                <span class="muted">Ciclo escolar:</span>
+                <strong>2026 - 2027</strong>
+              </div>
+              <div style="padding:10px;border:1px solid var(--line);border-radius:10px;display:flex;justify-content:space-between;align-items:center;">
+                <span class="muted">Grado y grupo:</span>
+                <strong>4.° Grado · Grupo A</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2 style="display:flex;align-items:center;gap:8px;">
+              <span>⚡</span> Base de Datos en la Nube (Supabase)
+            </h2>
+            <p class="muted" style="margin-bottom:14px;">
+              Conectado a PostgreSQL en la nube para guardar calificaciones y asistencias a ultra-alta velocidad (sub-100 ms).
+            </p>
+            <div style="background:var(--bg-subtle,#f8fafc);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <span class="muted" style="font-size:12px;">Servidor Supabase:</span>
+                <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:11px;">wdnzjopfrpkqomsoywwu</span>
+              </div>
+              <div id="supabaseConnectionStatus" style="font-size:13px;display:flex;align-items:center;gap:6px;font-weight:600;color:var(--text-muted);">
+                <span class="status-indicator warning"></span> Listo para vincular esquema
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button type="button" class="btn secondary" data-action="test-supabase" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;font-size:13px;">
+                <span>🔌</span> Probar Conexión
+              </button>
+              <button type="button" class="btn primary" data-action="sync-supabase" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;font-size:13px;">
+                <span>☁️</span> Sincronizar Alumnos a la Nube
+              </button>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
@@ -981,6 +1067,11 @@
   <script src="js/core/auth-boot.js" defer></script>
   <script src="js/core/navigation.js" defer></script>
   <script src="js/core/utils.js" defer></script>
+  <script src="js/core/backup.js" defer></script>
+  <script src="js/core/pwa-manager.js" defer></script>
+  <!-- Conector de Base de Datos Supabase (Ultra Rápida) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="js/core/supabase-client.js" defer></script>
 
   <!-- Controladores Modulares por Vista -->
   <script src="js/vistas/dashboard.js" defer></script>
