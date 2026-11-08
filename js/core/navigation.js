@@ -3,10 +3,51 @@
    ========================================================================== */
 function bindUI(){
   ['click','keydown','touchstart'].forEach(type=>document.addEventListener(type,()=>{if(document.body.classList.contains('family-mode'))resetFamilyIdleTimer()},{passive:true}));
-  $$('.nav-item').forEach(b=>b.addEventListener('click',()=>b.dataset.view==='payments'?openPayments():b.dataset.view==='directory'?openDirectory():b.dataset.view==='family-access'?openFamilyAccess():b.dataset.view==='grades'?openGrades():b.dataset.view==='attendance'?openAttendance():b.dataset.view==='enrollment-admin'?openEnrollmentAdmin():b.dataset.view==='daily'?openClassForm():b.dataset.view==='observations'?(window.loadObservations?window.loadObservations():showView('observations')):b.dataset.view==='pda-observations'?(window.openPdaObservations?window.openPdaObservations():showView('pda-observations')):showView(b.dataset.view)));
+  $$('.nav-item').forEach(b=>b.addEventListener('click',()=>{
+    closeMobileSidebarNav();
+    b.dataset.view==='payments'?openPayments():b.dataset.view==='directory'?openDirectory():b.dataset.view==='family-access'?openFamilyAccess():b.dataset.view==='grades'?openGrades():b.dataset.view==='attendance'?openAttendance():b.dataset.view==='enrollment-admin'?openEnrollmentAdmin():b.dataset.view==='daily'?openClassForm():b.dataset.view==='observations'?(window.loadObservations?window.loadObservations():showView('observations')):b.dataset.view==='pda-observations'?(window.openPdaObservations?window.openPdaObservations():showView('pda-observations')):showView(b.dataset.view);
+  }));
   $$('[data-view-link]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.viewLink)));
   document.addEventListener('click',e=>{const close=e.target.closest('[data-close]');if(close){$('#'+close.dataset.close)?.close();return}const a=e.target.closest('[data-action]');if(!a)return;actions[a.dataset.action]?.(a)});
-  $('#menuButton').addEventListener('click',()=>$('#sidebar').classList.toggle('open'));
+  // Control de apertura/cierre en móvil y colapso en PC
+  if (localStorage.getItem('carpeta_sidebar_collapsed') === '1' && window.innerWidth > 900) {
+    $('#sidebar')?.classList.add('collapsed');
+    $('.main')?.classList.add('sidebar-collapsed');
+  }
+
+  function toggleSidebarNav() {
+    if (window.innerWidth <= 900) {
+      const sidebar = $('#sidebar');
+      const backdrop = $('#sidebarBackdrop');
+      const isOpen = sidebar ? sidebar.classList.toggle('open') : false;
+      if (backdrop) backdrop.classList.toggle('active', isOpen);
+    } else {
+      const sidebar = $('#sidebar');
+      const main = $('.main');
+      if (sidebar) {
+        const isCollapsed = sidebar.classList.toggle('collapsed');
+        if (main) main.classList.toggle('sidebar-collapsed', isCollapsed);
+        localStorage.setItem('carpeta_sidebar_collapsed', isCollapsed ? '1' : '0');
+      }
+    }
+  }
+
+  function closeMobileSidebarNav() {
+    if (window.innerWidth <= 900) {
+      $('#sidebar')?.classList.remove('open');
+      $('#sidebarBackdrop')?.classList.remove('active');
+    }
+  }
+
+  $('#menuButton')?.addEventListener('click', toggleSidebarNav);
+  $('#sidebarCollapse')?.addEventListener('click', () => {
+    if (window.innerWidth <= 900) {
+      closeMobileSidebarNav();
+    } else {
+      toggleSidebarNav();
+    }
+  });
+  $('#sidebarBackdrop')?.addEventListener('click', closeMobileSidebarNav);
   $('#studentSearch').addEventListener('input',renderStudents);
   $('#projectSearch').addEventListener('input',renderProjects);
   $('#projectStatus').addEventListener('change',renderProjects);
@@ -211,6 +252,7 @@ function showView(id){
   if (id === 'settings' && window.updateSettingsStats) window.updateSettingsStats();
   const title=$('#currentViewTitle');
   if(title)title.textContent=VIEW_TITLES[id]||'Carpeta Académica';
-  $('#sidebar').classList.remove('open');
+  $('#sidebar')?.classList.remove('open');
+  $('#sidebarBackdrop')?.classList.remove('active');
   window.scrollTo(0,0);
 }
