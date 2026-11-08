@@ -1,0 +1,596 @@
+/* ==========================================================================
+   MÓDULO: EXPEDIENTE DEL ALUMNO (AISLADO AL 100%)
+   Todos los estilos pertenecen exclusivamente al contenedor .student-record-module
+   ========================================================================== */
+
+.student-record-module {
+  box-sizing: border-box;
+  padding: 24px;
+}
+
+/* 1. Panel del Buscador Inicial */
+.student-record-module .student-record-search-panel {
+  background: var(--white, #ffffff);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow, 0 8px 24px rgba(14, 49, 85, 0.08));
+  border: 1px solid var(--line, #dbe5ec);
+  margin-bottom: 20px;
+}
+
+.student-record-module .student-record-search-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.student-record-module .student-record-search-input-wrap {
+  position: relative;
+  flex: 1 1 320px;
+}
+
+.student-record-module .student-record-search-input-wrap svg {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted, #65798b);
+  pointer-events: none;
+  width: 18px;
+  height: 18px;
+}
+
+.student-record-module .student-record-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px 12px 42px;
+  border: 1.5px solid var(--line, #dbe5ec);
+  border-radius: 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink, #102a43);
+  background: #f8fafc;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.student-record-module .student-record-search-input:focus {
+  outline: none;
+  border-color: var(--teal, #12B8B5);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(18, 184, 181, 0.15);
+}
+
+.student-record-module .student-record-filters {
+  display: flex;
+  gap: 8px;
+}
+
+.student-record-module .student-record-filter-btn {
+  border: 1px solid var(--line, #dbe5ec);
+  background: #f8fafc;
+  color: var(--muted, #65798b);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.student-record-module .student-record-filter-btn.active {
+  background: var(--teal, #12B8B5);
+  border-color: var(--teal, #12B8B5);
+  color: #ffffff;
+}
+
+.student-record-module .student-record-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.student-record-module .student-record-student-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--line, #dbe5ec);
+  border-radius: 12px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.student-record-module .student-record-student-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--teal, #12B8B5);
+  box-shadow: 0 6px 16px rgba(18, 184, 181, 0.12);
+}
+
+/* 2. Encabezado del Alumno */
+.student-record-module .student-record-header-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: var(--shadow, 0 8px 24px rgba(14, 49, 85, 0.08));
+  border: 1px solid var(--line, #dbe5ec);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.student-record-module .student-record-header-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.student-record-module .student-record-avatar {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: #dff5f4;
+  color: var(--navy, #0b315d);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Nunito', 'Segoe UI', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  flex-shrink: 0;
+  border: 2px solid #ffffff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+}
+
+.student-record-module .student-record-meta-wrap h2 {
+  margin: 0 0 4px 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--navy, #0b315d);
+  font-family: 'Nunito', 'Segoe UI', sans-serif;
+  line-height: 1.2;
+}
+
+.student-record-module .student-record-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted, #65798b);
+  flex-wrap: wrap;
+}
+
+.student-record-module .student-record-header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* 3. Pestañas de Navegación */
+.student-record-module .student-record-nav-desktop {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1.5px solid var(--line, #dbe5ec);
+  margin-bottom: 22px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.student-record-module .student-record-tab-btn {
+  border: 0;
+  background: transparent;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted, #65798b);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.student-record-module .student-record-tab-btn:hover {
+  color: var(--navy, #0b315d);
+}
+
+.student-record-module .student-record-tab-btn.active {
+  color: var(--teal, #12B8B5);
+  border-bottom-color: var(--teal, #12B8B5);
+}
+
+.student-record-module .student-record-nav-mobile {
+  display: none;
+  margin-bottom: 18px;
+}
+
+.student-record-module .student-record-tab-select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line, #dbe5ec);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy, #0b315d);
+  background: #ffffff;
+}
+
+/* 4. Estructura de Secciones */
+.student-record-module .student-record-kpis-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.student-record-module .student-record-kpi-card {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--line, #dbe5ec);
+  box-shadow: var(--shadow, 0 8px 24px rgba(14, 49, 85, 0.08));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.student-record-module .student-record-kpi-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.student-record-module .student-record-kpi-icon.promedio { background: #e0f2fe; color: #0284c7; }
+.student-record-module .student-record-kpi-icon.asistencia { background: #dcfce7; color: #16a34a; }
+.student-record-module .student-record-kpi-icon.tareas { background: #fef9c3; color: #ca8a04; }
+.student-record-module .student-record-kpi-icon.incidencias { background: #fee2e2; color: #dc2626; }
+
+.student-record-module .student-record-kpi-details span {
+  font-size: 12px;
+  color: var(--muted, #65798b);
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+
+.student-record-module .student-record-kpi-details strong {
+  font-size: 22px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 900;
+  color: var(--ink, #102a43);
+}
+
+.student-record-module .student-record-stage-notice {
+  background: #f8fafc;
+  border: 1.5px dashed var(--line, #dbe5ec);
+  border-radius: 14px;
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--muted, #65798b);
+  margin-top: 10px;
+}
+
+.student-record-module .student-record-stage-notice h3 {
+  margin: 0 0 6px 0;
+  color: var(--navy, #0b315d);
+  font-size: 17px;
+}
+
+.student-record-module .student-record-stage-notice p {
+  margin: 0;
+  font-size: 13.5px;
+}
+
+.student-record-module .student-record-content-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+}
+
+/* Estilos de las Pestañas Académico y Tareas (Etapa 4) */
+.student-record-module .student-record-subject-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.student-record-module .student-record-subject-card {
+  background: #f8fafc;
+  border: 1px solid var(--line, #dbe5ec);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.student-record-module .student-record-subject-card:hover {
+  background: #ffffff;
+  border-color: var(--teal, #12B8B5);
+  box-shadow: 0 4px 14px rgba(18, 184, 181, 0.1);
+}
+
+.student-record-module .student-record-task-card {
+  background: #ffffff;
+  border: 1px solid var(--line, #dbe5ec);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: all 0.15s ease;
+}
+
+.student-record-module .student-record-task-card:hover {
+  border-color: var(--teal, #12B8B5);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+}
+
+
+/* Estilos de las Pestañas Asistencia e Incidencias (Etapa 5) */
+.student-record-module .student-record-attendance-row {
+  background: #ffffff;
+  border: 1px solid var(--line, #dbe5ec);
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: all 0.15s ease;
+}
+
+.student-record-module .student-record-attendance-row:hover {
+  border-color: var(--teal, #12B8B5);
+  background: #f8fafc;
+}
+
+.student-record-module .student-record-incident-card {
+  background: #ffffff;
+  border: 1px solid var(--line, #dbe5ec);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  transition: all 0.15s ease;
+}
+
+.student-record-module .student-record-incident-card:hover {
+  border-color: var(--teal, #12B8B5);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
+}
+
+
+/* Estilos de las Pestañas Familia y Archivos (Etapa 6) */
+.student-record-module .student-record-file-card {
+  background: #ffffff;
+  border: 1px solid var(--line, #dbe5ec);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: all 0.15s ease;
+}
+
+.student-record-module .student-record-file-card:hover {
+  border-color: var(--teal, #12B8B5);
+  background: #f8fafc;
+}
+
+/* 5. Adaptación Responsiva (Móvil) */
+@media (max-width: 900px) {
+  .student-record-module .student-record-file-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .student-record-module .student-record-attendance-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .student-record-module .student-record-incident-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .student-record-module .student-record-tasks-filters {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    flex-wrap: nowrap !important;
+    scrollbar-width: thin;
+  }
+  .student-record-module .student-record-tasks-filters .btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .student-record-module .student-record-academic-period-selector {
+    width: 100%;
+  }
+  .student-record-module .student-record-academic-period-selector select {
+    width: 100% !important;
+  }
+
+  .student-record-module {
+    padding: 14px;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+  .student-record-module .student-record-subject-cards-grid {
+    grid-template-columns: 1fr;
+  }
+  .student-record-module .student-record-task-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .student-record-module .student-record-nav-desktop {
+    display: none;
+  }
+  .student-record-module .student-record-nav-mobile {
+    display: block;
+  }
+  .student-record-module .student-record-header-panel {
+    padding: 16px;
+    gap: 12px;
+    flex-direction: column;
+    align-items: stretch;
+    box-sizing: border-box;
+    width: 100%;
+  }
+  .student-record-module .student-record-header-info {
+    width: 100%;
+    gap: 12px;
+  }
+  .student-record-module .student-record-header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    box-sizing: border-box;
+  }
+  .student-record-module #studentRecordTutorQuickInfo {
+    text-align: left !important;
+    margin-right: 0 !important;
+    width: 100%;
+    font-size: 12.5px;
+    padding-top: 4px;
+    border-top: 1px solid var(--line, #dbe5ec);
+  }
+  .student-record-module #btnStudentRecordBackSearch {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+  .student-record-module .student-record-kpis-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .student-record-module .student-record-kpi-card {
+    padding: 12px 10px;
+    gap: 10px;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .student-record-module .student-record-kpi-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .student-record-module .student-record-kpi-details {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .student-record-module .student-record-kpi-details span {
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+  }
+  .student-record-module .student-record-kpi-details strong {
+    font-size: 18px;
+  }
+  .student-record-module .student-record-content-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .student-record-module .panel {
+    box-sizing: border-box;
+    width: 100%;
+  }
+}
+
+
+/* ==========================================================================
+   FORMATOS OFICIALES DE BITÁCORA Y SEGUIMIENTO (SEP QUINTANA ROO)
+   ========================================================================== */
+.bitacora-modal-dialog {
+  max-width: 780px !important;
+  width: 95vw !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  border-radius: 16px !important;
+}
+
+.checkbox-chip {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 8px 12px !important;
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #1e293b !important;
+  transition: all 0.15s ease !important;
+}
+
+.checkbox-chip:hover {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+}
+
+.checkbox-chip input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px !important;
+  accent-color: #0f766e !important;
+  cursor: pointer !important;
+}
+
+.checkbox-chip input[type="checkbox"]:checked + span {
+  color: #0f766e !important;
+  font-weight: 700 !important;
+}
+
+.bitacora-format-section {
+  animation: fadeInBitacora 0.2s ease-in-out;
+}
+
+@keyframes fadeInBitacora {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Badge de salida anticipada en asistencia */
+.badge-salida-anticipada {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #ffedd5;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
