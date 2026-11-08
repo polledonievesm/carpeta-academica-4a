@@ -108,6 +108,20 @@ function bindUI(){
     if($('#projectDialog')?.open)writeDraft($('#projectForm'),DRAFT_KEYS.project,null,'projectDraftStatus');
     if($('#view-daily')?.classList.contains('active'))writeDraft($('#classForm'),DRAFT_KEYS.classRecord,()=>({evaluations:state.classEvaluations}),'classDraftStatus');
   });
+
+  // Soporte para botón Atrás del navegador y celular (Android / PC)
+  window.addEventListener('popstate', (e) => {
+    const stateView = e.state?.view;
+    const hashView = window.location.hash.replace(/^#/, '');
+    const viewToRestore = stateView || hashView || 'dashboard';
+    showView(viewToRestore, false);
+  });
+
+  // Restaurar vista desde hash en URL si existe al abrir el sistema
+  const initialHash = window.location.hash.replace(/^#/, '');
+  if (initialHash && VIEW_TITLES[initialHash]) {
+    setTimeout(() => showView(initialHash, false), 60);
+  }
 }
 const actions={
   'logout':()=>logout(),
@@ -236,9 +250,15 @@ const actions={
   'toggle-family-pending':btn=>{const list=$('#familyPending'+btn.dataset.index);if(list){list.classList.toggle('hidden-control');btn.textContent=list.classList.contains('hidden-control')?'Ver pendientes':'Ocultar pendientes'}},
   'family-logout':familyLogout
 };
-function showView(id){
-  $$('.view').forEach(v=>v.classList.toggle('active',v.id===id));
-  $$('.nav-item').forEach(b=>{
+function showView(id, pushHistory = true){
+  if (!id) return;
+  const target = document.getElementById(id);
+  if (!target || !target.classList.contains('view')) {
+    id = 'dashboard';
+  }
+
+  $('.view').forEach(v=>v.classList.toggle('active',v.id===id));
+  $('.nav-item').forEach(b=>{
     const isActive=b.dataset.view===id;
     b.classList.toggle('active',isActive);
     if(isActive){
@@ -246,7 +266,7 @@ function showView(id){
       if(parentGroup) parentGroup.open=true;
     }
   });
-  $$('.nav-group').forEach(grp=>{
+  $('.nav-group').forEach(grp=>{
     grp.classList.toggle('has-active',Boolean(grp.querySelector('.nav-item.active')));
   });
   if (id === 'settings' && window.updateSettingsStats) window.updateSettingsStats();
@@ -254,5 +274,14 @@ function showView(id){
   if(title)title.textContent=VIEW_TITLES[id]||'Carpeta Académica';
   $('#sidebar')?.classList.remove('open');
   $('#sidebarBackdrop')?.classList.remove('active');
+
+  // Integración con historial del navegador y botón Atrás (Android / PC)
+  if (pushHistory && typeof window !== 'undefined' && window.history && typeof window.history.pushState === 'function') {
+    const currentHash = window.location.hash.replace(/^#/, '');
+    if (currentHash !== id) {
+      window.history.pushState({ view: id }, '', '#' + id);
+    }
+  }
+
   window.scrollTo(0,0);
 }

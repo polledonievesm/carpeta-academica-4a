@@ -64,7 +64,8 @@ function apiRequest(action,args=[],token=sessionToken){
     const requestId='REQ-'+Date.now()+'-'+Math.random().toString(36).slice(2);
     const iframe=document.createElement('iframe');iframe.name='bridge_'+requestId;iframe.hidden=true;document.body.appendChild(iframe);
     const form=document.createElement('form');form.method='POST';form.action=API_URL;form.target=iframe.name;form.hidden=true;
-    const fields={requestId,action,args:JSON.stringify(args),sessionToken:token||''};
+    const safeArgs = (typeof window !== 'undefined' && typeof window.sanitizePayload === 'function') ? window.sanitizePayload(args) : args;
+    const fields={requestId,action,args:JSON.stringify(safeArgs),sessionToken:token||''};
     Object.entries(fields).forEach(([name,value])=>{const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.appendChild(input)});
     document.body.appendChild(form);
     const timer=setTimeout(()=>{pendingRequests.delete(requestId);iframe.remove();reject(new Error('La conexión con Google tardó demasiado. Intenta nuevamente.'))},45000);
