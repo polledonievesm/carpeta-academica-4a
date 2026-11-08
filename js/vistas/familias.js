@@ -53,7 +53,8 @@ function directoryAdminCard(row){
   const formBadge=`<span class="directory-state ${row.complete?'success':'warning'}">${row.complete?'Ficha completa':'Ficha pendiente'}</span>`;
   const inviteText=invite?invite.status==='PENDIENTE'?`Invitación vigente hasta ${escapeHtml(new Date(invite.expiresAt).toLocaleString('es-MX'))}`:`Invitación ${escapeHtml(invite.status.toLowerCase())}`:'Sin invitación';
   const accessActions=account?`<button class="btn primary small" data-action="generate-family-credentials" data-id="${row.student.id}">Regenerar usuario y contraseña</button><button class="btn small" data-action="generate-family-reset" data-id="${row.student.id}">Crear enlace de recuperación</button><button class="btn small" data-action="toggle-family-account" data-id="${row.student.id}" data-active="${!account.active}">${account.active?'Bloquear cuenta':'Desbloquear cuenta'}</button>`:`<button class="btn primary small" data-action="generate-family-credentials" data-id="${row.student.id}">Crear usuario y contraseña</button><button class="btn small" data-action="generate-family-invite" data-id="${row.student.id}">Invitación con correo</button>${invite?.status==='PENDIENTE'?`<button class="btn small" data-action="revoke-family-invite" data-id="${row.student.id}">Cancelar invitación</button>`:''}`;
-  return `<article class="directory-card"><div class="directory-card-main"><div class="directory-card-number">${escapeHtml(row.student.apellidoPaterno?.slice(0,1)||'A')}</div><div><h3>${escapeHtml(row.student.name)}</h3><p>${escapeHtml(tutor)}${p.tutorTelefono?' · '+escapeHtml(p.tutorTelefono):''}</p><small>${escapeHtml(inviteText)}</small></div></div><div class="directory-badges">${formBadge}${accountBadge}</div><div class="directory-actions"><button class="btn small" data-action="view-directory" data-id="${row.student.id}">Ver información</button><button class="btn small" data-action="edit-directory" data-id="${row.student.id}">Editar información</button><button class="btn small" data-action="print-directory-profile" data-id="${row.student.id}">Imprimir ficha</button>${accessActions}<button class="btn danger small" data-action="delete-family-access" data-id="${row.student.id}">Borrar datos familiares</button><button class="btn danger small" data-action="directory-delete-student" data-id="${row.student.id}">Eliminar alumno</button></div></article>`;
+  return `<article class="directory-card"><div class="directory-card-main"><div class="directory-card-number">${escapeHtml(row.student.apellidoPaterno?.slice(0,1)||'A')}</div><div><h3>${escapeHtml(row.student.name)}</h3><p>${escapeHtml(tutor)}${p.tutorTelefono?' · '+escapeHtml(p.tutorTelefono):''}</p><small>${escapeHtml(inviteText)}</small></div></div><div class="directory-badges">${formBadge}${accountBadge}</div><div class="directory-actions">
+    ${p.tutorTelefono ? `<button type="button" class="btn small" data-action="send-whatsapp-student" data-id="${row.student.id}" data-phone="${escapeHtml(p.tutorTelefono)}" data-name="${escapeHtml(row.student.name)}" style="background:#25D366;border-color:#25D366;color:#ffffff;font-weight:700;display:inline-flex;align-items:center;gap:4px;">💬 WhatsApp</button>` : ''}<button class="btn small" data-action="view-directory" data-id="${row.student.id}">Ver información</button><button class="btn small" data-action="edit-directory" data-id="${row.student.id}">Editar información</button><button class="btn small" data-action="print-directory-profile" data-id="${row.student.id}">Imprimir ficha</button>${accessActions}<button class="btn danger small" data-action="delete-family-access" data-id="${row.student.id}">Borrar datos familiares</button><button class="btn danger small" data-action="directory-delete-student" data-id="${row.student.id}">Eliminar alumno</button></div></article>`;
 }
 function directoryOption(value,current){return `<option ${String(value)===String(current)?'selected':''}>${escapeHtml(value)}</option>`}
 function directoryFieldsHtml(data,family=false){
@@ -144,3 +145,37 @@ async function saveFamilyAccountSettings(e){e.preventDefault();const form=e.curr
 async function saveFamilyProfile(e){e.preventDefault();const form=e.currentTarget,payload=directoryPayloadFromForm(form);setLoading(true,'Guardando los datos familiares…');try{const result=await familyServer('saveFamilyProfile',payload);const data=result.data||{};familyPortalData.profile=data.profile||familyPortalData.profile;familyPortalData.contacts=data.contacts||familyPortalData.contacts;$('#familyProfileForm').innerHTML=directoryFieldsHtml(familyPortalData,true);familyMessage('Los datos fueron guardados con éxito.');toast('Los datos fueron guardados con éxito.')}catch(error){familyMessage(error.message,true)}finally{setLoading(false)}}
 function familyLogout(confirmFirst=true,message=''){if(confirmFirst&&!confirm('¿Cerrar la sesión familiar?'))return;familySessionToken='';clearTimeout(familyIdleTimer);localStorage.removeItem(FAMILY_SESSION_KEY);localStorage.removeItem(FAMILY_REMEMBER_KEY);sessionStorage.removeItem(FAMILY_SESSION_KEY);if(message)sessionStorage.setItem('family_logout_message',message);location.href=siteBaseUrl()+'?familia=acceso'}
 function paymentMoney(value){return new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(value)||0)}
+
+
+function openWhatsappDialog(studentId, phone, studentName) {
+  const row = state.directory?.rows.find(r => String(r.student.id) === String(studentId));
+  const sName = studentName || row?.student.name || 'Alumno(a)';
+  const tPhone = phone || row?.profile?.tutorTelefono || '';
+
+  const cleanPhone = String(tPhone).replace(/\D/g, '');
+
+  $('#whatsappDialogStudentName').textContent = sName;
+  $('#whatsappPhoneInput').value = cleanPhone;
+
+  // Redactar mensaje sugerido profesional
+  const msg = `Buenas tardes estimado(a) tutor(a) de ${sName}, le saluda el Prof. Michel de 4.° A de la Esc. Primaria Francisco Hoil Torres. Le escribo para compartirle el avance y recordatorios de la semana. Puede consultar las actividades y calificaciones en el portal escolar.`;
+  $('#whatsappMessageInput').value = msg;
+
+  const sendBtn = $('#whatsappSendBtn');
+  sendBtn.onclick = function() {
+    const finalPhone = $('#whatsappPhoneInput').value.replace(/\D/g, '');
+    const finalMsg = encodeURIComponent($('#whatsappMessageInput').value);
+    if (!finalPhone || finalPhone.length < 10) {
+      alert('Por favor introduce un número de teléfono válido de 10 dígitos.');
+      return;
+    }
+    // Prefijo 52 para México si no tiene código de país
+    const phoneWithCountry = finalPhone.length === 10 ? '52' + finalPhone : finalPhone;
+    const waUrl = `https://wa.me/${phoneWithCountry}?text=${finalMsg}`;
+    window.open(waUrl, '_blank');
+    $('#whatsappDialog').close();
+  };
+
+  $('#whatsappDialog').showModal();
+}
+window.openWhatsappDialog = openWhatsappDialog;
