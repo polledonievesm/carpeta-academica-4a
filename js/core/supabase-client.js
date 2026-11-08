@@ -56,19 +56,28 @@ async function syncStudentsToSupabase() {
   const students = (typeof state !== 'undefined' && state.students) ? state.students : [];
   if (!students.length) throw new Error('No hay alumnos cargados en memoria para sincronizar.');
 
-  const payload = students.map((s, idx) => ({
-    id: String(s.id || s.numeroLista || (idx + 1)),
-    numero_lista: s.numeroLista || (idx + 1),
-    nombre: s.nombre || s.name || 'Sin nombre',
-    apellido_paterno: s.apellidoPaterno || '',
-    apellido_materno: s.apellidoMaterno || '',
-    nombres: s.nombres || '',
-    curp: s.curp || '',
-    estilo_aprendizaje: s.estiloAprendizaje || '',
-    tutor_nombre: s.tutorNombre || '',
-    tutor_telefono: s.tutorTelefono || '',
-    updated_at: new Date().toISOString()
-  }));
+  const payload = students.map((s, idx) => {
+    const studentFullName = (typeof fullName === 'function' ? fullName(s) : '') ||
+      s.nombreCompleto ||
+      [s.apellidoPaterno, s.apellidoMaterno, s.nombres].filter(Boolean).join(' ') ||
+      s.name ||
+      s.nombre ||
+      ('Alumno ' + (s.numeroLista || idx + 1));
+
+    return {
+      id: String(s.id || s.numeroLista || (idx + 1)),
+      numero_lista: Number(s.numeroLista || (idx + 1)),
+      nombre: studentFullName,
+      apellido_paterno: s.apellidoPaterno || '',
+      apellido_materno: s.apellidoMaterno || '',
+      nombres: s.nombres || studentFullName,
+      curp: s.curp || '',
+      estilo_aprendizaje: s.estilo || s.estiloAprendizaje || '',
+      tutor_nombre: s.tutorNombre || '',
+      tutor_telefono: s.tutorTelefono || '',
+      updated_at: new Date().toISOString()
+    };
+  });
 
   const { data, error } = await sb.from('alumnos').upsert(payload, { onConflict: 'id' });
   if (error) throw error;
