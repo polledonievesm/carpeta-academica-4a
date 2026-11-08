@@ -343,7 +343,24 @@ const actions={
   'toggle-family-pending':btn=>{const list=$('#familyPending'+btn.dataset.index);if(list){list.classList.toggle('hidden-control');btn.textContent=list.classList.contains('hidden-control')?'Ver pendientes':'Ocultar pendientes'}},
   'family-logout':familyLogout
 };
-function showView(id){$$('.view').forEach(v=>v.classList.toggle('active',v.id===id));$$('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===id));const title=$('#currentViewTitle');if(title)title.textContent=VIEW_TITLES[id]||'Carpeta Académica';$('#sidebar').classList.remove('open');window.scrollTo(0,0)}
+function showView(id){
+  $$('.view').forEach(v=>v.classList.toggle('active',v.id===id));
+  $$('.nav-item').forEach(b=>{
+    const isActive=b.dataset.view===id;
+    b.classList.toggle('active',isActive);
+    if(isActive){
+      const parentGroup=b.closest('.nav-group');
+      if(parentGroup) parentGroup.open=true;
+    }
+  });
+  $$('.nav-group').forEach(grp=>{
+    grp.classList.toggle('has-active',Boolean(grp.querySelector('.nav-item.active')));
+  });
+  const title=$('#currentViewTitle');
+  if(title)title.textContent=VIEW_TITLES[id]||'Carpeta Académica';
+  $('#sidebar').classList.remove('open');
+  window.scrollTo(0,0);
+}
 function renderAll(){
   renderGreeting();
   if(!$('#dailyReportDate').value)$('#dailyReportDate').value=state.attendance?.today||new Date().toISOString().slice(0,10);
