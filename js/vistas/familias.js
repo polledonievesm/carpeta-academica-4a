@@ -379,7 +379,125 @@ async function deleteSelectedStudents(){const rows=selectedFamilyAccessRows(),id
 
 function toggleFamilyAccessPassword(button){const target=$(`[data-family-password="${CSS.escape(String(button.dataset.id))}"]`);if(!target)return;const hidden=target.textContent.includes('•');target.textContent=hidden?button.dataset.password:'••••••••••';button.textContent=hidden?'Ocultar':'Ver'}
 
-function openFamilyAccessAdmin(studentId){const row=(state.directory?.rows||[]).find(item=>String(item.student.id)===String(studentId));if(!row)return;currentFamilyAccessStudentId=String(studentId);const form=$('#familyAccessAdminForm'),a=row.account;form.elements.studentId.value=studentId;form.elements.email.value=a?.email||'';form.elements.phone.value=a?.phone||'';$('#familyAccessAdminStudent').textContent=row.student.name;$('#familyAccessAdminCredential').innerHTML=!a?'<div class="credential-empty"><strong>Sin cuenta familiar</strong><span>Genera un usuario y una contraseña para comenzar.</span></div>':`<div><span>Usuario</span><strong>${escapeHtml(a.username||'—')}</strong></div><div><span>Contraseña</span><strong>${a.temporaryPassword?escapeHtml(a.temporaryPassword):a.accessRevoked?'Acceso revocado':'Contraseña personal protegida'}</strong></div><small>${a.temporaryPassword?(!a.temporaryExpiresAt||a.temporaryExpiresAt===0?'● Permanente (Sin caducidad)':`Válida hasta ${escapeHtml(formatCancunDateTime(a.temporaryExpiresAt))}`):'Las contraseñas personales nunca se muestran.'}</small>`;$('#familyAccessAdminDialog').showModal()}
+function openFamilyAccessAdmin(studentId){
+  const row=(state.directory?.rows||[]).find(item=>String(item.student.id)===String(studentId));
+  if(!row)return;
+  currentFamilyAccessStudentId=String(studentId);
+  const form=$('#familyAccessAdminForm'),a=row.account;
+  form.elements.studentId.value=studentId;
+  form.elements.email.value=a?.email||'';
+  form.elements.phone.value=a?.phone||'';
+  $('#familyAccessAdminStudent').textContent=row.student.name;
+  
+  const credHtml = !a?'<div class="credential-empty"><strong>Sin cuenta familiar</strong><span>Genera un usuario y una contraseña para comenzar.</span></div>':`<div><span>Usuario</span><strong>${escapeHtml(a.username||'—')}</strong></div><div><span>Contraseña</span><strong>${a.temporaryPassword?escapeHtml(a.temporaryPassword):a.accessRevoked?'Acceso revocado':'Contraseña personal protegida'}</strong></div><small>${a.temporaryPassword?(!a.temporaryExpiresAt||a.temporaryExpiresAt===0?'● Permanente (Sin caducidad)':`Válida hasta ${escapeHtml(formatCancunDateTime(a.temporaryExpiresAt))}`):'Las contraseñas personales nunca se muestran.'}</small>`;
+  
+  const waSection = a ? `
+    <div id="familyAccessWhatsAppContainer" style="margin-top:12px;padding:10px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <strong style="font-size:12px;color:#166534;display:block;">Restablecimiento asistido por WhatsApp</strong>
+          <small style="font-size:11px;color:#15803d;">Enlace de un solo uso válido por 30 minutos</small>
+        </div>
+        <button type="button" class="btn small" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:600;" data-action="prepare-family-whatsapp-reset">Enviar recuperación por WhatsApp</button>
+      </div>
+      <div id="familyWhatsAppStep2" class="hidden-control" style="margin-top:10px;padding-top:10px;border-top:1px dashed #86efac;"></div>
+    </div>
+  ` : '';
+
+  $('#familyAccessAdminCredential').innerHTML = credHtml + waSection;
+  $('#familyAccessAdminDialog').showModal();
+}
+
+function normalizeMexicanPhone(raw) {
+  let digits = String(raw || '').replace(/\D/g, '');
+  if (digits.length === 13 && digits.startsWith('521')) {
+    digits = digits.slice(3);
+  } else if (digits.length === 12 && digits.startsWith('52')) {
+    digits = digits.slice(2);
+  }
+  return digits.length === 10 ? digits : null;
+}
+
+async function prepareFamilyWhatsAppReset(studentId) {
+  const row = (state.directory?.rows || []).find(item => String(item.student.id) === String(studentId));
+  if (!row) return toast('No se encontró el alumno seleccionado.', true);
+
+  const rawPhone = row.account?.phone || row.profile?.tutorTelefono || '';
+  const phone10 = normalizeMexicanPhone(rawPhone);
+
+  if (!phone10) {
+    alert(
+      '⚠️ No es posible preparar la recuperación por WhatsApp:\n\n' +
+      'El alumno no cuenta con un número celular mexicano válido de 10 dígitos registrado.\n\n' +
+      'Por favor actualiza el teléfono del tutor en la ficha familiar antes de continuar.'
+    );
+    return;
+  }
+
+  const last4 = phone10.slice(-4);
+  const tutorName = row.profile?.tutorNombres ? `${row.profile.tutorNombres} (${row.profile.tutorParentesco || 'Tutor'})` : 'Tutor registrado';
+
+  const confirmMsg = 
+    `¿Deseas generar un enlace de recuperación para la familia de ${row.student.name}?\n\n` +
+    `• Tutor: ${tutorName}\n` +
+    `• Celular destino: •••••• ${last4}\n` +
+    `• Vigencia: 30 minutos (un solo uso)\n\n` +
+    `Al confirmar, se generará el enlace oficial y aparecerá el botón para abrir WhatsApp.`;
+
+  if (!confirm(confirmMsg)) return;
+
+  const step2Box = $('#familyWhatsAppStep2');
+  if (step2Box) {
+    step2Box.innerHTML = '<span class="muted" style="font-size:12px;">Generando enlace seguro en el servidor…</span>';
+    step2Box.classList.remove('hidden-control');
+  }
+
+  try {
+    const res = await server('generateFamilyReset', String(studentId));
+    if (!res || !res.token) throw new Error(res?.message || 'No se recibió el token del servidor.');
+
+    const resetUrl = siteBaseUrl() + '?familia=acceso&recuperar=' + encodeURIComponent(res.token);
+    const message = 
+      `Estimada familia:\n\n` +
+      `Comparto el enlace oficial y seguro para restablecer la contraseña de su cuenta en el Portal Familiar de la Escuela Francisco Hoil Torres (4° A).\n\n` +
+      `Vigencia: 30 minutos (un solo uso):\n` +
+      `${resetUrl}\n\n` +
+      `Al ingresar, elija su contraseña personal.`;
+
+    const waLink = `https://wa.me/52${phone10}?text=${encodeURIComponent(message)}`;
+
+    if (step2Box) {
+      step2Box.innerHTML = `
+        <div style="background:#fff;padding:8px 10px;border-radius:6px;border:1px solid #86efac;margin-bottom:8px;">
+          <p style="margin:0 0 4px 0;font-size:12px;color:#166534;font-weight:600;">✓ Enlace oficial generado (vence en 30 minutos).</p>
+          <p style="margin:0;font-size:11px;color:#4b5563;">Pulsa el botón para abrir el chat de WhatsApp y enviar el mensaje preparado manualmente:</p>
+        </div>
+        <button type="button" class="btn primary full-button" id="btnLaunchWhatsAppDirect" style="background:#25d366;border-color:#25d366;font-weight:bold;font-size:13px;padding:8px 14px;">
+          💬 Abrir WhatsApp con mensaje preparado
+        </button>
+      `;
+      step2Box.classList.remove('hidden-control');
+
+      const btnLaunch = $('#btnLaunchWhatsAppDirect');
+      if (btnLaunch) {
+        btnLaunch.onclick = () => {
+          const win = window.open(waLink, '_blank');
+          if (!win || win.closed || typeof win.closed === 'undefined') {
+            alert('El navegador bloqueó la apertura de WhatsApp. Permite las ventanas emergentes para este sitio y vuelve a pulsar Abrir WhatsApp.');
+          } else {
+            toast('✓ Se abrió WhatsApp. Pulsa Enviar en la ventana de chat.');
+          }
+        };
+      }
+    }
+  } catch(err) {
+    if (step2Box) {
+      step2Box.innerHTML = `<span style="font-size:12px;color:#b91c1c;">⚠️ ${escapeHtml(err.message || 'Error al generar enlace.')}</span>`;
+      step2Box.classList.remove('hidden-control');
+    }
+    toast(`⚠️ No fue posible generar el enlace: ${err.message || 'Error de conexión'}`, true);
+  }
+}
 async function saveFamilyAccessRecovery(e){e.preventDefault();const form=e.currentTarget;if(!form.elements.studentId.value)return;await runAction(async()=>{const result=await server('saveFamilyRecoveryAdmin',form.elements.studentId.value,{email:form.elements.email.value,phone:form.elements.phone.value});state.directory=await server('getDirectoryAdminData');state.directoryLoadedAt=Date.now();renderFamilyAccess();openFamilyAccessAdmin(form.elements.studentId.value);toast(result.message)})}
 
 async function regenerateCurrentFamilyAccess(){
@@ -752,16 +870,108 @@ if (typeof document !== 'undefined') {
   });
 }
 
-function showFamilyPanel(id){['familyInvitationPanel','familyGroupPanel','familyLoginPanel','familyForgotPanel','familyResetPanel','familyOnboardingPanel','familyAppPanel'].forEach(panel=>$('#'+panel).classList.toggle('hidden-control',panel!==id));$('#familyMessage').classList.add('hidden-control')}
+const RECOVERY_STORAGE_KEY = 'carpeta_academica_family_reset_token';
+
+function showFamilyPanel(id){
+  ['familyInvitationPanel','familyGroupPanel','familyLoginPanel','familyForgotPanel','familyResetPanel','familyOnboardingPanel','familyAppPanel'].forEach(panel=>$('#'+panel).classList.toggle('hidden-control',panel!==id));
+  $('#familyMessage').classList.add('hidden-control');
+  if (id === 'familyLoginPanel') {
+    sessionStorage.removeItem(RECOVERY_STORAGE_KEY);
+    familyResetToken = '';
+  }
+}
 function familyMessage(message,error=false){const box=$('#familyMessage');box.textContent=message;box.classList.remove('hidden-control');box.classList.toggle('family-error',error)}
-async function startFamilyPortal(){document.body.classList.add('family-mode');$('#app').classList.add('hidden-control');$('#familyPortal').classList.remove('hidden-control');setLoading(false);try{if(familyResetToken){const result=await apiRequest('validateFamilyReset',[familyResetToken],'');$('#familyResetStudent').textContent='Cuenta de '+result.studentName;showFamilyPanel('familyResetPanel');return}if(familyGroupToken){await apiRequest('validateGroupInvitation',[familyGroupToken],'');showFamilyPanel('familyGroupPanel');return}if(familyInvitationToken&&familyInvitationToken!=='acceso'){const result=await apiRequest('validateFamilyInvitation',[familyInvitationToken],'');$('#familyInvitationStudent').textContent='Crearás el acceso para '+result.student.name+'. La invitación vence el '+formatCancunDateTime(result.expiresAt)+'.';showFamilyPanel('familyInvitationPanel');return}if(familySessionToken){await loadFamilyProfile();return}showFamilyPanel('familyLoginPanel');const logoutMessage=sessionStorage.getItem('family_logout_message');if(logoutMessage){sessionStorage.removeItem('family_logout_message');familyMessage(logoutMessage)}}catch(error){showFamilyPanel('familyLoginPanel');familyMessage(error.message,true)}}
+
+async function startFamilyPortal(){
+  document.body.classList.add('family-mode');
+  $('#app').classList.add('hidden-control');
+  $('#familyPortal').classList.remove('hidden-control');
+  setLoading(false);
+  try{
+    const urlParams = new URLSearchParams(location.search);
+    const resetParam = urlParams.get('recuperar') || '';
+    if (resetParam) {
+      sessionStorage.setItem(RECOVERY_STORAGE_KEY, resetParam);
+      familyResetToken = resetParam;
+      history.replaceState({}, '', siteBaseUrl() + '?familia=acceso');
+    } else {
+      familyResetToken = sessionStorage.getItem(RECOVERY_STORAGE_KEY) || familyResetToken || '';
+    }
+
+    if(familyResetToken){
+      try {
+        const result = await apiRequest('validateFamilyReset', [familyResetToken], '');
+        $('#familyResetStudent').textContent = 'Cuenta de ' + result.studentName;
+        showFamilyPanel('familyResetPanel');
+        return;
+      } catch (err) {
+        sessionStorage.removeItem(RECOVERY_STORAGE_KEY);
+        familyResetToken = '';
+        showFamilyPanel('familyLoginPanel');
+        familyMessage(err.message || 'El enlace de recuperación no es válido o ya fue utilizado.', true);
+        return;
+      }
+    }
+    if(familyGroupToken){await apiRequest('validateGroupInvitation',[familyGroupToken],'');showFamilyPanel('familyGroupPanel');return}
+    if(familyInvitationToken&&familyInvitationToken!=='acceso'){const result=await apiRequest('validateFamilyInvitation',[familyInvitationToken],'');$('#familyInvitationStudent').textContent='Crearás el acceso para '+result.student.name+'. La invitación vence el '+formatCancunDateTime(result.expiresAt)+'.';showFamilyPanel('familyInvitationPanel');return}
+    if(familySessionToken){await loadFamilyProfile();return}
+    showFamilyPanel('familyLoginPanel');
+    const logoutMessage=sessionStorage.getItem('family_logout_message');
+    if(logoutMessage){sessionStorage.removeItem('family_logout_message');familyMessage(logoutMessage)}
+  }catch(error){
+    showFamilyPanel('familyLoginPanel');
+    familyMessage(error.message,true);
+  }
+}
 let groupSearchTimer=0;function searchGroupStudents(){clearTimeout(groupSearchTimer);const query=$('#familyGroupSearch').value.trim();$('#familyGroupRegisterForm').classList.add('hidden-control');if(query.length<2){$('#familyGroupResults').innerHTML='';return}groupSearchTimer=setTimeout(async()=>{try{const rows=await apiRequest('searchGroupStudents',[familyGroupToken,query],'');$('#familyGroupResults').innerHTML=rows.length?rows.map(row=>`<button type="button" class="group-student-choice" data-action="select-group-student" data-id="${escapeHtml(row.id)}" data-name="${encodeURIComponent(row.name)}"><strong>${escapeHtml(row.name)}</strong><small>${row.hasPhone?'Teléfono registrado':'Requiere invitación individual'}</small></button>`).join(''):'<p class="muted">No hay coincidencias disponibles.</p>'}catch(error){familyMessage(error.message,true)}},350)}
 function selectGroupStudent(id,name){const form=$('#familyGroupRegisterForm');form.elements.studentId.value=id;$('#familyGroupStudent').textContent='Cuenta para '+name;form.classList.remove('hidden-control');form.scrollIntoView({behavior:'smooth'})}
 async function registerGroupFamilyAccount(e){e.preventDefault();const payload=formData(e.currentTarget);payload.groupToken=familyGroupToken;familyMessage('Creando la cuenta…');try{const result=await apiRequest('registerGroupFamilyAccount',[payload],'');storeFamilySession(result.token,false);familyGroupToken='';history.replaceState({},'',siteBaseUrl()+'?familia=acceso');await loadFamilyProfile()}catch(error){familyMessage(error.message,true)}}
 async function registerFamilyAccount(e){e.preventDefault();const payload=formData(e.currentTarget);payload.invitationToken=familyInvitationToken;familyMessage('Creando la cuenta…');try{const result=await apiRequest('registerFamilyAccount',[payload],'');storeFamilySession(result.token,false);familyInvitationToken='';history.replaceState({},'',siteBaseUrl()+'?familia=acceso');await loadFamilyProfile()}catch(error){familyMessage(error.message,true)}}
 async function familyLogin(e){e.preventDefault();const form=e.currentTarget,data=formData(form),remember=Boolean(form.elements.remember?.checked);familyMessage('Comprobando el acceso…');try{const result=await apiRequest('familyLogin',[data.email,data.password],'');storeFamilySession(result.token,remember);await loadFamilyProfile()}catch(error){familyMessage(error.message,true)}}
 async function requestFamilyReset(e){e.preventDefault();const data=formData(e.currentTarget);familyMessage('Enviando el enlace…');try{const result=await apiRequest('requestFamilyPasswordReset',[data.email],'');familyMessage(result.message);showFamilyPanel('familyLoginPanel');familyMessage(result.message)}catch(error){familyMessage(error.message,true)}}
-async function saveFamilyReset(e){e.preventDefault();const payload=formData(e.currentTarget);payload.resetToken=familyResetToken;familyMessage('Guardando la contraseña…');try{const result=await apiRequest('resetFamilyPassword',[payload],'');familyResetToken='';history.replaceState({},'',siteBaseUrl()+'?familia=acceso');showFamilyPanel('familyLoginPanel');familyMessage(result.message)}catch(error){familyMessage(error.message,true)}}
+
+function validateFamilyPasswordClient(password, confirmation) {
+  const value = String(password || '');
+  if (value.length < 10) return 'La contraseña debe tener al menos 10 caracteres.';
+  if (!/[A-ZÁÉÍÓÚÑ]/.test(value) || !/[a-záéíóúñ]/.test(value) || !/\d/.test(value) || !/[^A-Za-zÁÉÍÓÚáéíóúÑñ0-9]/.test(value)) {
+    return 'La contraseña debe incluir mayúscula, minúscula, número y símbolo.';
+  }
+  if (confirmation !== undefined && value !== String(confirmation || '')) return 'Las contraseñas no coinciden.';
+  return null;
+}
+
+async function saveFamilyReset(e){
+  e.preventDefault();
+  const form = e.currentTarget;
+  const password = form.elements.password.value;
+  const passwordConfirmation = form.elements.passwordConfirmation.value;
+
+  const valError = validateFamilyPasswordClient(password, passwordConfirmation);
+  if (valError) {
+    return familyMessage(valError, true);
+  }
+
+  familyMessage('Guardando la contraseña…');
+  try{
+    const payload = {
+      resetToken: familyResetToken,
+      password: password,
+      passwordConfirmation: passwordConfirmation
+    };
+    const result = await apiRequest('resetFamilyPassword', [payload], '');
+    sessionStorage.removeItem(RECOVERY_STORAGE_KEY);
+    familyResetToken = '';
+    form.reset();
+    showFamilyPanel('familyLoginPanel');
+    familyMessage(result.message);
+  }catch(error){
+    if (/no es válido|ya fue utilizado|venció|cancelad/i.test(String(error.message || ''))) {
+      sessionStorage.removeItem(RECOVERY_STORAGE_KEY);
+      familyResetToken = '';
+    }
+    familyMessage(error.message, true);
+  }
+}
 async function loadFamilyProfile(){setLoading(true,'Cargando el avance académico…',()=>loadFamilyProfile());try{resetFamilyIdleTimer();familyMessage('Consultando el avance académico…');const period={type:$('#familyPeriodType')?.value||'trimester',trimester:Number($('#familyTrimester')?.value||1),reference:''};try{familyPortalData=await familyServer('getFamilyPortalInitialData',period)}catch(error){if(!/acción familiar solicitada no está permitida/i.test(String(error.message||'')))throw error;familyPortalData=await familyServer('getFamilyPortalData',period.trimester)}renderFamilyPortal();showFamilyPanel('familyAppPanel')}catch(error){familySessionToken='';localStorage.removeItem(FAMILY_SESSION_KEY);sessionStorage.removeItem(FAMILY_SESSION_KEY);showFamilyPanel('familyLoginPanel');familyMessage(error.message,true)}finally{setLoading(false)}}
 function renderFamilyOnboarding(){const data=familyPortalData,form=$('#familyOnboardingForm'),account=data.account||{};$('#familyOnboardingStudent').textContent=data.student.name;form.elements.username.value=account.username||'';form.elements.email.value=account.email||'';form.elements.phone.value=account.phone||data.profile?.tutorTelefono||'';form.elements.password.value='';form.elements.passwordConfirmation.value='';form.elements.password.required=Boolean(account.mustChangePassword);form.elements.passwordConfirmation.required=Boolean(account.mustChangePassword);form.elements.password.closest('label').firstChild.textContent=account.mustChangePassword?'Nueva contraseña personal':'Nueva contraseña (opcional)';$('#familyOnboardingFields').innerHTML=directoryFieldsHtml(data,false)}
 async function completeFamilyOnboarding(e){e.preventDefault();const payload=directoryPayloadFromForm(e.currentTarget);familyMessage('Guardando y protegiendo la cuenta…');try{const result=await familyServer('completeFamilyOnboarding',payload);storeFamilySession(result.token,localStorage.getItem(FAMILY_REMEMBER_KEY)==='true');await loadFamilyProfile();familyMessage(result.message)}catch(error){familyMessage(error.message,true)}}
@@ -781,6 +991,17 @@ async function loadFamilyDirectoryProfile(){if(!familyPortalData)return;setLoadi
 function renderFamilyAccount(){if(!familyPortalData)return;const form=$('#familyAccountForm'),account=familyPortalData.account||{};if(!form)return;form.elements.username.value=account.username||'';form.elements.email.value=account.email||'';form.elements.phone.value=account.phone||familyPortalData.profile?.tutorTelefono||'';form.elements.password.value='';form.elements.passwordConfirmation.value=''}
 async function saveFamilyAccountSettings(e){e.preventDefault();const form=e.currentTarget,payload=formData(form);setLoading(true,'Guardando los cambios de la cuenta…');try{const result=await familyServer('saveFamilyAccountSettings',payload);storeFamilySession(result.token,localStorage.getItem(FAMILY_REMEMBER_KEY)==='true');familyPortalData.account=result.account;renderFamilyAccount();familyMessage(result.message);toast(result.message)}catch(error){familyMessage(error.message,true)}finally{setLoading(false)}}
 async function saveFamilyProfile(e){e.preventDefault();const form=e.currentTarget,payload=directoryPayloadFromForm(form);setLoading(true,'Guardando los datos familiares…');try{const result=await familyServer('saveFamilyProfile',payload);const data=result.data||{};familyPortalData.profile=data.profile||familyPortalData.profile;familyPortalData.contacts=data.contacts||familyPortalData.contacts;$('#familyProfileForm').innerHTML=directoryFieldsHtml(familyPortalData,true);familyMessage('Los datos fueron guardados con éxito.');toast('Los datos fueron guardados con éxito.')}catch(error){familyMessage(error.message,true)}finally{setLoading(false)}}
+function resetFamilyIdleTimer(){
+  if(typeof familyIdleTimer !== 'undefined' && familyIdleTimer) clearTimeout(familyIdleTimer);
+  if(typeof familySessionToken === 'undefined' || !familySessionToken) return;
+  if(typeof familyLogout === 'function'){
+    familyIdleTimer = setTimeout(()=>{
+      familyLogout(false, 'Tu sesión familiar expiró por inactividad.');
+    }, 15 * 60 * 1000);
+  }
+}
+window.resetFamilyIdleTimer = resetFamilyIdleTimer;
+
 function familyLogout(confirmFirst=true,message=''){if(confirmFirst&&!confirm('¿Cerrar la sesión familiar?'))return;familySessionToken='';clearTimeout(familyIdleTimer);localStorage.removeItem(FAMILY_SESSION_KEY);localStorage.removeItem(FAMILY_REMEMBER_KEY);sessionStorage.removeItem(FAMILY_SESSION_KEY);if(message)sessionStorage.setItem('family_logout_message',message);location.href=siteBaseUrl()+'?familia=acceso'}
 function paymentMoney(value){return new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(value)||0)}
 
@@ -833,8 +1054,10 @@ window.actions['regenerate-current-family-access'] = () => regenerateCurrentFami
 window.actions['revoke-current-family-access'] = () => revokeCurrentFamilyAccess();
 window.actions['print-current-managed-family-access'] = () => printCurrentManagedFamilyAccess();
 window.actions['generate-family-credentials'] = btn => generateFamilyCredentials(btn.dataset.id);
+window.actions['prepare-family-whatsapp-reset'] = btn => prepareFamilyWhatsAppReset(btn?.dataset?.id || currentFamilyAccessStudentId);
 
 // Exportaciones globales explícitas para acceso directo y desacoplado
+window.prepareFamilyWhatsAppReset = prepareFamilyWhatsAppReset;
 window.generateFamilyCredentials = generateFamilyCredentials;
 window.generateFamilyQrSvg = generateFamilyQrSvg;
 window.regenerateAllFamilyPasswordsNoExpiry = regenerateAllFamilyPasswordsNoExpiry;
