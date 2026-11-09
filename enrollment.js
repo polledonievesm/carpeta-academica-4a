@@ -53,7 +53,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('#enrollmentPeriodForm')?.addEventListener('submit',createEnrollmentPeriod);
   $('#enrollmentAdminSearch')?.addEventListener('input',renderEnrollmentAdminList);
   Object.assign(actions,{
-    'generate-all-family-access':generateAllFamilyAccess,
     'refresh-enrollment-admin':()=>loadEnrollmentAdmin(true),
     'toggle-enrollment-period-form':toggleEnrollmentPeriodForm,
     'copy-enrollment-link':button=>copyEnrollmentLink(button.dataset.url||''),
@@ -139,21 +138,6 @@ async function submitEnrollment(){
   const form=$('#enrollmentWizardForm');if(!form.elements.confirmacionVeracidad.checked)return familyMessage('Confirma que revisaste la información antes de enviarla.',true);
   if(!await saveEnrollmentDraft(true))return;if(!confirm('¿Enviar la ficha a la escuela? Podrás imprimirla inmediatamente.'))return;setLoading(true);
   try{const result=await enrollmentApi('submitEnrollment');enrollmentDraftData.enrollment=result.enrollment;familyMessage(result.message);await printEnrollment(false)}catch(error){familyMessage(error.message,true)}finally{setLoading(false)}
-}
-
-async function generateAllFamilyAccess(){
-  if(!state.directory)await loadFamilyAccess(true);const ids=(state.directory?.rows||[]).map(row=>row.student.id);if(!ids.length)return toast('No hay alumnos para generar accesos.',true);
-  if(!confirm(`Se crearán o renovarán ${ids.length} contraseñas temporales. ¿Continuar?`))return;
-  await runAction(async()=>{const result=await server('generateFamilyCredentialsBatch',ids);state.familyCredentials=result.credentials||[];applyFamilyCredentials(state.familyCredentials);renderFamilyAccess();toast(result.message+' Ya puedes imprimir las tarjetas.')})
-}
-
-function printFamilyCredentials(credentials){
-  const rows=Array.isArray(credentials)?credentials.filter(item=>item&&item.password):[];
-  if(!rows.length)return toast('Primero genera los accesos. Las contraseñas anteriores no pueden volver a mostrarse.',true);
-  const popup=window.open('','_blank');if(!popup)return toast('Permite las ventanas emergentes para imprimir.',true);
-  const logo=new URL('school-logo.webp',location.href).href,qr=new URL('family-access-qr.svg',location.href).href,access=siteBaseUrl()+'?familia=acceso',school=state.config.escuela||'Escuela Primaria Francisco Hoil Torres';
-  const cards=rows.map(item=>`<article class="access-card"><header><img src="${escapeHtml(logo)}"><div><b>${escapeHtml(school)}</b><span>${escapeHtml(state.config.gradoGrupo||'4° A')} · ${escapeHtml(state.config.cicloEscolar||'2026-2027')}</span></div></header><p class="tag">ACCESO FAMILIAR</p><h2>${escapeHtml(item.studentName)}</h2><div class="card-body"><div><label>USUARIO</label><strong>${escapeHtml(item.username)}</strong><label>CONTRASEÑA TEMPORAL</label><strong>${escapeHtml(item.password)}</strong><small>Vence: ${escapeHtml(new Date(Number(item.expiresAt)).toLocaleDateString('es-MX'))}</small></div><img class="qr" src="${escapeHtml(qr)}"></div><ol><li>Escanea el código.</li><li>Inicia sesión.</li><li>Confirma tus datos y cambia la contraseña.</li></ol><p class="url">${escapeHtml(access)}</p><footer>Información confidencial para la madre, padre o tutor.</footer></article>`).join('');
-  popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Tarjetas de acceso familiar</title><style>@page{size:letter portrait;margin:8mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#102a43;display:grid;grid-template-columns:1fr 1fr;gap:6mm}.access-card{height:127mm;border:1.5px dashed #65798b;border-radius:9px;padding:7mm;position:relative;break-inside:avoid;overflow:hidden}.access-card header{display:flex;gap:8px;align-items:center;border-bottom:3px solid #10a9b0;padding-bottom:7px}.access-card header img{width:40px;height:40px;object-fit:contain}.access-card header div{display:flex;flex-direction:column;font-size:9px}.access-card header b{font-size:10px}.tag{font-size:8px;letter-spacing:1px;color:#078f98;font-weight:800;margin:8px 0 3px}.access-card h2{font-size:15px;margin:0 0 7px}.card-body{display:grid;grid-template-columns:1fr 72px;gap:8px;align-items:center;background:#eef8f8;border-radius:8px;padding:8px}.card-body div{display:flex;flex-direction:column}.card-body label{font-size:7px;font-weight:bold;color:#55717b}.card-body strong{font-size:13px;background:white;border:1px dashed #7fb6b9;border-radius:5px;padding:5px;margin:2px 0 5px}.card-body small{font-size:7px}.qr{width:70px;height:70px}.access-card ol{font-size:8px;line-height:1.4;padding-left:16px;margin:7px 0}.url{font-size:6.8px;text-align:center;overflow-wrap:anywhere;margin:4px}.access-card footer{position:absolute;left:7mm;right:7mm;bottom:5mm;font-size:7px;color:#9a2b2b;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>${cards}</body></html>`);popup.document.close();popup.focus();setTimeout(()=>popup.print(),800);
 }
 
 function openEnrollmentAdmin(){showView('enrollment-admin');loadEnrollmentAdmin(false)}
