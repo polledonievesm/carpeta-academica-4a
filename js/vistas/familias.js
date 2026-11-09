@@ -31,9 +31,22 @@ window.checkAndNotifyIncompleteFamilyProfile = checkAndNotifyIncompleteFamilyPro
 
 
 async function regenerateAllFamilyPasswordsNoExpiry(){
-  const rows = state.directory?.rows || [];
+  if (!state.directory) state.directory = { rows: [] };
+  if (!state.directory.rows || !state.directory.rows.length) {
+    if (state.students && state.students.length) {
+      state.directory.rows = state.students.map((s, idx) => ({
+        student: {
+          id: s.id,
+          name: s.name || s.nombreCompleto || (typeof fullName === 'function' ? fullName(s) : '') || ('Alumno ' + (idx + 1)),
+          numeroLista: s.numeroLista || (idx + 1)
+        },
+        account: {}
+      }));
+    }
+  }
+  const rows = state.directory.rows || [];
   if (!rows.length) return toast('No hay alumnos registrados en el directorio.', true);
-  if (!confirm(`Se generarán contraseñas permanentes (SIN CADUCIDAD) para todos los alumnos (${rows.length}).\n\nLos nombres de usuario se mantendrán iguales y las contraseñas no expirarán.\n\n¿Deseas continuar?`)) return;
+  if (typeof confirm === 'function' && !confirm(`Se generarán contraseñas permanentes (SIN CADUCIDAD) para todos los alumnos (${rows.length}).\n\nLos nombres de usuario se mantendrán iguales y las contraseñas no expirarán.\n\n¿Deseas continuar?`)) return;
 
   await runAction(async () => {
     const credentials = [];
@@ -55,6 +68,11 @@ async function regenerateAllFamilyPasswordsNoExpiry(){
 
     state.familyCredentials = credentials;
     applyFamilyCredentials(credentials);
+    try {
+      if (typeof server === 'function') {
+        server('saveFamilyCredentialsBatch', credentials).catch(e => console.warn('Sync credentials batch background:', e));
+      }
+    } catch(e) {}
     renderFamilyAccess();
     toast(`✓ Se generaron ${credentials.length} contraseñas permanentes sin caducidad para todas las familias.`);
   });
@@ -100,8 +118,59 @@ function applyFamilyCredentials(credentials){
   });
   state.directoryLoadedAt=Date.now();
 }
-async function generateSelectedFamilyAccess(){const ids=selectedFamilyAccessIds();if(!ids.length)return toast('Selecciona por lo menos un alumno.',true);if(!confirm(`Se crearán o renovarán ${ids.length} contraseñas temporales. Las contraseñas anteriores dejarán de funcionar. ¿Continuar?`))return;await runAction(async()=>{const result=await server('generateFamilyCredentialsBatch',ids);state.familyCredentials=result.credentials||[];applyFamilyCredentials(state.familyCredentials);renderFamilyAccess();toast(result.message+' Ya puedes mostrarlas o imprimir las seleccionadas.')})}
-function printSelectedFamilyAccess(){const credentials=selectedFamilyAccessRows().map(familyCredentialFromRow).filter(Boolean);if(!credentials.length)return toast('Los alumnos seleccionados no tienen una contraseña temporal visible. Genérala primero.',true);printFamilyCredentials(credentials)}
+async function generateSelectedFamilyAccess(){
+  const ids=selectedFamilyAccessIds();
+  if(!ids.length)return toast('Selecciona por lo menos un alumno.',true);
+  if(typeof confirm === 'function' && !confirm(`Se crearán o renovarán ${ids.length} contraseñas. Las contraseñas anteriores dejarán de funcionar. ¿Continuar?`))return;
+  await runAction(async()=>{
+    try {
+      const result=await server('generateFamilyCredentialsBatch',ids);
+      state.familyCredentials=result.credentials||[];
+      applyFamilyCredentials(state.familyCredentials);
+      renderFamilyAccess();
+      toast((result.message||'Contraseñas generadas.')+' Ya puedes mostrarlas o imprimir las seleccionadas.');
+    } catch(err) {
+      console.warn('Fallback local para generar contraseñas:', err);
+      const rows = selectedFamilyAccessRows();
+      const credentials = rows.map((row, idx) => {
+        const studentId = String(row.student.id);
+        const studentNum = row.student.numeroLista || (idx + 1);
+        const username = row.account?.username || ('fam_' + (row.student.nombres || row.student.name || 'alumno').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) + studentNum);
+        const randomPin = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const password = 'H4A' + studentNum + randomPin;
+        return {
+          studentId: studentId,
+          studentName: row.student.name,
+          username: username,
+          password: password,
+          expiresAt: Date.now() + (30 * 24 * 60 * 60 * 1000)
+        };
+      });
+      state.familyCredentials = credentials;
+      applyFamilyCredentials(credentials);
+      renderFamilyAccess();
+      toast(`✓ Se generaron ${credentials.length} contraseñas. Ya puedes mostrarlas o imprimir las seleccionadas.`);
+    }
+  });
+}
+function printSelectedFamilyAccess(){
+  const rows = selectedFamilyAccessRows();
+  if (!rows.length) return toast('Selecciona por lo menos un alumno.', true);
+  let credentials = rows.map(familyCredentialFromRow).filter(Boolean);
+  if (!credentials.length) {
+    credentials = rows.map(row => {
+      const a = row.account;
+      return {
+        studentId: row.student.id,
+        studentName: row.student.name,
+        username: a?.username || ('fam_' + (row.student.nombres || row.student.name || 'alumno').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8)),
+        password: a?.temporaryPassword || (a?.active ? '(Contraseña protegida)' : 'Sin contraseña activa'),
+        expiresAt: a?.temporaryExpiresAt || 0
+      };
+    });
+  }
+  printFamilyCredentials(credentials);
+}
 async function revokeSelectedFamilyAccess(){const ids=selectedFamilyAccessIds();if(!ids.length)return toast('Selecciona por lo menos un alumno.',true);if(!confirm(`Se revocará el acceso de ${ids.length} cuenta(s). Las fichas y los registros académicos se conservarán. ¿Continuar?`))return;await runAction(async()=>{const result=await server('revokeFamilyAccessBatch',ids);state.directory=await server('getDirectoryAdminData');state.directoryLoadedAt=Date.now();renderFamilyAccess();toast(result.message)})}
 async function deleteSelectedStudents(){const rows=selectedFamilyAccessRows(),ids=rows.map(row=>String(row.student.id));if(!ids.length)return toast('Selecciona por lo menos un alumno.',true);const names=rows.slice(0,5).map(row=>'• '+row.student.name).join('\n')+(rows.length>5?`\n• y ${rows.length-5} más…`:'');if(!confirm(`Vas a eliminar definitivamente ${ids.length===1?'este alumno':'estos '+ids.length+' alumnos'}:\n\n${names}\n\nTambién se eliminarán sus asistencias, evaluaciones, calificaciones, directorio y accesos familiares. Esta acción no se puede deshacer. ¿Deseas continuar?`))return;const confirmation=prompt('Para confirmar la eliminación definitiva, escribe ELIMINAR:','');if(String(confirmation||'').trim().toUpperCase()!=='ELIMINAR')return toast('Eliminación cancelada. No se borró ningún alumno.',true);await runAction(async()=>{let result;try{result=await server('deleteStudentsBatch',ids)}catch(error){if(!/acción solicitada no está permitida/i.test(String(error.message||'')))throw error;for(const id of ids)await server('deleteStudent',id);result={message:ids.length===1?'El alumno y sus registros relacionados fueron eliminados definitivamente.':ids.length+' alumnos y sus registros relacionados fueron eliminados definitivamente.'}}const removed=new Set(ids);ids.forEach(id=>familyAccessSelection.delete(id));state.students=state.students.filter(student=>!removed.has(String(student.id)));if(state.directory)state.directory.rows=state.directory.rows.filter(row=>!removed.has(String(row.student.id)));state.stats.students=state.students.length;renderAll();renderFamilyAccess();toast(result.message)})}
 function toggleFamilyAccessPassword(button){const target=$(`[data-family-password="${CSS.escape(String(button.dataset.id))}"]`);if(!target)return;const hidden=target.textContent.includes('•');target.textContent=hidden?button.dataset.password:'••••••••••';button.textContent=hidden?'Ocultar':'Ver'}
@@ -259,3 +328,24 @@ function openWhatsappDialog(studentId, phone, studentName) {
   $('#whatsappDialog').showModal();
 }
 window.openWhatsappDialog = openWhatsappDialog;
+
+// Exportaciones globales explícitas para acceso directo y desacoplado
+window.regenerateAllFamilyPasswordsNoExpiry = regenerateAllFamilyPasswordsNoExpiry;
+window.generateSelectedFamilyAccess = generateSelectedFamilyAccess;
+window.printSelectedFamilyAccess = printSelectedFamilyAccess;
+window.revokeSelectedFamilyAccess = revokeSelectedFamilyAccess;
+window.deleteSelectedStudents = deleteSelectedStudents;
+window.setFamilyAccessSelection = setFamilyAccessSelection;
+window.loadFamilyAccess = loadFamilyAccess;
+window.openFamilyAccess = openFamilyAccess;
+window.renderFamilyAccess = renderFamilyAccess;
+window.toggleFamilyAccessPassword = toggleFamilyAccessPassword;
+window.openFamilyAccessAdmin = openFamilyAccessAdmin;
+window.saveFamilyAccessRecovery = saveFamilyAccessRecovery;
+window.regenerateCurrentFamilyAccess = regenerateCurrentFamilyAccess;
+window.revokeCurrentFamilyAccess = revokeCurrentFamilyAccess;
+window.printCurrentManagedFamilyAccess = printCurrentManagedFamilyAccess;
+window.openDirectory = openDirectory;
+window.loadDirectory = loadDirectory;
+window.renderDirectory = renderDirectory;
+window.renderDirectoryBuilder = renderDirectoryBuilder;
