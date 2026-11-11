@@ -2436,8 +2436,11 @@
     width: 100% !important;
     display: flex !important;
     align-items: center !important;
-    justify-content: space-around !important;
+    justify-content: space-between !important;
     height: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
   }
 
   .family-bottom-nav-btn {
@@ -2448,11 +2451,37 @@
     flex-direction: column !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 3px !important;
-    font-size: 10.5px !important;
-    font-weight: 500 !important;
+    gap: 2px !important;
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
     cursor: pointer !important;
-    flex: 1 !important;
+    width: 20% !important;
+    flex: 0 0 20% !important;
+    max-width: 20% !important;
+    min-width: 0 !important;
+    min-height: 48px !important;
+    height: 100% !important;
+    padding: 4px 1px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .family-bottom-nav-btn span {
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    display: block !important;
+    width: 100% !important;
+    letter-spacing: -0.01em !important;
   }
 
   .family-bottom-nav-btn svg {
