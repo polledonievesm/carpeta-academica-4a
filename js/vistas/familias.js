@@ -1564,10 +1564,10 @@ window.familyMessage = familyMessage;
           ${familySvg('grades', 22)}<span>Calificaciones</span>
         </button>
         <button type="button" class="family-bottom-nav-btn ${familyActiveTab === 'familyProfile' ? 'active' : ''}" data-action="family-tab-click" data-view="familyProfile">
-          ${familySvg('users', 22)}<span>Datos</span>
+          ${familySvg('users', 22)}<span>Datos familiares</span>
         </button>
         <button type="button" class="family-bottom-nav-btn ${familyActiveTab === 'familyAccount' ? 'active' : ''}" data-action="family-tab-click" data-view="familyAccount">
-          ${familySvg('shieldCheck', 22)}<span>Cuenta</span>
+          ${familySvg('shieldCheck', 22)}<span>Mi cuenta</span>
         </button>
       </div>
     `;
