@@ -1587,7 +1587,11 @@ window.familyMessage = familyMessage;
       phoneCall: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/><path d="M14.05 2a9 9 0 0 1 8 7.94"/><path d="M14.05 6A5 5 0 0 1 18 10"/></svg>`,
       mapPinHouse: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v4"/><path d="M18 10a6 6 0 0 0-12 0c0 7 6 12 6 12s6-5 6-12Z"/><circle cx="12" cy="10" r="2"/></svg>`,
       mapPin: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
-      phone: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`
+      phone: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`,
+      lock: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+      mail: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>`,
+      eye: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`,
+      eyeOff: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>`
     };
 
     return svgs[name] || svgs.overview;
@@ -2873,8 +2877,14 @@ window.familyMessage = familyMessage;
   }
 
   // ------------------------------------------------------------------------
-  // 5. PESTAÑA: MI CUENTA (MANTENIDA FIELMENTE)
+  // 5. PESTAÑA: MI CUENTA (REQUISITO 10: MAESTRO-DETALLE >= 900px, ACORDEÓN < 900px)
   // ------------------------------------------------------------------------
+  let familyAccountActiveSection = 0; // 0=Acceso a la cuenta por defecto en computadora
+  let familyAccountEditingSection = -1; // -1 = modo vista/consulta; 1 = editando recuperación; 2 = cambiando contraseña
+  let familyAccountMobileOpenSection = -1; // -1 = todas las secciones cerradas al cargar en móvil
+  let familyAccountShowNewPass = false;
+  let familyAccountShowConfirmPass = false;
+
   function renderModernAccount() {
     const host = $('#familyAccount');
     if (!host || !familyPortalData) return;
@@ -2883,102 +2893,324 @@ window.familyMessage = familyMessage;
     const account = familyPortalData.account || {};
     const tutor = familyPortalData.profile || familyPortalData.tutor || {};
 
+    const accountSections = [
+      {
+        id: 0,
+        title: 'Acceso a la cuenta',
+        badgeText: 'Cuenta activa',
+        badgeClass: 'complete',
+        iconKey: 'user',
+        note: 'Los datos de usuario y acceso oficial son administrados por la dirección del plantel.',
+        canEdit: false,
+        fields: [
+          { label: 'Alumno vinculado', val: student.name || 'MATEO HERNÁNDEZ LÓPEZ' },
+          { label: 'Nombre de usuario', val: account.username || 'demo.tutor' },
+          { label: 'Estado de la cuenta', val: 'Activa y confirmada' },
+          { label: 'Último acceso', val: account.lastAccess ? (typeof formatCancunDateTime === 'function' ? formatCancunDateTime(account.lastAccess) : String(account.lastAccess)) : '10 de noviembre de 2026, 08:30 hrs' }
+        ]
+      },
+      {
+        id: 1,
+        title: 'Medios de recuperación',
+        badgeText: 'Verificado',
+        badgeClass: 'complete',
+        iconKey: 'phone',
+        note: 'Se utilizan para restablecer el acceso a tu cuenta en caso de extravío o cambio de credenciales.',
+        canEdit: true,
+        fields: [
+          { name: 'email', label: 'Correo de recuperación', val: account.email || 'tutor.demo@ejemplo.com', type: 'email' },
+          { name: 'phone', label: 'Teléfono o WhatsApp de recuperación', val: getSafePhone(account.phone || tutor.tutorTelefono || tutor.telefono), type: 'tel' },
+          { name: 'status', label: 'Estado de verificación', val: 'Verificado' },
+          { name: 'method', label: 'Método activo de recuperación', val: 'Enlace de un solo uso vía WhatsApp' }
+        ]
+      },
+      {
+        id: 2,
+        title: 'Seguridad y contraseña',
+        badgeText: 'Protegida',
+        badgeClass: 'complete',
+        iconKey: 'shieldCheck',
+        note: 'Mantén una contraseña segura para proteger la información escolar y personal de tu familia.',
+        canEdit: false,
+        fields: [
+          { label: 'Estado de protección', val: 'Protegida con credenciales seguras' },
+          { label: 'Última modificación', val: account.lastPasswordChange || '10 de septiembre de 2026' }
+        ]
+      }
+    ];
+
+    const activeSec = accountSections.find(s => s.id === familyAccountActiveSection) || accountSections[0];
+    const isEditing = (familyAccountEditingSection === activeSec.id);
+
     host.innerHTML = `
       <div class="family-section-title-wrap">
         <h2 class="family-section-main-title">Mi Cuenta y Seguridad</h2>
         <p class="family-section-subtitle">Gestión de acceso, medios de recuperación y credenciales del portal.</p>
       </div>
 
-      <div class="family-account-3grid">
-        <article class="family-account-card">
-          <div>
-            <div class="family-account-card-header">
-              <span class="family-account-card-icon">${familySvg('user', 20)}</span>
-              <h3>Acceso a la cuenta</h3>
-            </div>
-            <div class="family-account-data-list">
-              <div class="family-account-data-item">
-                <span>Alumno vinculado</span>
-                <strong>${escapeHtml(student.name || 'MATEO HERNÁNDEZ LÓPEZ')}</strong>
-              </div>
-              <div class="family-account-data-item">
-                <span>Usuario asignado</span>
-                <strong>${escapeHtml(account.username || 'demo.tutor')}</strong>
-              </div>
-              <div class="family-account-data-item">
-                <span>Estado del acceso</span>
-                <strong style="color: #166534;">✓ Activa y verificada</strong>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <article class="family-account-card">
-          <div>
-            <div class="family-account-card-header">
-              <span class="family-account-card-icon">${familySvg('phone', 20)}</span>
-              <h3>Medios de recuperación</h3>
-            </div>
-            <div class="family-account-data-list">
-              <div class="family-account-data-item">
-                <span>WhatsApp de recuperación</span>
-                <strong>${escapeHtml(getSafePhone(tutor.tutorTelefono || tutor.telefono))} <small style="color: #0f766e; font-weight: 700;">(Verificado)</small></strong>
-              </div>
-              <div class="family-account-data-item">
-                <span>Correo de respaldo</span>
-                <strong>${escapeHtml(account.email || 'demo@example.invalid')}</strong>
-              </div>
-              <div class="family-account-data-item">
-                <span>Método activo</span>
-                <strong>Enlace de 30 min vía WhatsApp</strong>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <article class="family-account-card">
-          <div>
-            <div class="family-account-card-header">
-              <span class="family-account-card-icon">${familySvg('shieldCheck', 20)}</span>
-              <h3>Seguridad y contraseña</h3>
-            </div>
-            <div class="family-account-data-list">
-              <div class="family-account-data-item">
-                <span>Contraseña</span>
-                <strong>••••••••••••••</strong>
-              </div>
-              <div class="family-account-data-item">
-                <span>Última modificación</span>
-                <strong>10 de septiembre de 2026</strong>
-              </div>
-            </div>
-
-            <div id="familyPasswordChangeSection" style="display: none; margin-top: 14px; border-top: 1px solid #f1f5f9; padding-top: 12px;">
-              <form id="familyChangePasswordForm">
-                <div class="family-form-group" style="margin-bottom: 8px;">
-                  <label>Nueva contraseña</label>
-                  <input type="password" name="newPassword" minlength="10" required placeholder="Mínimo 10 caracteres">
+      <!-- DISEÑO 1: COMPUTADORA (MAESTRO-DETALLE >= 900px) -->
+      <div class="family-master-detail-layout family-account-master-detail">
+        <!-- Columna Izquierda: Menú con las 3 opciones (300px fijo) -->
+        <nav class="family-master-nav" role="tablist" aria-label="Secciones de Mi Cuenta">
+          ${accountSections.map(sec => {
+            const isSelected = (sec.id === familyAccountActiveSection);
+            return `
+              <button type="button"
+                class="family-master-nav-item ${isSelected ? 'active' : ''}"
+                role="tab"
+                aria-selected="${isSelected ? 'true' : 'false'}"
+                aria-controls="family-account-detail-${sec.id}"
+                data-action="family-account-select-section"
+                data-section="${sec.id}">
+                <span class="family-master-icon-wrap">${familySvg(sec.iconKey, 24)}</span>
+                <div class="family-master-text-group">
+                  <span class="family-master-title">${escapeHtml(sec.title)}</span>
+                  <span class="family-status-badge-mini ${sec.badgeClass}">
+                    ${escapeHtml(sec.badgeText)}
+                  </span>
                 </div>
-                <div class="family-form-group" style="margin-bottom: 12px;">
-                  <label>Confirmar contraseña</label>
-                  <input type="password" name="confirmPassword" minlength="10" required placeholder="Repite la contraseña">
+              </button>
+            `;
+          }).join('')}
+        </nav>
+
+        <!-- Columna Derecha: Panel de información y edición (espacio restante) -->
+        <div class="family-detail-panel" id="family-account-detail-${activeSec.id}" role="tabpanel">
+          <div class="family-detail-head">
+            <div class="family-detail-head-left">
+              <span class="family-detail-head-icon-wrap">${familySvg(activeSec.iconKey, 24)}</span>
+              <div class="family-detail-title-group">
+                <div class="family-detail-title-row">
+                  <h3>${escapeHtml(activeSec.title)}</h3>
+                  <span class="family-status-badge-mini ${activeSec.badgeClass}">
+                    ${escapeHtml(activeSec.badgeText)}
+                  </span>
                 </div>
-                <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                  <button type="button" class="family-btn-outline" data-action="family-toggle-change-password">Cancelar</button>
-                  <button type="submit" class="family-btn-solid-teal">Guardar</button>
-                </div>
-              </form>
+                <p class="family-detail-note">${escapeHtml(activeSec.note)}</p>
+              </div>
             </div>
+            ${(!isEditing && activeSec.canEdit) ? `
+              <button type="button" class="family-btn-solid-teal" data-action="family-account-edit" data-section="${activeSec.id}">
+                ${familySvg('edit', 16)} <span>Editar</span>
+              </button>
+            ` : ''}
+            ${(!isEditing && activeSec.id === 2) ? `
+              <button type="button" class="family-btn-solid-teal" data-action="family-account-start-change-password" data-section="2">
+                ${familySvg('lock', 16)} <span>Cambiar contraseña</span>
+              </button>
+            ` : ''}
           </div>
 
-          <div style="margin-top: 16px;">
-            <button type="button" class="family-btn-solid-teal" style="width: 100%; justify-content: center;" data-action="family-toggle-change-password">
-              Cambiar contraseña
-            </button>
-          </div>
-        </article>
+          ${/* SECCIÓN 1: MEDIOS DE RECUPERACIÓN EN EDICIÓN */
+            (isEditing && activeSec.id === 1) ? `
+            <form id="familyAccountRecoveryForm" onsubmit="event.preventDefault();">
+              <div class="family-form-grid-2col">
+                <div class="family-form-group">
+                  <label for="accEditEmail">Correo de recuperación</label>
+                  <input id="accEditEmail" type="email" name="email" value="${escapeHtml(account.email || 'tutor.demo@ejemplo.com')}" required>
+                </div>
+                <div class="family-form-group">
+                  <label for="accEditPhone">Teléfono o WhatsApp de recuperación</label>
+                  <input id="accEditPhone" type="tel" name="phone" value="${escapeHtml(account.phone || tutor.tutorTelefono || tutor.telefono || '998-123-4567')}" required>
+                </div>
+                <div class="family-form-group">
+                  <label>Estado de verificación</label>
+                  <input type="text" value="Verificado" readonly style="background:#f1f5f9; color:#475569; cursor:not-allowed;">
+                </div>
+                <div class="family-form-group">
+                  <label>Método activo de recuperación</label>
+                  <input type="text" value="Enlace de un solo uso vía WhatsApp" readonly style="background:#f1f5f9; color:#475569; cursor:not-allowed;">
+                </div>
+              </div>
+              <div class="family-detail-actions">
+                <button type="button" class="family-btn-outline" data-action="family-account-cancel">Cancelar</button>
+                <button type="button" class="family-btn-solid-teal" data-action="family-account-save-recovery">Guardar cambios</button>
+              </div>
+            </form>
+          ` : /* SECCIÓN 2: SEGURIDAD EN EDICIÓN (CAMBIAR CONTRASEÑA) */
+            (isEditing && activeSec.id === 2) ? `
+            <form id="familyAccountPasswordForm" onsubmit="event.preventDefault();">
+              <div class="family-form-grid-2col">
+                <div class="family-form-group">
+                  <label for="famAccountNewPass">Nueva contraseña</label>
+                  <div class="family-password-input-wrap">
+                    <input id="famAccountNewPass" type="${familyAccountShowNewPass ? 'text' : 'password'}" name="newPassword" minlength="8" required placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+                    <button type="button" class="family-password-toggle-btn" data-action="family-account-toggle-pass-visibility" data-field="new" aria-label="${familyAccountShowNewPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}">
+                      ${familySvg(familyAccountShowNewPass ? 'eyeOff' : 'eye', 18)}
+                    </button>
+                  </div>
+                </div>
+                <div class="family-form-group">
+                  <label for="famAccountConfirmPass">Confirmar nueva contraseña</label>
+                  <div class="family-password-input-wrap">
+                    <input id="famAccountConfirmPass" type="${familyAccountShowConfirmPass ? 'text' : 'password'}" name="confirmPassword" minlength="8" required placeholder="Repite la nueva contraseña" autocomplete="new-password">
+                    <button type="button" class="family-password-toggle-btn" data-action="family-account-toggle-pass-visibility" data-field="confirm" aria-label="${familyAccountShowConfirmPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}">
+                      ${familySvg(familyAccountShowConfirmPass ? 'eyeOff' : 'eye', 18)}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <p class="family-password-req-note">
+                Requisitos mínimos: la contraseña debe contener al menos 8 caracteres (se sugiere combinar letras y números).
+              </p>
+              <div class="family-detail-actions">
+                <button type="button" class="family-btn-outline" data-action="family-account-cancel">Cancelar</button>
+                <button type="button" class="family-btn-solid-teal" data-action="family-account-save-password">Guardar cambios</button>
+              </div>
+            </form>
+          ` : /* MODO CONSULTA PARA CUALQUIERA DE LAS 3 SECCIONES */ `
+            <div class="family-detail-view-grid">
+              ${activeSec.fields.map(f => `
+                <div class="family-detail-item">
+                  <span class="family-detail-item-label">${escapeHtml(f.label)}</span>
+                  <strong class="family-detail-item-val">${escapeHtml(f.val || '—')}</strong>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      </div>
+
+      <!-- DISEÑO 2: TELÉFONO POR DEBAJO DE 900px (ACORDEÓN COMPACTO) -->
+      <div class="family-mobile-accordion-list family-account-mobile-accordion">
+        ${accountSections.map(sec => {
+          const isOpen = (familyAccountMobileOpenSection === sec.id);
+          const isMobileEditing = (familyAccountEditingSection === sec.id);
+
+          return `
+            <article class="family-mob-acc-item ${isOpen ? 'open' : ''}">
+              <button type="button"
+                class="family-mob-acc-header"
+                data-action="family-account-mob-acc-toggle"
+                data-section="${sec.id}"
+                aria-expanded="${isOpen ? 'true' : 'false'}"
+                aria-controls="family-account-mob-body-${sec.id}">
+                <div class="family-mob-acc-header-left">
+                  <span class="family-master-icon-wrap">${familySvg(sec.iconKey, 24)}</span>
+                  <div class="family-master-text-group">
+                    <span class="family-master-title">${escapeHtml(sec.title)}</span>
+                    <span class="family-status-badge-mini ${sec.badgeClass}">
+                      ${escapeHtml(sec.badgeText)}
+                    </span>
+                  </div>
+                </div>
+                <span class="family-acc-chevron">${familySvg('chevronDown', 18)}</span>
+              </button>
+
+              ${isOpen ? `
+                <div class="family-mob-acc-body" id="family-account-mob-body-${sec.id}">
+                  <p class="family-mob-note">${escapeHtml(sec.note)}</p>
+                  
+                  ${/* SECCIÓN 1: MEDIOS DE RECUPERACIÓN MÓVIL EN EDICIÓN */
+                    (isMobileEditing && sec.id === 1) ? `
+                    <form id="familyAccountRecoveryFormMobile" onsubmit="event.preventDefault();">
+                      <div class="family-form-grid-1col">
+                        <div class="family-form-group">
+                          <label for="mobAccEditEmail">Correo de recuperación</label>
+                          <input id="mobAccEditEmail" type="email" name="email" value="${escapeHtml(account.email || 'tutor.demo@ejemplo.com')}" required>
+                        </div>
+                        <div class="family-form-group">
+                          <label for="mobAccEditPhone">Teléfono o WhatsApp de recuperación</label>
+                          <input id="mobAccEditPhone" type="tel" name="phone" value="${escapeHtml(account.phone || tutor.tutorTelefono || tutor.telefono || '998-123-4567')}" required>
+                        </div>
+                      </div>
+                      <div class="family-mobile-edit-actions">
+                        <button type="button" class="family-btn-solid-teal" data-action="family-account-save-recovery">Guardar cambios</button>
+                        <button type="button" class="family-btn-outline" data-action="family-account-cancel">Cancelar</button>
+                      </div>
+                    </form>
+                  ` : /* SECCIÓN 2: CAMBIAR CONTRASEÑA MÓVIL EN EDICIÓN */
+                    (isMobileEditing && sec.id === 2) ? `
+                    <form id="familyAccountPasswordFormMobile" onsubmit="event.preventDefault();">
+                      <div class="family-form-grid-1col">
+                        <div class="family-form-group">
+                          <label for="mobFamAccountNewPass">Nueva contraseña</label>
+                          <div class="family-password-input-wrap">
+                            <input id="mobFamAccountNewPass" type="${familyAccountShowNewPass ? 'text' : 'password'}" name="newPassword" minlength="8" required placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+                            <button type="button" class="family-password-toggle-btn" data-action="family-account-toggle-pass-visibility" data-field="new" aria-label="${familyAccountShowNewPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}">
+                              ${familySvg(familyAccountShowNewPass ? 'eyeOff' : 'eye', 18)}
+                            </button>
+                          </div>
+                        </div>
+                        <div class="family-form-group">
+                          <label for="mobFamAccountConfirmPass">Confirmar nueva contraseña</label>
+                          <div class="family-password-input-wrap">
+                            <input id="mobFamAccountConfirmPass" type="${familyAccountShowConfirmPass ? 'text' : 'password'}" name="confirmPassword" minlength="8" required placeholder="Repite la nueva contraseña" autocomplete="new-password">
+                            <button type="button" class="family-password-toggle-btn" data-action="family-account-toggle-pass-visibility" data-field="confirm" aria-label="${familyAccountShowConfirmPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}">
+                              ${familySvg(familyAccountShowConfirmPass ? 'eyeOff' : 'eye', 18)}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <p class="family-password-req-note">
+                        Requisitos mínimos: la contraseña debe contener al menos 8 caracteres (se sugiere combinar letras y números).
+                      </p>
+                      <div class="family-mobile-edit-actions">
+                        <button type="button" class="family-btn-solid-teal" data-action="family-account-save-password">Guardar cambios</button>
+                        <button type="button" class="family-btn-outline" data-action="family-account-cancel">Cancelar</button>
+                      </div>
+                    </form>
+                  ` : /* MODO CONSULTA MÓVIL */ `
+                    <div class="family-mob-view-list">
+                      ${sec.fields.map(f => `
+                        <div class="family-mob-view-row">
+                          <span class="family-mob-label">${escapeHtml(f.label)}</span>
+                          <strong class="family-mob-val">${escapeHtml(f.val || '—')}</strong>
+                        </div>
+                      `).join('')}
+                    </div>
+                    ${sec.canEdit ? `
+                      <div style="margin-top: 16px;">
+                        <button type="button" class="family-btn-solid-teal" style="width: 100%; min-height: 46px; font-size: 15px; font-weight: 600; justify-content: center;" data-action="family-account-edit" data-section="${sec.id}">
+                          ${familySvg('edit', 16)} <span>Editar</span>
+                        </button>
+                      </div>
+                    ` : ''}
+                    ${sec.id === 2 ? `
+                      <div style="margin-top: 16px;">
+                        <button type="button" class="family-btn-solid-teal" style="width: 100%; min-height: 46px; font-size: 15px; font-weight: 600; justify-content: center;" data-action="family-account-start-change-password" data-section="2">
+                          ${familySvg('lock', 16)} <span>Cambiar contraseña</span>
+                        </button>
+                      </div>
+                    ` : ''}
+                  `}
+                </div>
+              ` : ''}
+            </article>
+          `;
+        }).join('')}
       </div>
     `;
+
+    // Soporte de navegación por teclado para el tablist accesible
+    const nav = host.querySelector('.family-master-nav');
+    if (nav) {
+      nav.addEventListener('keydown', (e) => {
+        const tabs = Array.from(nav.querySelectorAll('.family-master-nav-item'));
+        const currentIndex = tabs.findIndex(tab => tab === document.activeElement);
+        if (currentIndex === -1) return;
+
+        let nextIndex = currentIndex;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          nextIndex = (currentIndex + 1) % tabs.length;
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          nextIndex = 0;
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          nextIndex = tabs.length - 1;
+        }
+
+        if (nextIndex !== currentIndex) {
+          tabs[nextIndex].focus();
+          tabs[nextIndex].click();
+        }
+      });
+    }
   }
 
   // ------------------------------------------------------------------------
@@ -3139,7 +3371,12 @@ window.familyMessage = familyMessage;
       }
       renderModernProfileAccordion();
     }
-    else if (id === 'familyAccount') renderModernAccount();
+    else if (id === 'familyAccount') {
+      if (typeof window !== 'undefined' && window.innerWidth < 900 && familyAccountEditingSection === -1) {
+        familyAccountMobileOpenSection = -1;
+      }
+      renderModernAccount();
+    }
     else if (id === 'familyWeeklyReport') renderModernWeeklyReport();
   }
 
@@ -3390,6 +3627,126 @@ window.familyMessage = familyMessage;
       familyProfileEditingSection = -1;
       renderModernProfileAccordion();
     }
+  };
+
+  // Acciones de Mi Cuenta y Seguridad (Requisito 10)
+  window.actions['family-account-select-section'] = (item) => {
+    const secId = Number(item.dataset.section);
+    if (!isNaN(secId)) {
+      familyAccountActiveSection = secId;
+      familyAccountEditingSection = -1;
+      renderModernAccount();
+      const btn = document.querySelector(`.family-account-master-detail .family-master-nav-item[data-section="${secId}"]`);
+      if (btn) btn.focus();
+    }
+  };
+
+  window.actions['family-account-mob-acc-toggle'] = (header) => {
+    const secId = Number(header.dataset.section);
+    if (!isNaN(secId)) {
+      familyAccountMobileOpenSection = (familyAccountMobileOpenSection === secId) ? -1 : secId;
+      familyAccountEditingSection = -1;
+      renderModernAccount();
+    }
+  };
+
+  window.actions['family-account-edit'] = (btn) => {
+    const secId = Number(btn.dataset.section);
+    if (!isNaN(secId)) {
+      familyAccountEditingSection = secId;
+      renderModernAccount();
+    }
+  };
+
+  window.actions['family-account-cancel'] = () => {
+    familyAccountEditingSection = -1;
+    familyAccountShowNewPass = false;
+    familyAccountShowConfirmPass = false;
+    renderModernAccount();
+  };
+
+  window.actions['family-account-save-recovery'] = () => {
+    const form = document.querySelector('#familyAccountRecoveryForm') || document.querySelector('#familyAccountRecoveryFormMobile');
+    if (!form || !familyPortalData) return;
+    const emailInput = form.querySelector('[name="email"]');
+    const phoneInput = form.querySelector('[name="phone"]');
+    const emailVal = emailInput ? emailInput.value.trim() : '';
+    const phoneVal = phoneInput ? phoneInput.value.trim() : '';
+
+    if (!emailVal || !emailVal.includes('@') || !emailVal.includes('.')) {
+      if (typeof toast === 'function') toast('Por favor ingresa un correo de recuperación válido.');
+      return;
+    }
+    if (!phoneVal || phoneVal.length < 7) {
+      if (typeof toast === 'function') toast('Por favor ingresa un número de teléfono válido.');
+      return;
+    }
+
+    familyPortalData.account = familyPortalData.account || {};
+    familyPortalData.account.email = emailVal;
+    familyPortalData.account.phone = phoneVal;
+    if (familyPortalData.profile) {
+      familyPortalData.profile.tutorTelefono = phoneVal;
+    }
+
+    familyAccountEditingSection = -1;
+    renderModernAccount();
+    if (typeof toast === 'function') toast('Medios de recuperación guardados correctamente.');
+  };
+
+  window.actions['family-account-start-change-password'] = () => {
+    familyAccountEditingSection = 2;
+    familyAccountShowNewPass = false;
+    familyAccountShowConfirmPass = false;
+    renderModernAccount();
+  };
+
+  window.actions['family-account-toggle-pass-visibility'] = (btn) => {
+    const field = btn?.dataset?.field;
+    const newPassInput = document.querySelector('#famAccountNewPass') || document.querySelector('#mobFamAccountNewPass');
+    const confirmPassInput = document.querySelector('#famAccountConfirmPass') || document.querySelector('#mobFamAccountConfirmPass');
+    const newPassVal = newPassInput ? newPassInput.value : '';
+    const confirmPassVal = confirmPassInput ? confirmPassInput.value : '';
+
+    if (field === 'new') {
+      familyAccountShowNewPass = !familyAccountShowNewPass;
+    } else if (field === 'confirm') {
+      familyAccountShowConfirmPass = !familyAccountShowConfirmPass;
+    }
+
+    renderModernAccount();
+
+    const newPassAfter = document.querySelector('#famAccountNewPass') || document.querySelector('#mobFamAccountNewPass');
+    const confirmPassAfter = document.querySelector('#famAccountConfirmPass') || document.querySelector('#mobFamAccountConfirmPass');
+    if (newPassAfter) newPassAfter.value = newPassVal;
+    if (confirmPassAfter) confirmPassAfter.value = confirmPassVal;
+  };
+
+  window.actions['family-account-save-password'] = () => {
+    const form = document.querySelector('#familyAccountPasswordForm') || document.querySelector('#familyAccountPasswordFormMobile');
+    if (!form || !familyPortalData) return;
+    const newPassInput = form.querySelector('[name="newPassword"]');
+    const confirmPassInput = form.querySelector('[name="confirmPassword"]');
+    const newPass = newPassInput ? newPassInput.value : '';
+    const confirmPass = confirmPassInput ? confirmPassInput.value : '';
+
+    if (!newPass || newPass.length < 8) {
+      if (typeof toast === 'function') toast('La nueva contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
+    if (newPass !== confirmPass) {
+      if (typeof toast === 'function') toast('Las contraseñas ingresadas no coinciden.');
+      return;
+    }
+
+    familyPortalData.account = familyPortalData.account || {};
+    familyPortalData.account.temporaryPassword = newPass;
+    familyPortalData.account.lastPasswordChange = 'Hoy, ' + new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+    familyAccountEditingSection = -1;
+    familyAccountShowNewPass = false;
+    familyAccountShowConfirmPass = false;
+    renderModernAccount();
+    if (typeof toast === 'function') toast('Contraseña actualizada correctamente.');
   };
 
   window.actions['family-toggle-change-password'] = () => {
