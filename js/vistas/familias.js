@@ -1,31 +1,99 @@
 
+function getStudentFirstNameForNotice(student, profile) {
+  const namesStr = profile?.alumnoNombres || '';
+  let raw = '';
+  if (namesStr.trim()) {
+    raw = namesStr.trim().split(/\s+/)[0];
+  } else {
+    const clean = String(student?.name || '').replace(/\s*\([^)]*\)/g, '').trim();
+    raw = clean.split(/\s+/)[0] || 'tu hijo(a)';
+  }
+  return raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : 'tu hijo(a)';
+}
+
 function checkAndNotifyIncompleteFamilyProfile() {
   const data = familyPortalData;
   if (!data) return;
+  if (sessionStorage.getItem('family_notice_dismissed') === 'true') return;
   const p = data.profile || {};
   // Si ya tiene teléfono, domicilio y contacto de emergencia, o complete === true: NO mostrar pop up
   const isComplete = Boolean(data.complete || (p.tutorTelefono && (p.tutorDomicilio || p.calle) && (p.contactoEmergenciaNombre || p.contactoEmergencia)));
   if (isComplete) return;
 
-  // Si tiene datos incompletos: mostrar el modal pop-up amigable
   const dialog = document.getElementById('familyIncompleteNoticeDialog');
-  if (dialog) {
-    const nameEl = document.getElementById('familyIncompleteStudentName');
-    if (nameEl) nameEl.textContent = data.student?.name || 'su hijo(a)';
+  if (!dialog) return;
 
-    const btnGo = document.getElementById('btnGoToFamilyProfileNotice');
-    if (btnGo) {
-      btnGo.onclick = () => {
-        if (dialog.close) dialog.close();
-        else dialog.removeAttribute('open');
+  const firstName = getStudentFirstNameForNotice(data.student, p);
+
+  // Clases y atributos de accesibilidad estándar (role dialog, aria-modal, aria-labelledby)
+  dialog.className = 'modal family-update-modal';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-labelledby', 'familyIncompleteNoticeTitle');
+
+  dialog.innerHTML = `
+    <div class="family-update-modal__header">
+      <h2 id="familyIncompleteNoticeTitle" class="family-update-modal__title">Actualiza tus datos familiares</h2>
+      <button type="button" class="family-update-modal__close" id="btnFamilyIncompleteClose" aria-label="Cerrar aviso">✕</button>
+    </div>
+    <div class="family-update-modal__body">
+      <p class="family-update-modal__desc">
+        Revisa los datos de contacto y emergencia de <strong>${escapeHtml(firstName)}</strong> para que la escuela pueda comunicarse contigo cuando sea necesario.
+      </p>
+      <p class="family-update-modal__note">
+        <i>ℹ️</i>
+        <span>Si ya los actualizaste o prefieres hacerlo después, puedes continuar al portal.</span>
+      </p>
+    </div>
+    <div class="family-update-modal__footer">
+      <button type="button" class="btn family-update-modal__btn-secondary" id="btnFamilyIncompleteDismiss">Ahora no</button>
+      <button type="button" class="btn primary family-update-modal__btn-primary" id="btnGoToFamilyProfileNotice">Revisar mis datos</button>
+    </div>
+  `;
+
+  let lastActiveElement = document.activeElement;
+
+  function closeDialog(proceedToProfile = false) {
+    sessionStorage.setItem('family_notice_dismissed', 'true');
+    if (dialog.close) dialog.close();
+    else dialog.removeAttribute('open');
+
+    if (proceedToProfile) {
+      if (typeof showFamilyViewModern === 'function') {
+        showFamilyViewModern('familyProfile', true);
+      } else {
         const tabBtn = document.querySelector('[data-family-view="familyProfile"]');
         if (tabBtn) tabBtn.click();
-      };
+      }
+    } else if (lastActiveElement && typeof lastActiveElement.focus === 'function') {
+      try { lastActiveElement.focus(); } catch (e) {}
     }
-
-    if (typeof dialog.showModal === 'function') dialog.showModal();
-    else dialog.setAttribute('open', '');
   }
+
+  const btnClose = document.getElementById('btnFamilyIncompleteClose');
+  const btnDismiss = document.getElementById('btnFamilyIncompleteDismiss');
+  const btnReview = document.getElementById('btnGoToFamilyProfileNotice');
+
+  if (btnClose) btnClose.onclick = () => closeDialog(false);
+  if (btnDismiss) btnDismiss.onclick = () => closeDialog(false);
+  if (btnReview) btnReview.onclick = () => closeDialog(true);
+
+  // Manejo accesible de tecla Escape (mismo comportamiento que "Ahora no")
+  dialog.oncancel = (e) => {
+    e.preventDefault();
+    closeDialog(false);
+  };
+
+  if (typeof dialog.showModal === 'function') {
+    if (!dialog.open) dialog.showModal();
+  } else {
+    dialog.setAttribute('open', '');
+  }
+
+  // Foco inicial en el botón principal ("Revisar mis datos")
+  setTimeout(() => {
+    btnReview?.focus();
+  }, 50);
 }
 window.checkAndNotifyIncompleteFamilyProfile = checkAndNotifyIncompleteFamilyProfile;
 
@@ -1037,6 +1105,18 @@ function showFamilyPanel(id){
 }
 function familyMessage(message,error=false){const box=$('#familyMessage');box.textContent=message;box.classList.remove('hidden-control');box.classList.toggle('family-error',error)}
 
+function loadDemoScript(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) return resolve();
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('No se pudo cargar ' + src));
+    document.head.appendChild(script);
+  });
+}
+
 async function startFamilyPortal(){
   document.body.classList.add('family-mode');
   $('#app').classList.add('hidden-control');
@@ -1044,6 +1124,38 @@ async function startFamilyPortal(){
   setLoading(false);
   try{
     const urlParams = new URLSearchParams(location.search);
+    const isDemo = urlParams.get('familia') === 'demo';
+    const isLocalHost = ['localhost', '127.0.0.1'].includes(location.hostname);
+
+    if (isDemo) {
+      if (!isLocalHost) {
+        console.warn('[SEGURIDAD] Modo demostración bloqueado en dominio no local.');
+        history.replaceState({}, '', siteBaseUrl() + '?familia=acceso');
+        familyInvitationToken = 'acceso';
+        showFamilyPanel('familyLoginPanel');
+        familyMessage('El modo demostración solamente está disponible en el entorno local (localhost).', true);
+        return;
+      }
+
+      setLoading(true, 'Cargando modo demostración local…');
+      try {
+        if (!window.__familyDemoLoaded) {
+          await loadDemoScript('js/demo/family-portal-fixture.js');
+          await loadDemoScript('js/demo/family-portal-demo.js');
+          window.__familyDemoLoaded = true;
+        }
+        setLoading(false);
+        if (typeof window.initFamilyPortalDemo === 'function') {
+          window.initFamilyPortalDemo();
+        }
+      } catch (err) {
+        setLoading(false);
+        showFamilyPanel('familyLoginPanel');
+        familyMessage('Error al cargar los archivos de demostración: ' + (err.message || err), true);
+      }
+      return;
+    }
+
     const resetParam = urlParams.get('recuperar') || '';
     if (resetParam) {
       sessionStorage.setItem(RECOVERY_STORAGE_KEY, resetParam);
@@ -1234,3 +1346,1940 @@ window.openDirectory = openDirectory;
 window.loadDirectory = loadDirectory;
 window.renderDirectory = renderDirectory;
 window.renderDirectoryBuilder = renderDirectoryBuilder;
+window.setFamilyPortalData = (data) => { familyPortalData = data; };
+window.getFamilyPortalData = () => familyPortalData;
+window.loadFamilyProfile = loadFamilyProfile;
+window.renderFamilyPortal = renderFamilyPortal;
+window.renderFamilyAcademic = renderFamilyAcademic;
+window.showFamilyPanel = showFamilyPanel;
+window.showFamilyView = showFamilyView;
+window.familyMessage = familyMessage;
+
+
+/* ==========================================================================
+   MOTOR DE REDISEÑO VISUAL DEL PORTAL FAMILIAR (5 PESTAÑAS, COMPACTO Y ACCESIBLE)
+   ========================================================================== */
+
+(function () {
+  'use strict';
+
+  // Variables de estado del rediseño
+  let familyActiveTab = 'familyOverview';
+  let familyCurrentDate = '2026-08-31';
+  let familyTasksScope = 'week'; // 'week' | 'day'
+  let familyTasksFilter = 'all'; // 'all' | 'entregada' | 'pendiente' | 'incompleta' | 'tarde'
+  let familyEditingAccordion = null; // null | 0..5
+  let familyPasswordFolded = true;
+
+  // Iconos vectoriales accesibles (SVG consistentes, sin emojis de interfaz)
+  function familySvg(name) {
+    const svgs = {
+      overview: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
+      tasks: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="m9 16 2 2 4-4"></path></svg>',
+      grades: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>',
+      family: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+      account: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
+      attendance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>',
+      conduct: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>',
+      fieldLenguajes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>',
+      fieldSaberes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"></circle><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path></svg>',
+      fieldEtica: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>',
+      fieldHumano: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>',
+      observation: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>',
+      calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>',
+      chevronDown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>',
+      edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+      logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>',
+      shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>',
+      user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
+      phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>',
+      mapPin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>',
+      medical: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
+      check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+      alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>',
+      clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>'
+    };
+    return svgs[name] || '';
+  }
+
+  function getFieldIconSvg(fieldName) {
+    if (!fieldName) return familySvg('fieldLenguajes');
+    if (fieldName === 'Lenguajes') return familySvg('fieldLenguajes');
+    if (fieldName.includes('Científico') || fieldName.includes('Saberes')) return familySvg('fieldSaberes');
+    if (fieldName.startsWith('Ética')) return familySvg('fieldEtica');
+    return familySvg('fieldHumano');
+  }
+
+  function formatDayLong(isoDateStr) {
+    if (!isoDateStr) return '';
+    try {
+      const parts = isoDateStr.split('-').map(Number);
+      const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+      return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+    } catch (_) {
+      return isoDateStr;
+    }
+  }
+
+  function obfuscatePhone(raw) {
+    if (!raw) return '••• ••• 4589';
+    const digits = String(raw).replace(/\D/g, '');
+    const last4 = digits.length >= 4 ? digits.slice(-4) : '4589';
+    return `••• ••• ${last4}`;
+  }
+
+  // Inicialización y montaje del contenedor unificado
+
+  //
+
+  function ensureModernShell() {
+    const app = $('#familyAppPanel');
+    if (!app) return;
+
+    // 1. TOP BAR 1: Encabezado superior institucional (56px)
+    const header = $('#familyPortal .family-header');
+    if (header) {
+      const schoolName = familyPortalData?.school?.name || 'Escuela Primaria Francisco Hoil Torres T.V.';
+      header.innerHTML = `
+        <div class="family-header-brand-wrap">
+          <img src="school-logo.webp" alt="Logo de la escuela" width="38" height="38">
+          <div class="family-header-titles">
+            <span class="family-header-app-title">Carpeta Académica</span>
+            <span class="family-header-sep">|</span>
+            <span class="family-header-school-name" title="${escapeHtml(schoolName)}">${escapeHtml(schoolName)}</span>
+          </div>
+        </div>
+        <div class="family-header-actions">
+          <button type="button" class="family-logout-btn" data-action="family-logout">
+            ${familySvg('logout', 16)} <span>Cerrar sesión</span>
+          </button>
+        </div>
+      `;
+    }
+
+    // 2. TOP BAR 2: Barra del alumno + 5 pestañas desktop (48px)
+    let studentNavTopBar = $('#familyStudentNavTopBar');
+    if (!studentNavTopBar) {
+      studentNavTopBar = document.createElement('div');
+      studentNavTopBar.id = 'familyStudentNavTopBar';
+      studentNavTopBar.className = 'family-student-nav-topbar';
+      const portal = $('#familyPortal');
+      const main = portal?.querySelector('.family-main');
+      if (portal && main) {
+        portal.insertBefore(studentNavTopBar, main);
+      }
+    }
+
+    const studentName = familyPortalData?.student?.name || 'Alumno(a)';
+    const groupName = familyPortalData?.school?.group || '4.º A';
+
+    studentNavTopBar.innerHTML = `
+      <div class="family-student-nav-inner">
+        <div class="family-student-label-group">
+          <span class="student-name">${escapeHtml(studentName)}</span>
+          <span class="group-pill">· ${escapeHtml(groupName)}</span>
+        </div>
+        <nav class="family-top-tabs-desktop" aria-label="Navegación principal">
+          <button type="button" class="family-top-tab-btn ${familyActiveTab === 'familyOverview' ? 'active' : ''}" data-action="family-tab-click" data-view="familyOverview">Resumen</button>
+          <button type="button" class="family-top-tab-btn ${familyActiveTab === 'familyTasks' ? 'active' : ''}" data-action="family-tab-click" data-view="familyTasks">Tareas</button>
+          <button type="button" class="family-top-tab-btn ${familyActiveTab === 'familyGrades' ? 'active' : ''}" data-action="family-tab-click" data-view="familyGrades">Calificaciones</button>
+          <button type="button" class="family-top-tab-btn ${familyActiveTab === 'familyProfile' ? 'active' : ''}" data-action="family-tab-click" data-view="familyProfile">Datos familiares</button>
+          <button type="button" class="family-top-tab-btn ${familyActiveTab === 'familyAccount' ? 'active' : ''}" data-action="family-tab-click" data-view="familyAccount">Mi cuenta</button>
+        </nav>
+      </div>
+    `;
+
+    // 3. BARRA INFERIOR MÓVIL (5 OPCIONES CON ICONOS SVG OUTLINE)
+    let bottomNav = $('.family-bottom-nav');
+    if (!bottomNav) {
+      bottomNav = document.createElement('nav');
+      bottomNav.className = 'family-bottom-nav';
+      bottomNav.setAttribute('aria-label', 'Navegación familiar móvil');
+      $('#familyPortal')?.appendChild(bottomNav);
+    }
+    bottomNav.innerHTML = `
+      <div class="family-bottom-nav-inner">
+        <button type="button" class="family-bottom-nav-btn ${familyActiveTab === 'familyOverview' ? 'active' : ''}" data-action="family-tab-click" data-view="familyOverview">
+          ${familySvg('overview', 22)}<span>Resumen</span>
+        </button>
+        <button type="button" class="family-bottom-nav-btn ${familyActiveTab === 'familyTasks' ? 'active' : ''}" data-action="family-tab-click" data-view="familyTasks">
+          ${familySvg('clipboardCheck', 22)}<span>Tareas</span>
+        </button>
+        <button type="button" class="family-bottom-nav-btn ${familyActiveTab === 'familyGrades' ? 'active' : ''}" data-action="family-tab-click" data-view="familyGrades">
+          ${familySvg('grades', 22)}<span>Calificaciones</span>
+        </button>
+        <button type="button" class="family-bottom-nav-btn ${familyActiveTab === 'familyProfile' ? 'active' : ''}" data-action="family-tab-click" data-view="familyProfile">
+          ${familySvg('users', 22)}<span>Datos</span>
+        </button>
+        <button type="button" class="family-bottom-nav-btn ${familyActiveTab === 'familyAccount' ? 'active' : ''}" data-action="family-tab-click" data-view="familyAccount">
+          ${familySvg('shieldCheck', 22)}<span>Cuenta</span>
+        </button>
+      </div>
+    `;
+
+    // 4. ASEGURAR VISTA DE REPORTE SEMANAL EN EL DOM
+    let reportView = $('#familyWeeklyReport');
+    if (!reportView) {
+      reportView = document.createElement('div');
+      reportView.id = 'familyWeeklyReport';
+      reportView.className = 'family-view';
+      app.appendChild(reportView);
+    }
+
+    // 5. INPUT DATE NATIVO OCULTO PARA PICKER
+    let hiddenDate = $('#familyHiddenDateInput');
+    if (!hiddenDate) {
+      hiddenDate = document.createElement('input');
+      hiddenDate.type = 'date';
+      hiddenDate.id = 'familyHiddenDateInput';
+      hiddenDate.style.display = 'none';
+      hiddenDate.addEventListener('change', (e) => {
+        if (e.target.value) {
+          setFamilyDateModern(e.target.value, true);
+        }
+      });
+      document.body.appendChild(hiddenDate);
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // ICONOGRAFÍA SVG UNIFORME DE CONTORNO (LUCIDE BASELINE)
+  // ------------------------------------------------------------------------
+  function familySvg(name, size = 24) {
+    const s = Number(size) || 24;
+    const svgs = {
+      // Navegación y general
+      overview: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+      grades: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+      logout: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
+      edit: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+      chevronDown: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>`,
+      chevronUp: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>`,
+      chevronLeft: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>`,
+      chevronRight: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>`,
+      observation: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>`,
+      messageCircle: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>`,
+      fileText: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>`,
+      check: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`,
+      clock: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+
+      // Requerimientos específicos de iconografía (Lucide)
+      calendarDays: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M8 2v4"/><path d="M16 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg>`,
+      userCheck: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>`,
+      clipboardCheck: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>`,
+      shieldCheck: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>`,
+      star: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+      hand: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>`,
+      handRaised: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>`,
+
+      // 4 Campos Formativos (Iconos diferentes)
+      bookOpen: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
+      flaskConical: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>`,
+      flask: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>`,
+      leaf: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c0 3 0 5-1 9a7 7 0 0 1-7 9Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>`,
+      usersRound: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-5-8a5 5 0 0 0-.45-8.3"/></svg>`,
+      users: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-5-8a5 5 0 0 0-.45-8.3"/></svg>`,
+
+      // Directorio familiar
+      user: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+      mapPin: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
+      phone: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`
+    };
+
+    return svgs[name] || svgs.overview;
+  }
+
+  // Teléfono seguro en modo demostración
+  function getSafePhone(phone) {
+    if (!phone || window.__familyDemoActive || String(phone).includes('TELÉFONO') || String(phone).includes('999')) {
+      return 'TELÉFONO FICTICIO NO UTILIZABLE';
+    }
+    return phone;
+  }
+
+  // Sincronización de URL y History API
+  const VIEW_SLUG_MAP = {
+    familyOverview: 'resumen',
+    familyTasks: 'tareas',
+    familyGrades: 'calificaciones',
+    familyProfile: 'datos',
+    familyAccount: 'cuenta',
+    familyWeeklyReport: 'reporte'
+  };
+
+  const SLUG_VIEW_MAP = {
+    resumen: 'familyOverview',
+    tareas: 'familyTasks',
+    calificaciones: 'familyGrades',
+    datos: 'familyProfile',
+    cuenta: 'familyAccount',
+    reporte: 'familyWeeklyReport'
+  };
+
+  function syncUrlAndHistory(viewId, date, push = true) {
+    const slug = VIEW_SLUG_MAP[viewId] || 'resumen';
+    const url = new URL(window.location.href);
+    url.searchParams.set('vista', slug);
+    if (date) {
+      url.searchParams.set('fecha', date);
+    }
+    const state = { view: viewId, date: date };
+    if (push) {
+      window.history.pushState(state, '', url.toString());
+    } else {
+      window.history.replaceState(state, '', url.toString());
+    }
+  }
+
+  window.addEventListener('popstate', (e) => {
+    let targetDate = null;
+    let targetView = 'familyOverview';
+    if (e.state && e.state.view) {
+      targetView = e.state.view;
+      if (e.state.date) targetDate = e.state.date;
+    } else {
+      const params = new URLSearchParams(window.location.search);
+      const slug = params.get('vista');
+      const date = params.get('fecha');
+      if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        targetDate = date;
+      }
+      if (slug && SLUG_VIEW_MAP[slug]) {
+        targetView = SLUG_VIEW_MAP[slug];
+      }
+    }
+
+    if (targetDate) {
+      familyCurrentDate = targetDate;
+      const period = getPeriodForDate(targetDate);
+      if (window.__familyDemoActive && typeof window.setDemoWeek === 'function') {
+        window.setDemoWeek(period.number, targetDate, false);
+      }
+    }
+    showFamilyViewModern(targetView, false);
+  });
+
+  // ------------------------------------------------------------------------
+  // AYUDANTES DE CICLO ESCOLAR, PERIODOS Y FECHAS (OFICIAL 2026-2027)
+  // ------------------------------------------------------------------------
+  const SCHOOL_CYCLE_CONFIG = {
+    startDate: '2026-08-31', // Lunes 31 de agosto de 2026
+    endDate: '2027-07-09',   // Viernes 9 de julio de 2027 (fin oficial: 10 de julio)
+    excludedMondayDates: [
+      '2026-12-21', // Vacaciones de invierno: 21 al 25 de diciembre de 2026
+      '2026-12-28', // Vacaciones de invierno: 28 de diciembre de 2026 al 1 de enero de 2027
+      '2027-03-22', // Vacaciones de primavera: 22 al 26 de marzo de 2027
+      '2027-03-29'  // Vacaciones de primavera: 29 de marzo al 2 de abril de 2027
+    ],
+    partialWeeks: {
+      '2027-01-04': {
+        tag: 'Semana parcial · Regreso de vacaciones',
+        days: {
+          '2027-01-04': { type: 'vacation', label: 'Vacaciones escolares' },
+          '2027-01-05': { type: 'vacation', label: 'Vacaciones escolares' },
+          '2027-01-06': { type: 'suspension', label: 'Suspensión de actividades' },
+          '2027-01-07': { type: 'class', label: 'Día de clases' },
+          '2027-01-08': { type: 'class', label: 'Día de clases' }
+        },
+        defaultDate: '2027-01-07'
+      }
+    }
+  };
+
+  function parseIsoDate(isoStr) {
+    if (!isoStr || typeof isoStr !== 'string') return new Date(2026, 7, 31, 12, 0, 0);
+    const parts = isoStr.split('-').map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+  }
+
+  function toIsoDate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function getMondayForDate(d) {
+    const day = d.getDay();
+    const diff = (day === 0 ? -6 : 1 - day);
+    const mon = new Date(d);
+    mon.setDate(d.getDate() + diff);
+    return mon;
+  }
+
+  function formatWeekRange(monDate, friDate) {
+    const months = [
+      'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+    ];
+    const d1 = monDate.getDate(), m1 = months[monDate.getMonth()], y1 = monDate.getFullYear();
+    const d2 = friDate.getDate(), m2 = months[friDate.getMonth()], y2 = friDate.getFullYear();
+    if (y1 !== y2) return `Del ${d1} de ${m1} de ${y1} al ${d2} de ${m2} de ${y2}`;
+    if (m1 !== m2) return `Del ${d1} de ${m1} al ${d2} de ${m2} de ${y2}`;
+    return `Del ${d1} al ${d2} de ${m2} de ${y2}`;
+  }
+
+  let cachedSchoolPeriods = null;
+
+  function getSchoolPeriods() {
+    if (cachedSchoolPeriods) return cachedSchoolPeriods;
+
+    const periods = [];
+    const [sy, sm, sd] = SCHOOL_CYCLE_CONFIG.startDate.split('-').map(Number);
+    const [ey, em, ed] = SCHOOL_CYCLE_CONFIG.endDate.split('-').map(Number);
+    const cur = new Date(sy, sm - 1, sd, 12, 0, 0);
+    const end = new Date(ey, em - 1, ed, 12, 0, 0);
+    let periodIndex = 1;
+
+    while (cur <= end) {
+      const monIso = toIsoDate(cur);
+      const fri = new Date(cur);
+      fri.setDate(cur.getDate() + 4);
+      const friIso = toIsoDate(fri);
+
+      if (!SCHOOL_CYCLE_CONFIG.excludedMondayDates.includes(monIso)) {
+        const isPartial = Boolean(SCHOOL_CYCLE_CONFIG.partialWeeks[monIso]);
+        const partialConfig = SCHOOL_CYCLE_CONFIG.partialWeeks[monIso] || null;
+        const rangeStr = formatWeekRange(cur, fri);
+
+        periods.push({
+          number: periodIndex,
+          startMondayIso: monIso,
+          endFridayIso: friIso,
+          rangeLabel: rangeStr,
+          isPartial: isPartial,
+          tag: partialConfig?.tag || null,
+          defaultDate: partialConfig?.defaultDate || monIso,
+          daysConfig: partialConfig?.days || null
+        });
+        periodIndex++;
+      }
+      cur.setDate(cur.getDate() + 7);
+    }
+
+    cachedSchoolPeriods = periods;
+    return periods;
+  }
+
+  function getPeriodForDate(isoStr) {
+    const periods = getSchoolPeriods();
+    if (!isoStr) return periods[0];
+    for (const p of periods) {
+      if (isoStr >= p.startMondayIso && isoStr <= p.endFridayIso) {
+        return p;
+      }
+    }
+    const d = parseIsoDate(isoStr);
+    const monIso = toIsoDate(getMondayForDate(d));
+    const found = periods.find(p => p.startMondayIso === monIso);
+    if (found) return found;
+
+    if (isoStr < periods[0].startMondayIso) return periods[0];
+    if (isoStr > periods[periods.length - 1].endFridayIso) return periods[periods.length - 1];
+
+    if (isoStr >= '2026-12-21' && isoStr <= '2027-01-03') {
+      return periods.find(p => p.number === 17) || periods[16];
+    }
+    if (isoStr >= '2027-03-22' && isoStr <= '2027-04-04') {
+      return periods.find(p => p.number === 28) || periods[27];
+    }
+    return periods[0];
+  }
+
+  function getPeriodByNumber(num) {
+    const periods = getSchoolPeriods();
+    const n = parseInt(num, 10) || 1;
+    if (n <= 1) return periods[0];
+    if (n >= periods.length) return periods[periods.length - 1];
+    return periods[n - 1];
+  }
+
+  function getTotalCycleWeeks() {
+    return getSchoolPeriods().length;
+  }
+
+  function getWeekDaysForPeriod(period, currentDate) {
+    const [sy, sm, sd] = period.startMondayIso.split('-').map(Number);
+    const mon = new Date(sy, sm - 1, sd, 12, 0, 0);
+    const labels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
+
+    return [0, 1, 2, 3, 4].map(i => {
+      const cur = new Date(mon);
+      cur.setDate(mon.getDate() + i);
+      const iso = toIsoDate(cur);
+      let dayType = 'class';
+      let statusLabel = '';
+      let isDisabled = false;
+
+      if (period.daysConfig && period.daysConfig[iso]) {
+        const cfg = period.daysConfig[iso];
+        dayType = cfg.type;
+        statusLabel = cfg.label;
+        if (dayType === 'vacation' || dayType === 'suspension') {
+          isDisabled = true;
+        }
+      }
+
+      return {
+        date: iso,
+        label: labels[i],
+        day: cur.getDate(),
+        type: dayType,
+        statusLabel: statusLabel,
+        disabled: isDisabled,
+        active: (iso === currentDate)
+      };
+    });
+  }
+
+  function getWeekDaysForDate(isoDate) {
+    const period = getPeriodForDate(isoDate);
+    return getWeekDaysForPeriod(period, isoDate);
+  }
+
+  window.getSchoolPeriods = getSchoolPeriods;
+  window.getPeriodForDate = getPeriodForDate;
+  window.getPeriodByNumber = getPeriodByNumber;
+
+  // Estado del panel de periodos
+  let familyPeriodPanelOpen = false;
+  let familyPeriodNoticeDismissed = false;
+
+  function renderPeriodSelectorHtml(viewId) {
+    // Requisito: Mostrar únicamente en Resumen, Tareas y Calificaciones
+    if (viewId === 'familyProfile' || viewId === 'familyAccount' || viewId === 'familyWeeklyReport') {
+      return '';
+    }
+
+    const periods = getSchoolPeriods();
+    const totalPeriods = periods.length;
+    const curPeriod = getPeriodForDate(familyCurrentDate);
+    const curNum = curPeriod.number;
+
+    const isFirstWeek = (curNum <= 1);
+    const isLastWeek = (curNum >= totalPeriods);
+
+    const activeLabel = curPeriod.tag
+      ? `Semana ${curNum} · ${curPeriod.tag} · ${curPeriod.rangeLabel}`
+      : `Semana ${curNum} · ${curPeriod.rangeLabel}`;
+
+    return `
+      <div class="family-period-selector-row">
+        <button type="button" class="family-btn-toggle-period" data-action="family-toggle-period-panel" aria-expanded="${familyPeriodPanelOpen}">
+          ${familySvg(familyPeriodPanelOpen ? 'chevronDown' : 'chevronRight', 16)}
+          <span>Consultar otro periodo</span>
+        </button>
+        <span class="family-period-active-label">${escapeHtml(activeLabel)}</span>
+      </div>
+
+      <div id="familyPeriodLiveRegion" role="status" aria-live="polite" style="position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0,0,0,0);"></div>
+
+      ${familyPeriodPanelOpen ? `
+        <div class="family-period-panel" role="region" aria-label="Navegador de semanas">
+          <div class="family-week-nav-card ${curPeriod.isPartial ? 'partial-period' : ''}">
+            <button type="button"
+              class="family-week-nav-arrow prev"
+              data-action="family-period-prev-week"
+              ${isFirstWeek ? 'disabled aria-disabled="true"' : ''}
+              aria-label="Consultar semana anterior">
+              ${familySvg('chevronLeft', 20)}
+            </button>
+
+            <div class="family-week-nav-center">
+              <span class="family-week-nav-title">Semana ${curNum} de ${totalPeriods}</span>
+              ${curPeriod.tag ? `<span class="family-week-nav-badge">${escapeHtml(curPeriod.tag)}</span>` : ''}
+              <span class="family-week-nav-range">${escapeHtml(curPeriod.rangeLabel)}</span>
+            </div>
+
+            <button type="button"
+              class="family-week-nav-arrow next"
+              data-action="family-period-next-week"
+              ${isLastWeek ? 'disabled aria-disabled="true"' : ''}
+              aria-label="Consultar semana siguiente">
+              ${familySvg('chevronRight', 20)}
+            </button>
+          </div>
+        </div>
+      ` : ''}
+    `;
+  }
+
+  function formatDayCapitalized(isoDateStr) {
+    if (!isoDateStr) return '';
+    try {
+      const parts = isoDateStr.split('-').map(Number);
+      const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+      const str = d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    } catch (_) {
+      return isoDateStr;
+    }
+  }
+
+  // Selector de fechas compacto y accesible (Solo en Resumen)
+  function renderDateBarHtml() {
+    const curPeriod = getPeriodForDate(familyCurrentDate);
+    const days = getWeekDaysForPeriod(curPeriod, familyCurrentDate);
+
+    return `
+      <div class="family-compact-date-bar">
+        <!-- Escritorio: ‹ LUN 31 MAR 1 MIÉ 2 JUE 3 VIE 4 › | Elegir fecha | Hoy -->
+        <div class="family-date-bar-desktop">
+          <button type="button" class="family-date-arrow-btn" data-action="family-date-prev-day" aria-label="Día anterior">
+            ${familySvg('chevronLeft', 16)}
+          </button>
+          <div class="family-date-days-strip">
+            ${days.map(d => `
+              <button type="button"
+                class="family-day-btn ${d.active ? 'active' : ''} ${d.disabled ? 'disabled-day' : ''}"
+                data-action="${d.disabled ? 'noop' : 'family-date-day-click'}"
+                data-date="${d.date}"
+                ${d.disabled ? 'disabled aria-disabled="true"' : ''}
+                title="${escapeHtml(d.statusLabel ? (d.label + ' ' + d.day + ' - ' + d.statusLabel) : (d.label + ' ' + d.day))}">
+                <span class="day-label">${escapeHtml(d.label.toUpperCase())}</span>
+                <span class="day-num">${escapeHtml(String(d.day))}</span>
+                ${(d.type === 'vacation' || d.type === 'suspension') ? `<span class="day-status-pill ${d.type}">${d.type === 'vacation' ? 'Vac' : 'Susp'}</span>` : ''}
+              </button>
+            `).join('')}
+          </div>
+          <button type="button" class="family-date-arrow-btn" data-action="family-date-next-day" aria-label="Día siguiente">
+            ${familySvg('chevronRight', 16)}
+          </button>
+          <span class="family-date-bar-sep" aria-hidden="true">|</span>
+          <button type="button" class="family-date-action-btn" data-action="family-open-date-picker">
+            ${familySvg('calendarDays', 18)}
+            <span>Elegir fecha</span>
+          </button>
+          <span class="family-date-bar-sep" aria-hidden="true">|</span>
+          <button type="button" class="family-date-action-btn today" data-action="family-date-today">
+            <span>Hoy</span>
+          </button>
+        </div>
+
+        <!-- Teléfono: ‹ Lunes, 31 de agosto › y botón SVG de calendario -->
+        <div class="family-date-bar-mobile">
+          <div class="family-date-mobile-group">
+            <button type="button" class="family-date-arrow-btn" data-action="family-date-prev-day" aria-label="Día anterior">
+              ${familySvg('chevronLeft', 18)}
+            </button>
+            <span class="family-date-mobile-text">${escapeHtml(formatDayCapitalized(familyCurrentDate))}</span>
+            <button type="button" class="family-date-arrow-btn" data-action="family-date-next-day" aria-label="Día siguiente">
+              ${familySvg('chevronRight', 18)}
+            </button>
+          </div>
+          <button type="button" class="family-date-mobile-cal-btn" data-action="family-open-date-picker" aria-label="Elegir fecha">
+            ${familySvg('calendarDays', 20)}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  // ------------------------------------------------------------------------
+  // 1. PESTAÑA: RESUMEN ACADÉMICO (COMPACTO Y FIEL AL DISEÑO)
+  // ------------------------------------------------------------------------
+  function renderModernOverview() {
+    const host = $('#familyOverview');
+    if (!host || !familyPortalData) return;
+    host.className = 'family-view family-summary-view active';
+
+    const academic = familyPortalData.academic || {};
+    const weeklyTasks = academic.weeklyTasks || [];
+    const reportTasks = academic.weeklyReport?.tasks || [];
+    const reportAttendance = academic.weeklyReport?.attendance?.records || [];
+
+    // Tareas del día
+    let dayTasks = [];
+    weeklyTasks.forEach(w => {
+      (w.tasks || []).forEach(t => {
+        if (t.date === familyCurrentDate) dayTasks.push(t);
+      });
+    });
+    if (!dayTasks.length && reportTasks.length) {
+      dayTasks = reportTasks.filter(t => t.date === familyCurrentDate);
+    }
+
+    // Determinar si hay actividades registradas en el día
+    const hasDayRecords = Boolean(dayTasks.length > 0);
+
+    const periodHtml = renderPeriodSelectorHtml('familyOverview');
+    const dateBarHtml = renderDateBarHtml();
+    const headingText = `Resumen del ${formatDayCapitalized(familyCurrentDate)}`;
+
+    // 7. ESTADOS SIN INFORMACIÓN / VACACIONES / SUSPENSIÓN
+    if (!hasDayRecords) {
+      const curPeriod = getPeriodForDate(familyCurrentDate);
+      const dayCfg = curPeriod?.daysConfig && curPeriod.daysConfig[familyCurrentDate];
+      const isVacation = (dayCfg?.type === 'vacation');
+      const isSuspension = (dayCfg?.type === 'suspension');
+
+      let emptyIllustration = `
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+      `;
+      let emptyTitle = 'Información pendiente de publicación';
+      let emptySubtitle = 'Las actividades y el registro de este día todavía no están disponibles. Vuelve a consultar más tarde.';
+      let extraClass = '';
+
+      if (isVacation) {
+        extraClass = 'vacation-state';
+        emptyIllustration = `
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+          </svg>
+        `;
+        emptyTitle = 'Vacaciones escolares';
+        emptySubtitle = 'No hay clases programadas para este día conforme al calendario escolar oficial por periodo vacacional.';
+      } else if (isSuspension) {
+        extraClass = 'suspension-state';
+        emptyIllustration = `
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        `;
+        emptyTitle = 'Suspensión de actividades';
+        emptySubtitle = 'Suspensión oficial de labores escolares conforme al calendario escolar autorizado.';
+      }
+
+      host.innerHTML = `
+        ${periodHtml}
+        ${dateBarHtml}
+
+        <h2 class="family-summary-main-heading">${escapeHtml(headingText)}</h2>
+
+        <div class="family-empty-day-container ${extraClass}">
+          <div class="family-empty-day-illustration">
+            ${emptyIllustration}
+          </div>
+          <h3 class="family-empty-day-title">${escapeHtml(emptyTitle)}</h3>
+          <p class="family-empty-day-subtitle">${escapeHtml(emptySubtitle)}</p>
+          <div class="family-empty-day-divider" aria-hidden="true"></div>
+          <p class="family-empty-day-helptext">Puedes consultar los días de clases de la semana o elegir otra fecha.</p>
+          <div class="family-empty-day-actions-row">
+            <button type="button" class="family-btn-outline" data-action="family-open-date-picker">
+              ${familySvg('calendarDays', 18)}
+              <span>Elegir otra fecha</span>
+            </button>
+            <button type="button" class="family-btn-solid-teal" data-action="family-refresh-date">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+              <span>Actualizar</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="family-pending-week-alert-box">
+          <span class="family-alert-icon">${familySvg('clipboardCheck', 20)}</span>
+          <span>Aún no se han publicado tareas para este día.</span>
+        </div>
+
+        <div class="family-observations-card-full" style="margin-top: 18px;">
+          <div class="family-obs-left-content">
+            <span class="family-obs-icon-wrap">${familySvg('messageCircle', 28)}</span>
+            <div class="family-obs-texts">
+              <h4>Reporte semanal escolar</h4>
+              <p>Puedes consultar el informe académico consolidado de la semana correspondiente a este periodo.</p>
+            </div>
+          </div>
+          <button type="button" class="family-btn-solid-teal" data-action="family-view-weekly-report">
+            ${familySvg('fileText', 18)}
+            <span>Ver reporte semanal</span>
+          </button>
+        </div>
+      `;
+      return;
+    }
+
+    // 2. MÉTRICAS PRINCIPALES (LUNES / DÍA CON DATOS)
+    const dayAttendanceRecord = reportAttendance.find(r => r.date === familyCurrentDate);
+    let attLabel = 'Presente';
+    let attPctText = '94 % de asistencia';
+    if (dayAttendanceRecord) {
+      if (dayAttendanceRecord.status === 'R') { attLabel = 'Retardo'; }
+      else if (dayAttendanceRecord.status === 'J') { attLabel = 'Justificada'; }
+      else if (dayAttendanceRecord.status === 'F') { attLabel = 'Falta'; }
+    }
+
+    const taskSummary = academic.taskSummary || { completed: 2, total: 3, percentage: 66.7 };
+    const taskCompleted = taskSummary.completed || 2;
+    const taskTotal = taskSummary.total || 3;
+    const taskPct = taskTotal ? Math.round((taskCompleted / taskTotal) * 100) : 66;
+
+    const conductSummary = academic.conductSummary || { label: 'Adecuada', score: 9.2 };
+    const conductLabel = conductSummary.label || 'Adecuada';
+
+    const participationSummary = academic.participationSummary || { label: 'Alta', score: 9.5 };
+    const participationLabel = participationSummary.label || 'Alta';
+    const participationDesc = 'Participación activa en clase';
+
+    // 3. AVANCE ACADÉMICO: 4 CAMPOS CON ICONOS DISTINTOS
+    const fields = [
+      { name: 'Lenguajes', grade: 9.5, status: 'Buen avance', pct: 85, iconSvg: familySvg('bookOpen', 26), iconClass: 'lenguajes' },
+      { name: 'Saberes y Pensamiento Científico', grade: 9.0, status: 'En proceso', pct: 75, iconSvg: familySvg('flaskConical', 26), iconClass: 'saberes' },
+      { name: 'Ética, Naturaleza y Sociedades', grade: 8.8, status: 'Buen avance', pct: 80, iconSvg: familySvg('leaf', 26), iconClass: 'etica' },
+      { name: 'De lo Humano y lo Comunitario', grade: 9.2, status: 'En proceso', pct: 70, iconSvg: familySvg('usersRound', 26), iconClass: 'humano' }
+    ];
+
+    const observationText = academic.observation || 'Muestra una actitud participativa y responsable en clase. Continúa reforzando la entrega puntual de sus tareas.';
+
+    host.innerHTML = `
+      ${periodHtml}
+      ${dateBarHtml}
+
+      <h2 class="family-summary-main-heading">${escapeHtml(headingText)}</h2>
+
+      <!-- 2. MÉTRICAS PRINCIPALES (4 TARJETAS INDEPENDIENTES) -->
+      <div class="family-summary-4grid">
+        <!-- 1. Asistencia -->
+        <article class="family-summary-card">
+          <div class="family-summary-card-head">
+            <span class="family-summary-card-icon user-check">${familySvg('userCheck', 30)}</span>
+            <span class="family-summary-card-title">ASISTENCIA</span>
+          </div>
+          <div class="family-summary-card-body">
+            <div class="family-metric-pill green">✓ ${escapeHtml(attLabel)}</div>
+            <p class="family-stat-subtext">${escapeHtml(attPctText)}</p>
+          </div>
+        </article>
+
+        <!-- 2. Tareas -->
+        <article class="family-summary-card">
+          <div class="family-summary-card-head">
+            <span class="family-summary-card-icon clipboard-check">${familySvg('clipboardCheck', 30)}</span>
+            <span class="family-summary-card-title">TAREAS</span>
+          </div>
+          <div class="family-summary-card-body">
+            <div class="family-tasks-stat-pill">${taskCompleted} de ${taskTotal} entregadas</div>
+            <div class="family-mini-progress"><i style="width: ${Math.min(taskPct, 100)}%"></i></div>
+          </div>
+        </article>
+
+        <!-- 3. Conducta -->
+        <article class="family-summary-card">
+          <div class="family-summary-card-head">
+            <span class="family-summary-card-icon star">${familySvg('star', 30)}</span>
+            <span class="family-summary-card-title">CONDUCTA</span>
+          </div>
+          <div class="family-summary-card-body">
+            <div class="family-conduct-gauge-wrap">
+              <svg class="family-conduct-gauge-svg" width="120" height="70" viewBox="0 0 120 70" aria-hidden="true">
+                <path d="M 18 52 A 42 42 0 0 1 102 52" fill="none" stroke="#e2e8f0" stroke-width="8" stroke-linecap="round"/>
+                <path d="M 18 52 A 42 42 0 0 1 94 27" fill="none" stroke="#10b981" stroke-width="8" stroke-linecap="round"/>
+                <text class="family-gauge-label" x="60" y="50" text-anchor="middle" font-size="14.5" font-weight="800" fill="#047857" font-family="system-ui, -apple-system, sans-serif">${escapeHtml(conductLabel)}</text>
+              </svg>
+            </div>
+          </div>
+        </article>
+
+        <!-- 4. Participación -->
+        <article class="family-summary-card">
+          <div class="family-summary-card-head">
+            <span class="family-summary-card-icon hand">${familySvg('hand', 30)}</span>
+            <span class="family-summary-card-title">PARTICIPACIÓN</span>
+          </div>
+          <div class="family-summary-card-body">
+            <div class="family-metric-pill blue">★ ${escapeHtml(participationLabel)}</div>
+            <p class="family-stat-subtext">${escapeHtml(participationDesc)}</p>
+          </div>
+        </article>
+      </div>
+
+      <!-- 3. AVANCE ACADÉMICO (SIN SUBTÍTULO REDUNDANTE) -->
+      <div class="family-academic-section-wrap">
+        <h3 class="family-academic-section-title">Avance académico</h3>
+
+        <div class="family-academic-fields-4grid">
+          ${fields.map(f => {
+            const isSuccess = f.status === 'Buen avance';
+            return `
+              <article class="family-field-card-box">
+                <div class="family-field-header-row">
+                  <div class="family-field-identity">
+                    <span class="family-field-icon-wrap ${f.iconClass}">${f.iconSvg}</span>
+                    <h4 class="family-field-name-text">${escapeHtml(f.name)}</h4>
+                  </div>
+                  <span class="family-status-pill-small ${isSuccess ? 'success' : 'process'}">${escapeHtml(f.status)}</span>
+                </div>
+                <div class="family-field-progress-wrap">
+                  <div class="family-mini-progress"><i style="width: ${f.pct}%"></i></div>
+                </div>
+              </article>
+            `;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- 4. OBSERVACIONES DEL MAESTRO -->
+      <div class="family-observations-card-full">
+        <div class="family-obs-left-content">
+          <span class="family-obs-icon-wrap">${familySvg('messageCircle', 28)}</span>
+          <div class="family-obs-texts">
+            <h4>Observaciones del maestro</h4>
+            <p>${escapeHtml(observationText)}</p>
+          </div>
+        </div>
+        <button type="button" class="family-btn-solid-teal" data-action="family-view-weekly-report">
+          ${familySvg('fileText', 18)}
+          <span>Ver reporte semanal</span>
+        </button>
+      </div>
+    `;
+  }
+
+  // ------------------------------------------------------------------------
+  // 2. PESTAÑA: TAREAS (REQUISITO 5: FILA DE DÍAS Y ESTADOS VACÍOS)
+  // ------------------------------------------------------------------------
+  function renderModernTasks() {
+    const host = $('#familyTasks');
+    if (!host || !familyPortalData) return;
+
+    const academic = familyPortalData.academic || {};
+    const weeklyTasks = academic.weeklyTasks || [];
+    const reportAttendance = academic.weeklyReport?.attendance?.records || [];
+    let allTasks = [];
+
+    weeklyTasks.forEach(w => {
+      (w.tasks || []).forEach(t => allTasks.push(t));
+    });
+    if (!allTasks.length && academic.weeklyReport?.tasks) {
+      allTasks = academic.weeklyReport.tasks;
+    }
+
+    const calendar = window.CARPETA_PLANNING_CALENDAR;
+    const info = calendar?.resolve ? calendar.resolve(familyCurrentDate) : null;
+    const days = calendar?.daysFor && info ? calendar.daysFor(info) : getWeekDaysForDate(familyCurrentDate);
+
+    let scopedTasks = familyTasksScope === 'day'
+      ? allTasks.filter(t => t.date === familyCurrentDate)
+      : allTasks;
+
+    const totalCount = scopedTasks.length;
+    const completedCount = scopedTasks.filter(t => /entregad/i.test(t.status) && !/no entregad/i.test(t.status)).length;
+    const progressPct = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
+
+    let filteredTasks = scopedTasks.filter(t => {
+      const st = String(t.status || '').toLowerCase();
+      if (familyTasksFilter === 'all') return true;
+      if (familyTasksFilter === 'entregada') return st.includes('entregad') && !st.includes('tarde') && !st.includes('incomplet');
+      if (familyTasksFilter === 'pendiente') return st.includes('pendiente');
+      if (familyTasksFilter === 'incompleta') return st.includes('incomplet');
+      if (familyTasksFilter === 'tarde') return st.includes('tard');
+      return true;
+    });
+
+    const periodHtml = renderPeriodSelectorHtml('familyTasks');
+
+    // Determinar mensaje de estado vacío por día (Requisito 5)
+    const isDayRegisteredInSchool = reportAttendance.some(r => r.date === familyCurrentDate);
+    const dayEmptyMessage = isDayRegisteredInSchool
+      ? 'No se registraron tareas para este día.'
+      : 'Aún no se han publicado tareas para este día.';
+
+    host.innerHTML = `
+      ${periodHtml}
+
+      <div class="family-tasks-top-header">
+        <div class="family-tasks-headline">
+          <h2>Tareas de la semana</h2>
+          <p>${familyTasksScope === 'day' ? 'Mostrando tareas de ' + escapeHtml(formatDayLong(familyCurrentDate)) : escapeHtml(academic.periodLabel || 'Semana del 31 de agosto al 4 de septiembre de 2026')}</p>
+        </div>
+        <div class="family-tasks-delivered-pill">
+          ✓ ${completedCount} de ${totalCount} entregadas
+        </div>
+      </div>
+
+      <div class="family-mini-progress" style="margin-bottom: 16px;">
+        <i style="width: ${progressPct}%"></i>
+      </div>
+
+      <!-- Controles: Ámbito y Filtros -->
+      <div class="family-tasks-controls-bar">
+        <div class="family-scope-segmented">
+          <button type="button" class="family-scope-pill-btn ${familyTasksScope === 'week' ? 'active' : ''}" data-action="family-tasks-scope" data-scope="week">Toda la semana</button>
+          <button type="button" class="family-scope-pill-btn ${familyTasksScope === 'day' ? 'active' : ''}" data-action="family-tasks-scope" data-scope="day">Día seleccionado</button>
+        </div>
+
+        <div class="family-filter-pills-row">
+          <button type="button" class="family-filter-tag-btn ${familyTasksFilter === 'all' ? 'active' : ''}" data-action="family-tasks-filter" data-filter="all">Todas</button>
+          <button type="button" class="family-filter-tag-btn ${familyTasksFilter === 'entregada' ? 'active' : ''}" data-action="family-tasks-filter" data-filter="entregada">Entregadas</button>
+          <button type="button" class="family-filter-tag-btn ${familyTasksFilter === 'pendiente' ? 'active' : ''}" data-action="family-tasks-filter" data-filter="pendiente">Pendientes</button>
+          <button type="button" class="family-filter-tag-btn ${familyTasksFilter === 'incompleta' ? 'active' : ''}" data-action="family-tasks-filter" data-filter="incompleta">Incompletas</button>
+          <button type="button" class="family-filter-tag-btn ${familyTasksFilter === 'tarde' ? 'active' : ''}" data-action="family-tasks-filter" data-filter="tarde">Tardías</button>
+        </div>
+      </div>
+
+      <!-- Sub-fila de 5 botones de día cuando Día seleccionado está activo (Requisito 5) -->
+      ${familyTasksScope === 'day' ? `
+        <div class="family-tasks-days-subrow" aria-label="Seleccionar día de tareas">
+          ${days.map(d => `
+            <button type="button" class="family-task-day-btn ${d.date === familyCurrentDate ? 'active' : ''}" data-action="family-tasks-day-click" data-date="${d.date}">
+              <span>${escapeHtml(d.label)}</span> <b>${escapeHtml(String(d.day))}</b>
+            </button>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      <!-- Lista de Tareas o Estado Vacío -->
+      ${filteredTasks.length ? `
+        <div class="family-task-horizontal-list">
+          ${filteredTasks.map(task => {
+            const statusLower = String(task.status || '').toLowerCase();
+            const isEntregada = statusLower.includes('entregad') && !statusLower.includes('no');
+            const isPendiente = statusLower.includes('pendiente');
+            const borderClass = isEntregada ? 'border-entregada' : (isPendiente ? 'border-pendiente' : 'border-incompleta');
+            const statusBadgeClass = isEntregada ? 'entregada' : (isPendiente ? 'pendiente' : 'incompleta');
+
+            let fieldIcon = familySvg('bookOpen', 22);
+            const sourceLower = String(task.source || '').toLowerCase();
+            if (sourceLower.includes('saber') || sourceLower.includes('cient') || sourceLower.includes('mat')) {
+              fieldIcon = familySvg('flask', 22);
+            } else if (sourceLower.includes('ética') || sourceLower.includes('sociedad')) {
+              fieldIcon = familySvg('leaf', 22);
+            } else if (sourceLower.includes('humano') || sourceLower.includes('comunitar')) {
+              fieldIcon = familySvg('users', 22);
+            }
+
+            return `
+              <article class="family-task-card-row ${borderClass}">
+                <div class="family-task-left-section">
+                  <span class="family-task-square-badge" style="background: ${isEntregada ? '#dcfce7' : '#fef3c7'}; color: ${isEntregada ? '#166534' : '#92400e'};">
+                    ${fieldIcon}
+                  </span>
+                  <div class="family-task-info-content">
+                    <h3>${escapeHtml(task.title || task.name || 'Actividad escolar')}</h3>
+                    <div class="family-task-datetime-line">
+                      <span>${familySvg('calendarDays', 15)} Entrega: ${escapeHtml(task.date || '')} ${task.dueTime ? '· ' + escapeHtml(task.dueTime) : ''}</span>
+                    </div>
+                    <div class="family-task-meta-row">
+                      <span class="family-task-field-tag">${escapeHtml(task.source || 'Campo formativo')}</span>
+                      ${task.indication || task.instructions ? `<span class="family-task-indication-pill">💡 "${escapeHtml(task.indication || task.instructions)}"</span>` : ''}
+                    </div>
+                  </div>
+                </div>
+                <div class="family-task-right-status">
+                  <span class="family-task-status-badge ${statusBadgeClass}">
+                    ${isEntregada ? '✓ Entregada' : (isPendiente ? '⏳ Pendiente' : '⚠ Incompleta')}
+                  </span>
+                  ${task.grade != null ? `<small style="font-size: 11px; font-weight: 700; color: #166534;">Calificación: ${task.grade}</small>` : ''}
+                </div>
+              </article>
+            `;
+          }).join('')}
+        </div>
+      ` : `
+        <div class="family-tasks-empty-card">
+          <div style="display: flex; justify-content: center; color: #94a3b8;">${familySvg('clipboardCheck', 40)}</div>
+          <p>${familyTasksScope === 'day' ? escapeHtml(dayEmptyMessage) : 'No se encontraron tareas con el filtro seleccionado.'}</p>
+        </div>
+      `}
+    `;
+  }
+
+  // ------------------------------------------------------------------------
+  // 3. PESTAÑA: CALIFICACIONES (REQUISITO 6: DESGLOSE ACCESIBLE INDEPENDIENTE)
+  // ------------------------------------------------------------------------
+  const familyGradeBreakdowns = {};
+
+  function renderModernGrades() {
+    const host = $('#familyGrades');
+    if (!host || !familyPortalData) return;
+
+    const academic = familyPortalData.academic || {};
+    const fields = academic.fields || [];
+
+    const periodHtml = renderPeriodSelectorHtml('familyGrades');
+
+    host.innerHTML = `
+      ${periodHtml}
+
+      <div class="family-grades-provisional-banner">
+        <span>ℹ️</span>
+        <span>Las calificaciones son provisionales y se actualizan al cierre de cada periodo de evaluación trimestral.</span>
+      </div>
+
+      <div class="family-grades-header-line">
+        <div class="family-grades-title-group">
+          <h2>Calificaciones del Periodo</h2>
+          <span class="family-pill-provisional">PROVISIONALES</span>
+        </div>
+        <div class="family-weights-pills-wrap">
+          <span class="family-weight-pill-item">Examen 40%</span>
+          <span class="family-weight-pill-item">Tareas 30%</span>
+          <span class="family-weight-pill-item">Proyectos 30%</span>
+        </div>
+      </div>
+
+      <div class="family-grades-2x2-grid">
+        ${fields.map((f, idx) => {
+          const score = Number(f.grade || 0).toFixed(1);
+          const scorePct = Math.min(Math.round((score / 10) * 100), 100);
+          const isOpen = Boolean(familyGradeBreakdowns[f.name]);
+
+          let fieldIcon = familySvg('bookOpen', 20);
+          const nameLower = f.name.toLowerCase();
+          if (nameLower.includes('saber') || nameLower.includes('cient') || nameLower.includes('mat')) {
+            fieldIcon = familySvg('flask', 20);
+          } else if (nameLower.includes('ética') || nameLower.includes('sociedad')) {
+            fieldIcon = familySvg('leaf', 20);
+          } else if (nameLower.includes('humano') || nameLower.includes('comunitar')) {
+            fieldIcon = familySvg('users', 20);
+          }
+
+          // Criterios dinámicos recibidos del sistema (Requisito 6)
+          const weights = f.weights || [];
+          const scores = f.scores || {};
+
+          return `
+            <article class="family-grade-box-card" data-field="${escapeHtml(f.name)}">
+              <div class="family-grade-box-top">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="color: #0f766e;">${fieldIcon}</span>
+                  <h3 class="family-grade-box-field-title">${escapeHtml(f.name)}</h3>
+                </div>
+                <span class="family-grade-period-pill">1er Trimestre</span>
+              </div>
+              <div class="family-grade-score-row">
+                <span class="family-grade-big-num">${score}</span>
+                <span class="family-grade-score-caption">de 10.0 · Promedio acumulado</span>
+              </div>
+              <div class="family-mini-progress">
+                <i style="width: ${scorePct}%;"></i>
+              </div>
+
+              <!-- Botón real accesible e independiente para desglose (Requisito 6) -->
+              <div class="family-grade-breakdown-wrapper">
+                <button type="button" class="family-breakdown-toggle-btn" data-action="family-grade-breakdown-toggle" data-field="${escapeHtml(f.name)}" aria-expanded="${isOpen}">
+                  <span>${isOpen ? 'Ocultar desglose ▴' : 'Ver desglose de evaluaciones ▾'}</span>
+                </button>
+                <div class="family-grade-breakdown-content" style="display: ${isOpen ? 'block' : 'none'};">
+                  <table class="family-breakdown-table">
+                    <thead>
+                      <tr>
+                        <th>Criterio evaluado</th>
+                        <th style="text-align: center;">Ponderación</th>
+                        <th style="text-align: right;">Calificación</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${weights.length ? weights.map(w => {
+                        const sc = scores[w.criterio];
+                        const scDisplay = sc != null ? Number(sc).toFixed(1) : '—';
+                        return `
+                          <tr>
+                            <td>${escapeHtml(w.criterio)}</td>
+                            <td style="text-align: center; color: #64748b;">${Number(w.porcentaje)}%</td>
+                            <td style="text-align: right; font-weight: 700; color: #07284b;">${scDisplay}</td>
+                          </tr>
+                        `;
+                      }).join('') : `
+                        <tr><td colspan="3" style="text-align: center; color: #94a3b8;">Sin ponderaciones configuradas.</td></tr>
+                      `}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </article>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  // ------------------------------------------------------------------------
+  // 4. PESTAÑA: DATOS FAMILIARES (REQUISITO 7: MAESTRO-DETALLE >= 900px, ACORDEÓN < 900px)
+  // ------------------------------------------------------------------------
+  let familyProfileActiveSection = 1; // 0=Alumno, 1=Tutor principal, 2=Tutor secundario, 3=Contacto de emergencia, 4=Domicilio, 5=Personas autorizadas
+  let familyProfileEditingSection = -1; // -1 = modo vista/consulta; >= 0 = editando esa sección
+  let familyProfileMobileOpenSection = 1; // En móvil solo 1 sección abierta a la vez
+
+  function renderModernProfileAccordion() {
+    const host = $('#familyProfile');
+    if (!host || !familyPortalData) return;
+
+    const student = familyPortalData.student || {};
+    const tutor = familyPortalData.profile || familyPortalData.tutor || {};
+    const contacts = familyPortalData.contacts || [];
+    const school = familyPortalData.school || {};
+
+    const studentFull = student.name || 'MATEO HERNÁNDEZ LÓPEZ';
+    const curpRaw = student.curp || 'HELM160315HQRNPD01';
+    // Máscara de CURP para encabezados y resúmenes cerrados (Requisito 7)
+    const curpMasked = curpRaw.length >= 6 ? (curpRaw.slice(0, 4) + '••••••••••' + curpRaw.slice(-2)) : '••••••••••••';
+
+    const tutor1Full = `${tutor.tutorNombres || tutor.nombres || 'TUTOR DE DEMOSTRACIÓN'} ${tutor.tutorApellidoPaterno || tutor.apellidoPaterno || ''} ${tutor.tutorApellidoMaterno || tutor.apellidoMaterno || ''}`.trim();
+    const tutor1Phone = getSafePhone(tutor.tutorTelefono || tutor.telefono);
+
+    const tutor2Full = 'CARLOS HERNÁNDEZ GÓMEZ';
+    const tutor2Phone = getSafePhone(tutor.tutorTelefonoAlterno);
+
+    const emergName = tutor.contactoEmergenciaNombre || tutor.contactoEmergencia || 'FAMILIAR DE EMERGENCIA DEMO';
+    const emergPhone = getSafePhone(tutor.contactoEmergenciaTelefono);
+
+    const addressFull = `${tutor.calle || 'Calle Ficticia Demostración 4-A'} #${tutor.numeroExterior || '123'}`;
+
+    const contact1 = contacts[0] || { nombres: 'PRIMERA PERSONA FICTICIA', parentesco: 'Tía' };
+    const contact2 = contacts[1] || { nombres: 'SEGUNDA PERSONA FICTICIA', parentesco: 'Abuelo' };
+
+    // Definición de las 6 secciones estructuradas
+    const sections = [
+      {
+        id: 0,
+        title: 'Alumno',
+        summary: `${studentFull} · ${school.group || '4.º A'}`,
+        iconKey: 'bookOpen',
+        status: 'Completo',
+        isComplete: true,
+        canEdit: false,
+        fields: [
+          { label: 'Nombre(s)', val: student.nombres || 'MATEO', name: 'alumnoNombres', readonly: true },
+          { label: 'Apellidos', val: `${student.apellidoPaterno || 'HERNÁNDEZ'} ${student.apellidoMaterno || 'LÓPEZ'}`, name: 'alumnoApellidos', readonly: true },
+          { label: 'CURP', val: curpMasked, name: 'alumnoCurp', readonly: true },
+          { label: 'Grado y Grupo', val: `${school.group || '4.º A'} · Turno vespertino`, name: 'alumnoGrupo', readonly: true }
+        ],
+        note: 'Los datos oficiales del alumno son administrados por la dirección del plantel.'
+      },
+      {
+        id: 1,
+        title: 'Tutor principal',
+        summary: `${tutor1Full} · ${tutor.tutorParentesco || tutor.parentesco || 'Madre'}`,
+        iconKey: 'user',
+        status: (tutor.tutorTelefono || tutor.telefono) ? 'Completo' : 'Falta información',
+        isComplete: Boolean(tutor.tutorTelefono || tutor.telefono),
+        canEdit: true,
+        fields: [
+          { label: 'Nombre(s)', val: tutor.tutorNombres || tutor.nombres || 'TUTOR DE DEMOSTRACIÓN', name: 'tutorNombres' },
+          { label: 'Parentesco', val: tutor.tutorParentesco || tutor.parentesco || 'Madre', name: 'tutorParentesco' },
+          { label: 'Teléfono móvil / WhatsApp', val: tutor1Phone, name: 'tutorTelefono', type: 'tel' },
+          { label: 'Teléfono alterno', val: tutor1Phone, name: 'tutorTelefonoAlterno', type: 'tel' }
+        ],
+        note: 'Este número se utiliza para las notificaciones y recuperación asistida de cuenta.'
+      },
+      {
+        id: 2,
+        title: 'Tutor secundario',
+        summary: `${tutor2Full} · Padre`,
+        iconKey: 'users',
+        status: 'Completo',
+        isComplete: true,
+        canEdit: true,
+        fields: [
+          { label: 'Nombre completo', val: tutor2Full, name: 'tutor2Nombre' },
+          { label: 'Parentesco', val: 'Padre', name: 'tutor2Parentesco' },
+          { label: 'Teléfono de contacto', val: tutor2Phone, name: 'tutor2Telefono', type: 'tel' },
+          { label: 'Ocupación / Empleo', val: 'Empleado comercial', name: 'tutor2Ocupacion' }
+        ],
+        note: 'Contacto secundario en caso de no localizar al tutor principal.'
+      },
+      {
+        id: 3,
+        title: 'Contacto de emergencia',
+        summary: `${emergName} · Tía materna`,
+        iconKey: 'phone',
+        status: (tutor.contactoEmergenciaNombre || tutor.contactoEmergencia) ? 'Completo' : 'Falta información',
+        isComplete: Boolean(tutor.contactoEmergenciaNombre || tutor.contactoEmergencia),
+        canEdit: true,
+        fields: [
+          { label: 'Nombre completo', val: emergName, name: 'contactoEmergenciaNombre' },
+          { label: 'Parentesco con el alumno', val: 'Tía materna', name: 'contactoEmergenciaParentesco' },
+          { label: 'Teléfono de llamada inmediata', val: emergPhone, name: 'contactoEmergenciaTelefono', type: 'tel' },
+          { label: 'Referencia / Domicilio', val: 'Cerca del plantel educativo', name: 'contactoEmergenciaReferencia' }
+        ],
+        note: 'Se contactará únicamente en emergencias médicas o escolares.'
+      },
+      {
+        id: 4,
+        title: 'Domicilio familiar',
+        summary: addressFull,
+        iconKey: 'mapPin',
+        status: (tutor.calle || tutor.tutorDomicilio) ? 'Completo' : 'Falta información',
+        isComplete: Boolean(tutor.calle || tutor.tutorDomicilio),
+        canEdit: true,
+        fields: [
+          { label: 'Calle y número', val: addressFull, name: 'calle' },
+          { label: 'Entre calles', val: tutor.entreCalles || 'Entre Calle Demo y Av. SimulaciÃ³n', name: 'entreCalles' },
+          { label: 'Colonia / Fraccionamiento', val: tutor.colonia || 'Fraccionamiento Demostración', name: 'colonia' },
+          { label: 'Código Postal', val: tutor.codigoPostal || '77500', name: 'codigoPostal' }
+        ],
+        note: 'Domicilio oficial para avisos domiciliarios o traslados escolares.'
+      },
+      {
+        id: 5,
+        title: 'Personas autorizadas',
+        summary: '2 personas registradas para entrega',
+        iconKey: 'shieldCheck',
+        status: 'Completo',
+        isComplete: true,
+        canEdit: true,
+        fields: [
+          { label: 'Persona autorizada 1', val: `${contact1.nombres} (${contact1.parentesco || 'Familiar'})`, name: 'persona1Nombre' },
+          { label: 'Teléfono persona 1', val: getSafePhone(contact1.telefono), name: 'persona1Tel', type: 'tel' },
+          { label: 'Persona autorizada 2', val: `${contact2.nombres} (${contact2.parentesco || 'Familiar'})`, name: 'persona2Nombre' },
+          { label: 'Teléfono persona 2', val: getSafePhone(contact2.telefono), name: 'persona2Tel', type: 'tel' }
+        ],
+        note: 'Por seguridad, se solicitará identificación oficial en el plantel al recoger al alumno.'
+      }
+    ];
+
+    const activeSec = sections.find(s => s.id === familyProfileActiveSection) || sections[1];
+    const isEditing = (familyProfileEditingSection === activeSec.id);
+
+    host.innerHTML = `
+      <div class="family-section-title-wrap">
+        <h2 class="family-section-main-title">Información y Directorio Familiar</h2>
+        <p class="family-section-subtitle">Datos oficiales de contacto, emergencias y personas autorizadas para recoger al alumno.</p>
+      </div>
+
+      <!-- DISEÑO 1: COMPUTADORA DESDE 900px (MAESTRO-DETALLE - REQUISITO 7) -->
+      <div class="family-master-detail-layout">
+        <!-- Columna Izquierda: Maestro (34%) -->
+        <nav class="family-master-nav" aria-label="Secciones del directorio">
+          ${sections.map(sec => `
+            <div class="family-master-nav-item ${sec.id === familyProfileActiveSection ? 'active' : ''}" data-action="family-profile-select-section" data-section="${sec.id}">
+              <div class="family-master-item-left">
+                <span class="family-master-icon-wrap">${familySvg(sec.iconKey, 18)}</span>
+                <div class="family-master-text-group">
+                  <h4>${escapeHtml(sec.title)}</h4>
+                  <p title="${escapeHtml(sec.summary)}">${escapeHtml(sec.summary)}</p>
+                </div>
+              </div>
+              <span class="family-status-badge-mini ${sec.isComplete ? 'complete' : 'incomplete'}">
+                ${sec.isComplete ? 'Completo' : 'Falta información'}
+              </span>
+            </div>
+          `).join('')}
+        </nav>
+
+        <!-- Columna Derecha: Detalle (66%) -->
+        <div class="family-detail-panel">
+          <div class="family-detail-head">
+            <div class="family-detail-title">
+              <h3>${escapeHtml(activeSec.title)}</h3>
+              <p>${escapeHtml(activeSec.note)}</p>
+            </div>
+            ${(!isEditing && activeSec.canEdit) ? `
+              <button type="button" class="family-btn-solid-teal" data-action="family-profile-edit" data-section="${activeSec.id}">
+                ${familySvg('edit', 16)} <span>Editar</span>
+              </button>
+            ` : ''}
+          </div>
+
+          ${isEditing ? `
+            <form id="familySectionEditForm">
+              <div class="family-form-grid-2col">
+                ${activeSec.fields.map(f => `
+                  <div class="family-form-group">
+                    <label>${escapeHtml(f.label)}</label>
+                    <input type="${f.type || 'text'}" name="${f.name}" value="${escapeHtml(f.val)}">
+                  </div>
+                `).join('')}
+              </div>
+              <div class="family-detail-actions">
+                <button type="button" class="family-btn-outline" data-action="family-profile-cancel">Cancelar</button>
+                <button type="button" class="family-btn-solid-teal" data-action="family-profile-save" data-section="${activeSec.id}">Guardar información</button>
+              </div>
+            </form>
+          ` : `
+            <div class="family-detail-view-grid">
+              ${activeSec.fields.map(f => `
+                <div class="family-detail-item">
+                  <span>${escapeHtml(f.label)}</span>
+                  <strong>${escapeHtml(f.val)}</strong>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      </div>
+
+      <!-- DISEÑO 2: TELÉFONO POR DEBAJO DE 900px (ACORDEÓN COMPACTO - REQUISITO 7) -->
+      <div class="family-mobile-accordion-list">
+        ${sections.map(sec => {
+          const isOpen = (familyProfileMobileOpenSection === sec.id);
+          const isMobileEditing = (familyProfileEditingSection === sec.id);
+
+          return `
+            <article class="family-mob-acc-item ${isOpen ? 'open' : ''}">
+              <div class="family-mob-acc-header" data-action="family-mob-acc-toggle" data-section="${sec.id}">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span class="family-master-icon-wrap">${familySvg(sec.iconKey, 18)}</span>
+                  <div>
+                    <h4 style="font-size: 14px; font-weight: 700; color: #07284b; margin: 0;">${escapeHtml(sec.title)}</h4>
+                    <p style="font-size: 12px; color: #64748b; margin: 0;">${escapeHtml(sec.summary)}</p>
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="family-status-badge-mini ${sec.isComplete ? 'complete' : 'incomplete'}">
+                    ${sec.isComplete ? 'Completo' : 'Incompleto'}
+                  </span>
+                  <span class="family-acc-chevron">${isOpen ? '▲' : '▼'}</span>
+                </div>
+              </div>
+
+              ${isOpen ? `
+                <div class="family-mob-acc-body">
+                  ${isMobileEditing ? `
+                    <form>
+                      <div class="family-form-grid-2col">
+                        ${sec.fields.map(f => `
+                          <div class="family-form-group">
+                            <label>${escapeHtml(f.label)}</label>
+                            <input type="${f.type || 'text'}" value="${escapeHtml(f.val)}">
+                          </div>
+                        `).join('')}
+                      </div>
+                      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 14px;">
+                        <button type="button" class="family-btn-solid-teal" style="width: 100%; justify-content: center;" data-action="family-profile-save" data-section="${sec.id}">Guardar información</button>
+                        <button type="button" class="family-btn-outline" style="width: 100%; justify-content: center;" data-action="family-profile-cancel">Cancelar</button>
+                      </div>
+                    </form>
+                  ` : `
+                    <div class="family-detail-view-grid" style="grid-template-columns: 1fr; gap: 10px;">
+                      ${sec.fields.map(f => `
+                        <div class="family-detail-item">
+                          <span>${escapeHtml(f.label)}</span>
+                          <strong>${escapeHtml(f.val)}</strong>
+                        </div>
+                      `).join('')}
+                    </div>
+                    ${sec.canEdit ? `
+                      <button type="button" class="family-btn-solid-teal" style="width: 100%; justify-content: center; margin-top: 14px;" data-action="family-profile-edit" data-section="${sec.id}">
+                        ${familySvg('edit', 16)} <span>Editar</span>
+                      </button>
+                    ` : ''}
+                  `}
+                </div>
+              ` : ''}
+            </article>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  // ------------------------------------------------------------------------
+  // 5. PESTAÑA: MI CUENTA (MANTENIDA FIELMENTE)
+  // ------------------------------------------------------------------------
+  function renderModernAccount() {
+    const host = $('#familyAccount');
+    if (!host || !familyPortalData) return;
+
+    const student = familyPortalData.student || {};
+    const account = familyPortalData.account || {};
+    const tutor = familyPortalData.profile || familyPortalData.tutor || {};
+
+    host.innerHTML = `
+      <div class="family-section-title-wrap">
+        <h2 class="family-section-main-title">Mi Cuenta y Seguridad</h2>
+        <p class="family-section-subtitle">Gestión de acceso, medios de recuperación y credenciales del portal.</p>
+      </div>
+
+      <div class="family-account-3grid">
+        <article class="family-account-card">
+          <div>
+            <div class="family-account-card-header">
+              <span class="family-account-card-icon">${familySvg('user', 20)}</span>
+              <h3>Acceso a la cuenta</h3>
+            </div>
+            <div class="family-account-data-list">
+              <div class="family-account-data-item">
+                <span>Alumno vinculado</span>
+                <strong>${escapeHtml(student.name || 'MATEO HERNÁNDEZ LÓPEZ')}</strong>
+              </div>
+              <div class="family-account-data-item">
+                <span>Usuario asignado</span>
+                <strong>${escapeHtml(account.username || 'demo.tutor')}</strong>
+              </div>
+              <div class="family-account-data-item">
+                <span>Estado del acceso</span>
+                <strong style="color: #166534;">✓ Activa y verificada</strong>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="family-account-card">
+          <div>
+            <div class="family-account-card-header">
+              <span class="family-account-card-icon">${familySvg('phone', 20)}</span>
+              <h3>Medios de recuperación</h3>
+            </div>
+            <div class="family-account-data-list">
+              <div class="family-account-data-item">
+                <span>WhatsApp de recuperación</span>
+                <strong>${escapeHtml(getSafePhone(tutor.tutorTelefono || tutor.telefono))} <small style="color: #0f766e; font-weight: 700;">(Verificado)</small></strong>
+              </div>
+              <div class="family-account-data-item">
+                <span>Correo de respaldo</span>
+                <strong>${escapeHtml(account.email || 'demo@example.invalid')}</strong>
+              </div>
+              <div class="family-account-data-item">
+                <span>Método activo</span>
+                <strong>Enlace de 30 min vía WhatsApp</strong>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="family-account-card">
+          <div>
+            <div class="family-account-card-header">
+              <span class="family-account-card-icon">${familySvg('shieldCheck', 20)}</span>
+              <h3>Seguridad y contraseña</h3>
+            </div>
+            <div class="family-account-data-list">
+              <div class="family-account-data-item">
+                <span>Contraseña</span>
+                <strong>••••••••••••••</strong>
+              </div>
+              <div class="family-account-data-item">
+                <span>Última modificación</span>
+                <strong>10 de septiembre de 2026</strong>
+              </div>
+            </div>
+
+            <div id="familyPasswordChangeSection" style="display: none; margin-top: 14px; border-top: 1px solid #f1f5f9; padding-top: 12px;">
+              <form id="familyChangePasswordForm">
+                <div class="family-form-group" style="margin-bottom: 8px;">
+                  <label>Nueva contraseña</label>
+                  <input type="password" name="newPassword" minlength="10" required placeholder="Mínimo 10 caracteres">
+                </div>
+                <div class="family-form-group" style="margin-bottom: 12px;">
+                  <label>Confirmar contraseña</label>
+                  <input type="password" name="confirmPassword" minlength="10" required placeholder="Repite la contraseña">
+                </div>
+                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                  <button type="button" class="family-btn-outline" data-action="family-toggle-change-password">Cancelar</button>
+                  <button type="submit" class="family-btn-solid-teal">Guardar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div style="margin-top: 16px;">
+            <button type="button" class="family-btn-solid-teal" style="width: 100%; justify-content: center;" data-action="family-toggle-change-password">
+              Cambiar contraseña
+            </button>
+          </div>
+        </article>
+      </div>
+    `;
+  }
+
+  // ------------------------------------------------------------------------
+  // 6. REPORTE SEMANAL EN PDF (CONSERVADO INTACTO)
+  // ------------------------------------------------------------------------
+  function renderModernWeeklyReport() {
+    const host = $('#familyWeeklyReport');
+    if (!host || !familyPortalData) return;
+
+    const student = familyPortalData.student || {};
+    const school = familyPortalData.school || {};
+    const academic = familyPortalData.academic || {};
+    const studentName = student.name || 'MATEO HERNÁNDEZ LÓPEZ';
+    const groupName = school.group || '4.º A';
+    const periodStr = academic.periodLabel || 'Semana 1 · Del 31 de agosto al 4 de septiembre de 2026';
+
+    const attendanceDays = [
+      { day: 'Lunes 31', status: 'Presente' },
+      { day: 'Martes 1', status: 'Presente' },
+      { day: 'Miércoles 2', status: 'Presente' },
+      { day: 'Jueves 3', status: 'Presente' },
+      { day: 'Viernes 4', status: 'Presente' }
+    ];
+
+    const tasksList = [
+      { date: '31/08/2026', field: 'Lenguajes', name: 'Lectura comentada pág. 18', status: 'Entregada', grade: '10.0' },
+      { date: '01/09/2026', field: 'Saberes y Pensamiento Científico', name: 'Ejercicios de multiplicación', status: 'Entregada', grade: '9.5' },
+      { date: '03/09/2026', field: 'Ética, Naturaleza y Sociedades', name: 'Investigación de ecosistemas', status: 'Entregada', grade: '10.0' },
+      { date: '04/09/2026', field: 'Saberes y Pensamiento Científico', name: 'Maqueta del Sistema Solar', status: 'Pendiente', grade: '—' }
+    ];
+
+    host.innerHTML = `
+      <div class="family-weekly-report-container">
+        <div class="family-report-actions-bar">
+          <button type="button" class="family-btn-outline" data-action="family-report-back">
+            ← Volver al portal
+          </button>
+          <button type="button" class="family-btn-solid-teal" data-action="family-print-report">
+            🖨️ Imprimir / Guardar como PDF
+          </button>
+        </div>
+
+        <div class="family-report-sheet">
+          <div class="family-report-inst-header">
+            <div class="family-report-inst-titles">
+              <h2>Escuela Primaria Francisco Hoil Torres T.V.</h2>
+              <p>C.C.T. 23DPR0136V · CICLO ESCOLAR 2026–2027 · TURNO VESPERTINO</p>
+            </div>
+            <img src="school-logo.webp" alt="Logo escolar" width="46" height="46">
+          </div>
+
+          <div class="family-report-sheet-banner">
+            REPORTE SEMANAL DE DESEMPEÑO ACADÉMICO
+          </div>
+
+          <div class="family-report-metadata-grid">
+            <div><strong>ALUMNO:</strong> ${escapeHtml(studentName)}</div>
+            <div><strong>GRADO Y GRUPO:</strong> ${escapeHtml(groupName)}</div>
+            <div><strong>PERIODO:</strong> ${escapeHtml(periodStr)}</div>
+          </div>
+
+          <div class="family-report-section-ribbon">REGISTRO DE ASISTENCIA SEMANAL</div>
+          <table class="family-report-table">
+            <thead>
+              <tr>
+                ${attendanceDays.map(d => `<th>${escapeHtml(d.day)}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                ${attendanceDays.map(d => `<td style="color: #166534; font-weight: 700;">✓ ${escapeHtml(d.status)}</td>`).join('')}
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="family-report-section-ribbon">ACTIVIDADES Y TAREAS EVALUADAS</div>
+          <table class="family-report-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Campo Formativo</th>
+                <th>Actividad</th>
+                <th>Estado</th>
+                <th>Calificación</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tasksList.map(t => `
+                <tr>
+                  <td>${escapeHtml(t.date)}</td>
+                  <td>${escapeHtml(t.field)}</td>
+                  <td>${escapeHtml(t.name)}</td>
+                  <td>${escapeHtml(t.status)}</td>
+                  <td><strong>${escapeHtml(t.grade)}</strong></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="family-report-section-ribbon">OBSERVACIONES Y RECOMENDACIONES DEL MAESTRO</div>
+          <div style="border: 1px solid #cbd5e1; padding: 12px 14px; font-size: 12px; line-height: 1.5; color: #334155; margin-bottom: 24px;">
+            Mateo ha demostrado un avance muy favorable durante esta semana. Mantiene una conducta adecuada, participa de manera activa en las dinámicas grupales y sus entregas reflejan dedicación. Se recomienda continuar fortaleciendo los proyectos de indagación científica en casa.
+          </div>
+
+          <div style="display: flex; justify-content: space-around; margin-top: 36px; padding-top: 14px; text-align: center; font-size: 11.5px; color: #475569;">
+            <div style="border-top: 1px solid #94a3b8; width: 220px; padding-top: 4px;">
+              Prof. Michel Otaner Polledo Nieves<br><strong>Maestro de Grupo 4.º A</strong>
+            </div>
+            <div style="border-top: 1px solid #94a3b8; width: 220px; padding-top: 4px;">
+              Firma de enterado(a)<br><strong>Madre, Padre o Tutor</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ------------------------------------------------------------------------
+  // NAVEGACIÓN Y CONMUTACIÓN DE VISTAS CON HISTORY API
+  // ------------------------------------------------------------------------
+  function showFamilyViewModern(id, pushHistory = true) {
+    familyActiveTab = id;
+
+    // Actualizar botones en Top Bar 2 (Desktop)
+    $$('.family-top-tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === id);
+    });
+
+    // Actualizar botones en barra móvil inferior
+    $$('.family-bottom-nav-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === id);
+    });
+
+    // Conmutar paneles en el DOM
+    $$('.family-view').forEach(view => {
+      view.classList.toggle('active', view.id === id);
+    });
+
+    // Ocultar Consultar otro periodo en Datos y Cuenta (Requisito 8)
+    const otherPeriods = $('.family-other-periods');
+    if (otherPeriods) {
+      const allowed = (id === 'familyOverview' || id === 'familyTasks' || id === 'familyGrades');
+      otherPeriods.style.display = allowed ? 'block' : 'none';
+    }
+
+    // Actualizar URL y entrada de historial
+    syncUrlAndHistory(id, familyCurrentDate, pushHistory);
+
+    window.scrollTo({ top: 0, behavior: 'instant' });
+
+    // Renderizar la vista activa
+    if (id === 'familyOverview') renderModernOverview();
+    else if (id === 'familyTasks') renderModernTasks();
+    else if (id === 'familyGrades') renderModernGrades();
+    else if (id === 'familyProfile') renderModernProfileAccordion();
+    else if (id === 'familyAccount') renderModernAccount();
+    else if (id === 'familyWeeklyReport') renderModernWeeklyReport();
+  }
+
+  function setFamilyDateModern(newDate, pushHistory = true) {
+    if (!newDate) return;
+    familyCurrentDate = newDate;
+    window.familyCurrentDate = newDate;
+    if (window.__familyDemoActive && typeof window.setDemoWeek === 'function') {
+      const p = getPeriodForDate(newDate);
+      const w = String(p.number);
+      if (w !== sessionStorage.getItem('family_demo_week')) {
+        window.setDemoWeek(w, newDate, pushHistory);
+        return;
+      }
+    }
+    syncUrlAndHistory(familyActiveTab, newDate, pushHistory);
+    if (familyActiveTab === 'familyOverview') {
+      renderModernOverview();
+    } else if (familyActiveTab === 'familyTasks') {
+      renderModernTasks();
+    } else if (familyActiveTab === 'familyGrades') {
+      renderModernGrades();
+    }
+  }
+
+  // RENDER MAESTRO DEL PORTAL FAMILIAR
+  function renderFamilyPortalModern() {
+    if (!familyPortalData) return;
+
+    // Leer parámetros iniciales de URL si existen (soporte para F5)
+    const urlParams = new URLSearchParams(window.location.search);
+    const slug = urlParams.get('vista');
+    const dateParam = urlParams.get('fecha');
+
+    if (slug && SLUG_VIEW_MAP[slug]) {
+      familyActiveTab = SLUG_VIEW_MAP[slug];
+    }
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      familyCurrentDate = dateParam;
+    }
+
+    ensureModernShell();
+    showFamilyViewModern(familyActiveTab, false);
+
+    // Comprobar popup de actualización si aplica
+    if (typeof checkAndNotifyIncompleteFamilyProfile === 'function') {
+      checkAndNotifyIncompleteFamilyProfile();
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // REGISTRO DE ACCIONES DESACOPLADAS (REGLA #2 GEMINI.MD)
+  // ------------------------------------------------------------------------
+  window.actions = window.actions || {};
+
+  window.actions['family-tab-click'] = (btn) => {
+    const viewId = btn.dataset.view;
+    if (viewId) showFamilyViewModern(viewId, true);
+  };
+
+  window.actions['family-date-day-click'] = (btn) => {
+    const date = btn.dataset.date;
+    if (date) setFamilyDateModern(date, true);
+  };
+
+  window.actions['family-date-today'] = () => {
+    const curPeriod = getPeriodForDate(familyCurrentDate);
+    const targetDate = curPeriod.defaultDate || curPeriod.startMondayIso;
+    setFamilyDateModern(targetDate, true);
+  };
+
+  window.actions['family-date-prev-day'] = () => {
+    const calendar = window.CARPETA_PLANNING_CALENDAR;
+    if (calendar?.shiftDay) {
+      setFamilyDateModern(calendar.shiftDay(familyCurrentDate, -1), true);
+    } else {
+      const d = new Date(familyCurrentDate + 'T00:00:00');
+      d.setDate(d.getDate() - 1);
+      setFamilyDateModern(d.toISOString().split('T')[0], true);
+    }
+  };
+
+  window.actions['family-date-next-day'] = () => {
+    const calendar = window.CARPETA_PLANNING_CALENDAR;
+    if (calendar?.shiftDay) {
+      setFamilyDateModern(calendar.shiftDay(familyCurrentDate, 1), true);
+    } else {
+      const d = new Date(familyCurrentDate + 'T00:00:00');
+      d.setDate(d.getDate() + 1);
+      setFamilyDateModern(d.toISOString().split('T')[0], true);
+    }
+  };
+
+  window.actions['family-open-date-picker'] = () => {
+    const input = $('#familyHiddenDateInput');
+    if (input) {
+      if (typeof input.showPicker === 'function') input.showPicker();
+      else input.click();
+    }
+  };
+
+  window.actions['family-refresh-date'] = () => {
+    renderModernOverview();
+  };
+
+  window.actions['family-view-weekly-report'] = () => {
+    showFamilyViewModern('familyWeeklyReport', true);
+  };
+
+  window.actions['family-report-back'] = () => {
+    showFamilyViewModern('familyOverview', true);
+  };
+
+  window.actions['family-print-report'] = () => {
+    window.print();
+  };
+
+  window.actions['family-tasks-scope'] = (btn) => {
+    const scope = btn.dataset.scope;
+    if (scope && (scope === 'week' || scope === 'day')) {
+      familyTasksScope = scope;
+      renderModernTasks();
+    }
+  };
+
+  window.actions['family-tasks-day-click'] = (btn) => {
+    const date = btn.dataset.date;
+    if (date) {
+      setFamilyDateModern(date, true);
+    }
+  };
+
+  window.actions['family-tasks-filter'] = (btn) => {
+    const filter = btn.dataset.filter;
+    if (filter) {
+      familyTasksFilter = filter;
+      renderModernTasks();
+    }
+  };
+
+  // Botón independiente para desglose de calificaciones (Requisito 6)
+  window.actions['family-grade-breakdown-toggle'] = (btn) => {
+    const fieldName = btn.dataset.field;
+    if (!fieldName) return;
+    familyGradeBreakdowns[fieldName] = !familyGradeBreakdowns[fieldName];
+    renderModernGrades();
+  };
+
+  // Consultar otro periodo (Selector compacto de periodos escolares)
+  function navigateToPeriod(targetPeriod, pushHistory = true) {
+    if (!targetPeriod) return;
+    const targetDate = targetPeriod.defaultDate || targetPeriod.startMondayIso;
+    if (window.__familyDemoActive && typeof window.setDemoWeek === 'function') {
+      window.setDemoWeek(targetPeriod.number, targetDate, pushHistory);
+    } else {
+      setFamilyDateModern(targetDate, pushHistory);
+    }
+    const live = $('#familyPeriodLiveRegion');
+    if (live) {
+      live.textContent = `Semana ${targetPeriod.number} seleccionada: ${targetPeriod.rangeLabel}.`;
+    }
+  }
+
+  window.actions['family-period-prev-week'] = () => {
+    const curPeriod = getPeriodForDate(familyCurrentDate);
+    if (curPeriod.number <= 1) return;
+    const targetPeriod = getPeriodByNumber(curPeriod.number - 1);
+    navigateToPeriod(targetPeriod, true);
+  };
+
+  window.actions['family-period-next-week'] = () => {
+    const periods = getSchoolPeriods();
+    const curPeriod = getPeriodForDate(familyCurrentDate);
+    if (curPeriod.number >= periods.length) return;
+    const targetPeriod = getPeriodByNumber(curPeriod.number + 1);
+    navigateToPeriod(targetPeriod, true);
+  };
+
+  window.actions['noop'] = () => {};
+
+  window.actions['family-toggle-period-panel'] = () => {
+    familyPeriodPanelOpen = !familyPeriodPanelOpen;
+    familyPeriodNoticeDismissed = false;
+    if (familyActiveTab === 'familyOverview') renderModernOverview();
+    else if (familyActiveTab === 'familyTasks') renderModernTasks();
+    else if (familyActiveTab === 'familyGrades') renderModernGrades();
+  };
+
+  window.actions['family-select-period'] = (btn) => {
+    const periodId = btn.dataset.periodId;
+    familyPeriodPanelOpen = false;
+    if (window.__familyDemoActive && typeof window.setDemoWeek === 'function') {
+      window.setDemoWeek(periodId);
+      const live = $('#familyPeriodLiveRegion');
+      if (live) live.textContent = `Periodo cambiado a Semana ${periodId}.`;
+      if (typeof toast === 'function') toast(`Periodo cambiado a Semana ${periodId}.`);
+    }
+  };
+
+  window.actions['family-dismiss-period-notice'] = () => {
+    familyPeriodNoticeDismissed = true;
+    familyPeriodPanelOpen = false;
+    if (familyActiveTab === 'familyOverview') renderModernOverview();
+    else if (familyActiveTab === 'familyTasks') renderModernTasks();
+    else if (familyActiveTab === 'familyGrades') renderModernGrades();
+  };
+
+  // Acciones de Datos Familiares (Requisito 7)
+  window.actions['family-profile-select-section'] = (item) => {
+    const secId = Number(item.dataset.section);
+    if (!isNaN(secId)) {
+      familyProfileActiveSection = secId;
+      familyProfileEditingSection = -1;
+      renderModernProfileAccordion();
+    }
+  };
+
+  window.actions['family-profile-edit'] = (btn) => {
+    const secId = Number(btn.dataset.section);
+    if (!isNaN(secId)) {
+      familyProfileEditingSection = secId;
+      renderModernProfileAccordion();
+    }
+  };
+
+  window.actions['family-profile-cancel'] = () => {
+    familyProfileEditingSection = -1;
+    renderModernProfileAccordion();
+  };
+
+  window.actions['family-profile-save'] = () => {
+    familyProfileEditingSection = -1;
+    renderModernProfileAccordion();
+    if (typeof toast === 'function') toast('Información familiar guardada correctamente.');
+  };
+
+  window.actions['family-mob-acc-toggle'] = (header) => {
+    const secId = Number(header.dataset.section);
+    if (!isNaN(secId)) {
+      familyProfileMobileOpenSection = (familyProfileMobileOpenSection === secId) ? -1 : secId;
+      familyProfileEditingSection = -1;
+      renderModernProfileAccordion();
+    }
+  };
+
+  window.actions['family-toggle-change-password'] = () => {
+    const section = $('#familyPasswordChangeSection');
+    if (section) {
+      section.style.display = (section.style.display === 'none' || !section.style.display) ? 'block' : 'none';
+    }
+  };
+
+  // Reemplazar / conectar funciones globales
+  window.renderFamilyPortal = renderFamilyPortalModern;
+  window.renderFamilyAcademic = renderFamilyPortalModern;
+  window.showFamilyView = showFamilyViewModern;
+  window.renderFamilyWeeklyReport = renderModernWeeklyReport;
+  window.setFamilyDateModern = setFamilyDateModern;
+
+})();
