@@ -1582,6 +1582,10 @@ window.familyMessage = familyMessage;
 
       // Directorio familiar
       user: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+      userRound: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>`,
+      graduationCap: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>`,
+      phoneCall: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/><path d="M14.05 2a9 9 0 0 1 8 7.94"/><path d="M14.05 6A5 5 0 0 1 18 10"/></svg>`,
+      mapPinHouse: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v4"/><path d="M18 10a6 6 0 0 0-12 0c0 7 6 12 6 12s6-5 6-12Z"/><circle cx="12" cy="10" r="2"/></svg>`,
       mapPin: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
       phone: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`
     };
@@ -2492,9 +2496,81 @@ window.familyMessage = familyMessage;
   // ------------------------------------------------------------------------
   // 4. PESTAÑA: DATOS FAMILIARES (REQUISITO 7: MAESTRO-DETALLE >= 900px, ACORDEÓN < 900px)
   // ------------------------------------------------------------------------
-  let familyProfileActiveSection = 1; // 0=Alumno, 1=Tutor principal, 2=Tutor secundario, 3=Contacto de emergencia, 4=Domicilio, 5=Personas autorizadas
+  let familyProfileActiveSection = 0; // 0=Alumno por defecto en computadora
   let familyProfileEditingSection = -1; // -1 = modo vista/consulta; >= 0 = editando esa sección
-  let familyProfileMobileOpenSection = 1; // En móvil solo 1 sección abierta a la vez
+  let familyProfileMobileOpenSection = -1; // -1 = todas las secciones cerradas al cargar en móvil
+
+  function saveProfileSectionData(secId, form) {
+    if (!familyPortalData || !form) return;
+    familyPortalData.profile = familyPortalData.profile || {};
+    const p = familyPortalData.profile;
+    familyPortalData.tutor = p;
+
+    if (secId === 1) { // Tutor principal
+      const nom = form.querySelector('[name="tutorNombres"]')?.value.trim();
+      if (nom !== undefined) { p.tutorNombres = nom; p.nombres = nom; }
+      const apP = form.querySelector('[name="tutorApellidoPaterno"]')?.value.trim();
+      if (apP !== undefined) { p.tutorApellidoPaterno = apP; p.apellidoPaterno = apP; }
+      const apM = form.querySelector('[name="tutorApellidoMaterno"]')?.value.trim();
+      if (apM !== undefined) { p.tutorApellidoMaterno = apM; p.apellidoMaterno = apM; }
+      const par = form.querySelector('[name="tutorParentesco"]')?.value.trim();
+      if (par !== undefined) { p.tutorParentesco = par; p.parentesco = par; }
+      const tel = form.querySelector('[name="tutorTelefono"]')?.value.trim();
+      if (tel !== undefined) { p.tutorTelefono = tel; p.telefono = tel; }
+      const telAlt = form.querySelector('[name="tutorTelefonoAlterno"]')?.value.trim();
+      if (telAlt !== undefined) { p.tutorTelefonoAlterno = telAlt; }
+    } else if (secId === 2) { // Tutor secundario
+      const nom = form.querySelector('[name="tutor2Nombre"]')?.value.trim();
+      if (nom !== undefined) p.tutor2Nombre = nom;
+      const par = form.querySelector('[name="tutor2Parentesco"]')?.value.trim();
+      if (par !== undefined) p.tutor2Parentesco = par;
+      const tel = form.querySelector('[name="tutor2Telefono"]')?.value.trim();
+      if (tel !== undefined) p.tutor2Telefono = tel;
+      const ocu = form.querySelector('[name="tutor2Ocupacion"]')?.value.trim();
+      if (ocu !== undefined) p.tutor2Ocupacion = ocu;
+    } else if (secId === 3) { // Contacto de emergencia
+      const nom = form.querySelector('[name="contactoEmergenciaNombre"]')?.value.trim();
+      if (nom !== undefined) { p.contactoEmergenciaNombre = nom; p.contactoEmergencia = nom; }
+      const par = form.querySelector('[name="contactoEmergenciaParentesco"]')?.value.trim();
+      if (par !== undefined) p.contactoEmergenciaParentesco = par;
+      const tel = form.querySelector('[name="contactoEmergenciaTelefono"]')?.value.trim();
+      if (tel !== undefined) p.contactoEmergenciaTelefono = tel;
+      const ref = form.querySelector('[name="contactoEmergenciaReferencia"]')?.value.trim();
+      if (ref !== undefined) p.contactoEmergenciaReferencia = ref;
+    } else if (secId === 4) { // Domicilio familiar
+      const calle = form.querySelector('[name="calle"]')?.value.trim();
+      if (calle !== undefined) { p.calle = calle; p.tutorDomicilio = calle; }
+      const entre = form.querySelector('[name="entreCalles"]')?.value.trim();
+      if (entre !== undefined) p.entreCalles = entre;
+      const col = form.querySelector('[name="colonia"]')?.value.trim();
+      if (col !== undefined) p.colonia = col;
+      const cp = form.querySelector('[name="codigoPostal"]')?.value.trim();
+      if (cp !== undefined) p.codigoPostal = cp;
+    } else if (secId === 5) { // Personas autorizadas
+      familyPortalData.contacts = familyPortalData.contacts || [];
+      familyPortalData.contacts[0] = familyPortalData.contacts[0] || {};
+      const p1Nom = form.querySelector('[name="persona1Nombre"]')?.value.trim();
+      if (p1Nom !== undefined) familyPortalData.contacts[0].nombres = p1Nom;
+      const p1Par = form.querySelector('[name="persona1Parentesco"]')?.value.trim();
+      if (p1Par !== undefined) familyPortalData.contacts[0].parentesco = p1Par;
+      const p1Tel = form.querySelector('[name="persona1Tel"]')?.value.trim();
+      if (p1Tel !== undefined) familyPortalData.contacts[0].telefono = p1Tel;
+
+      familyPortalData.contacts[1] = familyPortalData.contacts[1] || {};
+      const p2Nom = form.querySelector('[name="persona2Nombre"]')?.value.trim();
+      if (p2Nom !== undefined) familyPortalData.contacts[1].nombres = p2Nom;
+      const p2Par = form.querySelector('[name="persona2Parentesco"]')?.value.trim();
+      if (p2Par !== undefined) familyPortalData.contacts[1].parentesco = p2Par;
+      const p2Tel = form.querySelector('[name="persona2Tel"]')?.value.trim();
+      if (p2Tel !== undefined) familyPortalData.contacts[1].telefono = p2Tel;
+    }
+
+    if (window.familyPortalData) {
+      window.familyPortalData.profile = p;
+      window.familyPortalData.tutor = p;
+      window.familyPortalData.contacts = familyPortalData.contacts;
+    }
+  }
 
   function renderModernProfileAccordion() {
     const host = $('#familyProfile');
@@ -2505,38 +2581,30 @@ window.familyMessage = familyMessage;
     const contacts = familyPortalData.contacts || [];
     const school = familyPortalData.school || {};
 
-    const studentFull = student.name || 'MATEO HERNÁNDEZ LÓPEZ';
     const curpRaw = student.curp || 'HELM160315HQRNPD01';
-    // Máscara de CURP para encabezados y resúmenes cerrados (Requisito 7)
+    // Máscara de CURP para privacidad en consulta
     const curpMasked = curpRaw.length >= 6 ? (curpRaw.slice(0, 4) + '••••••••••' + curpRaw.slice(-2)) : '••••••••••••';
 
-    const tutor1Full = `${tutor.tutorNombres || tutor.nombres || 'TUTOR DE DEMOSTRACIÓN'} ${tutor.tutorApellidoPaterno || tutor.apellidoPaterno || ''} ${tutor.tutorApellidoMaterno || tutor.apellidoMaterno || ''}`.trim();
-    const tutor1Phone = getSafePhone(tutor.tutorTelefono || tutor.telefono);
+    const tutor2Full = tutor.tutor2Nombre !== undefined ? tutor.tutor2Nombre : 'CARLOS HERNÁNDEZ GÓMEZ';
+    const tutor2Phone = tutor.tutor2Telefono !== undefined ? tutor.tutor2Telefono : '998-555-0102';
 
-    const tutor2Full = 'CARLOS HERNÁNDEZ GÓMEZ';
-    const tutor2Phone = getSafePhone(tutor.tutorTelefonoAlterno);
+    const emergName = tutor.contactoEmergenciaNombre || tutor.contactoEmergencia || '';
+    const emergPhone = tutor.contactoEmergenciaTelefono || '';
 
-    const emergName = tutor.contactoEmergenciaNombre || tutor.contactoEmergencia || 'FAMILIAR DE EMERGENCIA DEMO';
-    const emergPhone = getSafePhone(tutor.contactoEmergenciaTelefono);
+    const contact1 = contacts[0] || { nombres: '', parentesco: '', telefono: '' };
+    const contact2 = contacts[1] || { nombres: '', parentesco: '', telefono: '' };
 
-    const addressFull = `${tutor.calle || 'Calle Ficticia Demostración 4-A'} #${tutor.numeroExterior || '123'}`;
-
-    const contact1 = contacts[0] || { nombres: 'PRIMERA PERSONA FICTICIA', parentesco: 'Tía' };
-    const contact2 = contacts[1] || { nombres: 'SEGUNDA PERSONA FICTICIA', parentesco: 'Abuelo' };
-
-    // Definición de las 6 secciones estructuradas
+    // Definición de las 6 secciones estructuradas con cálculo dinámico de estado
     const sections = [
       {
         id: 0,
         title: 'Alumno',
-        summary: `${studentFull} · ${school.group || '4.º A'}`,
-        iconKey: 'bookOpen',
-        status: 'Completo',
-        isComplete: true,
+        iconKey: 'graduationCap',
+        isComplete: Boolean((student.nombres || student.name) && student.curp && (school.group || student.group)),
         canEdit: false,
         fields: [
           { label: 'Nombre(s)', val: student.nombres || 'MATEO', name: 'alumnoNombres', readonly: true },
-          { label: 'Apellidos', val: `${student.apellidoPaterno || 'HERNÁNDEZ'} ${student.apellidoMaterno || 'LÓPEZ'}`, name: 'alumnoApellidos', readonly: true },
+          { label: 'Apellidos', val: `${student.apellidoPaterno || 'HERNÁNDEZ'} ${student.apellidoMaterno || 'LÓPEZ'}`.trim(), name: 'alumnoApellidos', readonly: true },
           { label: 'CURP', val: curpMasked, name: 'alumnoCurp', readonly: true },
           { label: 'Grado y Grupo', val: `${school.group || '4.º A'} · Turno vespertino`, name: 'alumnoGrupo', readonly: true }
         ],
@@ -2545,120 +2613,129 @@ window.familyMessage = familyMessage;
       {
         id: 1,
         title: 'Tutor principal',
-        summary: `${tutor1Full} · ${tutor.tutorParentesco || tutor.parentesco || 'Madre'}`,
-        iconKey: 'user',
-        status: (tutor.tutorTelefono || tutor.telefono) ? 'Completo' : 'Falta información',
-        isComplete: Boolean(tutor.tutorTelefono || tutor.telefono),
+        iconKey: 'userRound',
+        isComplete: Boolean((tutor.tutorNombres || tutor.nombres) && (tutor.tutorTelefono || tutor.telefono) && (tutor.tutorParentesco || tutor.parentesco)),
         canEdit: true,
         fields: [
-          { label: 'Nombre(s)', val: tutor.tutorNombres || tutor.nombres || 'TUTOR DE DEMOSTRACIÓN', name: 'tutorNombres' },
-          { label: 'Parentesco', val: tutor.tutorParentesco || tutor.parentesco || 'Madre', name: 'tutorParentesco' },
-          { label: 'Teléfono móvil / WhatsApp', val: tutor1Phone, name: 'tutorTelefono', type: 'tel' },
-          { label: 'Teléfono alterno', val: tutor1Phone, name: 'tutorTelefonoAlterno', type: 'tel' }
+          { label: 'Nombre(s)', val: tutor.tutorNombres || tutor.nombres || '', name: 'tutorNombres' },
+          { label: 'Apellido Paterno', val: tutor.tutorApellidoPaterno || tutor.apellidoPaterno || '', name: 'tutorApellidoPaterno' },
+          { label: 'Apellido Materno', val: tutor.tutorApellidoMaterno || tutor.apellidoMaterno || '', name: 'tutorApellidoMaterno' },
+          { label: 'Parentesco', val: tutor.tutorParentesco || tutor.parentesco || '', name: 'tutorParentesco' },
+          { label: 'Teléfono móvil / WhatsApp', val: getSafePhone(tutor.tutorTelefono || tutor.telefono), editVal: tutor.tutorTelefono || tutor.telefono || '', name: 'tutorTelefono', type: 'tel' },
+          { label: 'Teléfono alterno', val: getSafePhone(tutor.tutorTelefonoAlterno), editVal: tutor.tutorTelefonoAlterno || '', name: 'tutorTelefonoAlterno', type: 'tel' }
         ],
         note: 'Este número se utiliza para las notificaciones y recuperación asistida de cuenta.'
       },
       {
         id: 2,
         title: 'Tutor secundario',
-        summary: `${tutor2Full} · Padre`,
-        iconKey: 'users',
-        status: 'Completo',
-        isComplete: true,
+        iconKey: 'usersRound',
+        isComplete: Boolean(tutor2Full && tutor2Phone),
         canEdit: true,
         fields: [
           { label: 'Nombre completo', val: tutor2Full, name: 'tutor2Nombre' },
-          { label: 'Parentesco', val: 'Padre', name: 'tutor2Parentesco' },
-          { label: 'Teléfono de contacto', val: tutor2Phone, name: 'tutor2Telefono', type: 'tel' },
-          { label: 'Ocupación / Empleo', val: 'Empleado comercial', name: 'tutor2Ocupacion' }
+          { label: 'Parentesco', val: tutor.tutor2Parentesco !== undefined ? tutor.tutor2Parentesco : 'Padre', name: 'tutor2Parentesco' },
+          { label: 'Teléfono de contacto', val: getSafePhone(tutor2Phone), editVal: tutor2Phone || '', name: 'tutor2Telefono', type: 'tel' },
+          { label: 'Ocupación / Empleo', val: tutor.tutor2Ocupacion !== undefined ? tutor.tutor2Ocupacion : 'Empleado comercial', name: 'tutor2Ocupacion' }
         ],
         note: 'Contacto secundario en caso de no localizar al tutor principal.'
       },
       {
         id: 3,
         title: 'Contacto de emergencia',
-        summary: `${emergName} · Tía materna`,
-        iconKey: 'phone',
-        status: (tutor.contactoEmergenciaNombre || tutor.contactoEmergencia) ? 'Completo' : 'Falta información',
-        isComplete: Boolean(tutor.contactoEmergenciaNombre || tutor.contactoEmergencia),
+        iconKey: 'phoneCall',
+        isComplete: Boolean(emergName && emergPhone),
         canEdit: true,
         fields: [
           { label: 'Nombre completo', val: emergName, name: 'contactoEmergenciaNombre' },
-          { label: 'Parentesco con el alumno', val: 'Tía materna', name: 'contactoEmergenciaParentesco' },
-          { label: 'Teléfono de llamada inmediata', val: emergPhone, name: 'contactoEmergenciaTelefono', type: 'tel' },
-          { label: 'Referencia / Domicilio', val: 'Cerca del plantel educativo', name: 'contactoEmergenciaReferencia' }
+          { label: 'Parentesco con el alumno', val: tutor.contactoEmergenciaParentesco !== undefined ? tutor.contactoEmergenciaParentesco : 'Tía materna', name: 'contactoEmergenciaParentesco' },
+          { label: 'Teléfono de llamada inmediata', val: getSafePhone(emergPhone), editVal: emergPhone || '', name: 'contactoEmergenciaTelefono', type: 'tel' },
+          { label: 'Referencia / Domicilio', val: tutor.contactoEmergenciaReferencia !== undefined ? tutor.contactoEmergenciaReferencia : 'Cerca del plantel educativo', name: 'contactoEmergenciaReferencia' }
         ],
         note: 'Se contactará únicamente en emergencias médicas o escolares.'
       },
       {
         id: 4,
         title: 'Domicilio familiar',
-        summary: addressFull,
-        iconKey: 'mapPin',
-        status: (tutor.calle || tutor.tutorDomicilio) ? 'Completo' : 'Falta información',
-        isComplete: Boolean(tutor.calle || tutor.tutorDomicilio),
+        iconKey: 'mapPinHouse',
+        isComplete: Boolean((tutor.calle || tutor.tutorDomicilio) && tutor.colonia && tutor.codigoPostal),
         canEdit: true,
         fields: [
-          { label: 'Calle y número', val: addressFull, name: 'calle' },
-          { label: 'Entre calles', val: tutor.entreCalles || 'Entre Calle Demo y Av. SimulaciÃ³n', name: 'entreCalles' },
-          { label: 'Colonia / Fraccionamiento', val: tutor.colonia || 'Fraccionamiento Demostración', name: 'colonia' },
-          { label: 'Código Postal', val: tutor.codigoPostal || '77500', name: 'codigoPostal' }
+          { label: 'Calle y número', val: tutor.calle ? `${tutor.calle} ${tutor.numeroExterior ? '#' + tutor.numeroExterior : ''}`.trim() : (tutor.tutorDomicilio || ''), name: 'calle' },
+          { label: 'Entre calles', val: tutor.entreCalles || '', name: 'entreCalles' },
+          { label: 'Colonia / Fraccionamiento', val: tutor.colonia || '', name: 'colonia' },
+          { label: 'Código Postal', val: tutor.codigoPostal || '', name: 'codigoPostal' }
         ],
         note: 'Domicilio oficial para avisos domiciliarios o traslados escolares.'
       },
       {
         id: 5,
         title: 'Personas autorizadas',
-        summary: '2 personas registradas para entrega',
         iconKey: 'shieldCheck',
-        status: 'Completo',
-        isComplete: true,
+        isComplete: Boolean(contacts && contacts.length > 0 && contacts[0].nombres && contacts[0].telefono),
         canEdit: true,
         fields: [
-          { label: 'Persona autorizada 1', val: `${contact1.nombres} (${contact1.parentesco || 'Familiar'})`, name: 'persona1Nombre' },
-          { label: 'Teléfono persona 1', val: getSafePhone(contact1.telefono), name: 'persona1Tel', type: 'tel' },
-          { label: 'Persona autorizada 2', val: `${contact2.nombres} (${contact2.parentesco || 'Familiar'})`, name: 'persona2Nombre' },
-          { label: 'Teléfono persona 2', val: getSafePhone(contact2.telefono), name: 'persona2Tel', type: 'tel' }
+          { label: 'Persona autorizada 1 - Nombre', val: contact1.nombres || '', name: 'persona1Nombre' },
+          { label: 'Persona autorizada 1 - Parentesco', val: contact1.parentesco || '', name: 'persona1Parentesco' },
+          { label: 'Persona autorizada 1 - Teléfono', val: getSafePhone(contact1.telefono), editVal: contact1.telefono || '', name: 'persona1Tel', type: 'tel' },
+          { label: 'Persona autorizada 2 - Nombre', val: contact2.nombres || '', name: 'persona2Nombre' },
+          { label: 'Persona autorizada 2 - Parentesco', val: contact2.parentesco || '', name: 'persona2Parentesco' },
+          { label: 'Persona autorizada 2 - Teléfono', val: getSafePhone(contact2.telefono), editVal: contact2.telefono || '', name: 'persona2Tel', type: 'tel' }
         ],
         note: 'Por seguridad, se solicitará identificación oficial en el plantel al recoger al alumno.'
       }
     ];
 
-    const activeSec = sections.find(s => s.id === familyProfileActiveSection) || sections[1];
+    const activeSec = sections.find(s => s.id === familyProfileActiveSection) || sections[0];
     const isEditing = (familyProfileEditingSection === activeSec.id);
 
     host.innerHTML = `
-      <div class="family-section-title-wrap">
+      <div class="family-section-title-wrap" style="max-width: 1280px; margin: 0 auto 16px;">
         <h2 class="family-section-main-title">Información y Directorio Familiar</h2>
         <p class="family-section-subtitle">Datos oficiales de contacto, emergencias y personas autorizadas para recoger al alumno.</p>
       </div>
 
-      <!-- DISEÑO 1: COMPUTADORA DESDE 900px (MAESTRO-DETALLE - REQUISITO 7) -->
+      <!-- DISEÑO 1: COMPUTADORA DESDE 900px (MAESTRO-DETALLE UNIFICADO) -->
       <div class="family-master-detail-layout">
-        <!-- Columna Izquierda: Maestro (34%) -->
-        <nav class="family-master-nav" aria-label="Secciones del directorio">
-          ${sections.map(sec => `
-            <div class="family-master-nav-item ${sec.id === familyProfileActiveSection ? 'active' : ''}" data-action="family-profile-select-section" data-section="${sec.id}">
-              <div class="family-master-item-left">
-                <span class="family-master-icon-wrap">${familySvg(sec.iconKey, 18)}</span>
+        <!-- Columna Izquierda: Menú de secciones (~290px) -->
+        <nav class="family-master-nav" role="tablist" aria-label="Secciones del directorio familiar">
+          ${sections.map(sec => {
+            const isSelected = (sec.id === familyProfileActiveSection);
+            return `
+              <button type="button"
+                role="tab"
+                id="family-tab-${sec.id}"
+                aria-selected="${isSelected ? 'true' : 'false'}"
+                aria-controls="family-panel-${sec.id}"
+                class="family-master-nav-item ${isSelected ? 'active' : ''}"
+                data-action="family-profile-select-section"
+                data-section="${sec.id}">
+                <span class="family-master-icon-wrap">${familySvg(sec.iconKey, 24)}</span>
                 <div class="family-master-text-group">
-                  <h4>${escapeHtml(sec.title)}</h4>
-                  <p title="${escapeHtml(sec.summary)}">${escapeHtml(sec.summary)}</p>
+                  <span class="family-master-title">${escapeHtml(sec.title)}</span>
+                  <span class="family-status-badge-mini ${sec.isComplete ? 'complete' : 'incomplete'}">
+                    ${sec.isComplete ? 'Completo' : 'Falta información'}
+                  </span>
                 </div>
-              </div>
-              <span class="family-status-badge-mini ${sec.isComplete ? 'complete' : 'incomplete'}">
-                ${sec.isComplete ? 'Completo' : 'Falta información'}
-              </span>
-            </div>
-          `).join('')}
+              </button>
+            `;
+          }).join('')}
         </nav>
 
-        <!-- Columna Derecha: Detalle (66%) -->
-        <div class="family-detail-panel">
+        <!-- Columna Derecha: Panel Detalle (Ocupa todo el espacio restante) -->
+        <div class="family-detail-panel" id="family-panel-${activeSec.id}" role="tabpanel" aria-labelledby="family-tab-${activeSec.id}">
           <div class="family-detail-head">
-            <div class="family-detail-title">
-              <h3>${escapeHtml(activeSec.title)}</h3>
-              <p>${escapeHtml(activeSec.note)}</p>
+            <div class="family-detail-head-left">
+              <span class="family-detail-head-icon-wrap">${familySvg(activeSec.iconKey, 24)}</span>
+              <div class="family-detail-title-group">
+                <div class="family-detail-title-row">
+                  <h3>${escapeHtml(activeSec.title)}</h3>
+                  <span class="family-status-badge-mini ${activeSec.isComplete ? 'complete' : 'incomplete'}">
+                    ${activeSec.isComplete ? 'Completo' : 'Falta información'}
+                  </span>
+                </div>
+                <p class="family-detail-note">${escapeHtml(activeSec.note)}</p>
+              </div>
             </div>
             ${(!isEditing && activeSec.canEdit) ? `
               <button type="button" class="family-btn-solid-teal" data-action="family-profile-edit" data-section="${activeSec.id}">
@@ -2672,8 +2749,8 @@ window.familyMessage = familyMessage;
               <div class="family-form-grid-2col">
                 ${activeSec.fields.map(f => `
                   <div class="family-form-group">
-                    <label>${escapeHtml(f.label)}</label>
-                    <input type="${f.type || 'text'}" name="${f.name}" value="${escapeHtml(f.val)}">
+                    <label for="field_${escapeHtml(f.name)}">${escapeHtml(f.label)}</label>
+                    <input id="field_${escapeHtml(f.name)}" type="${f.type || 'text'}" name="${f.name}" value="${escapeHtml(f.editVal !== undefined ? f.editVal : f.val)}" ${f.readonly ? 'readonly' : ''}>
                   </div>
                 `).join('')}
               </div>
@@ -2686,8 +2763,8 @@ window.familyMessage = familyMessage;
             <div class="family-detail-view-grid">
               ${activeSec.fields.map(f => `
                 <div class="family-detail-item">
-                  <span>${escapeHtml(f.label)}</span>
-                  <strong>${escapeHtml(f.val)}</strong>
+                  <span class="family-detail-item-label">${escapeHtml(f.label)}</span>
+                  <strong class="family-detail-item-val">${escapeHtml(f.val || '—')}</strong>
                 </div>
               `).join('')}
             </div>
@@ -2695,7 +2772,7 @@ window.familyMessage = familyMessage;
         </div>
       </div>
 
-      <!-- DISEÑO 2: TELÉFONO POR DEBAJO DE 900px (ACORDEÓN COMPACTO - REQUISITO 7) -->
+      <!-- DISEÑO 2: TELÉFONO POR DEBAJO DE 900px (ACORDEÓN COMPACTO) -->
       <div class="family-mobile-accordion-list">
         ${sections.map(sec => {
           const isOpen = (familyProfileMobileOpenSection === sec.id);
@@ -2703,52 +2780,57 @@ window.familyMessage = familyMessage;
 
           return `
             <article class="family-mob-acc-item ${isOpen ? 'open' : ''}">
-              <div class="family-mob-acc-header" data-action="family-mob-acc-toggle" data-section="${sec.id}">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <span class="family-master-icon-wrap">${familySvg(sec.iconKey, 18)}</span>
-                  <div>
-                    <h4 style="font-size: 14px; font-weight: 700; color: #07284b; margin: 0;">${escapeHtml(sec.title)}</h4>
-                    <p style="font-size: 12px; color: #64748b; margin: 0;">${escapeHtml(sec.summary)}</p>
+              <button type="button"
+                class="family-mob-acc-header"
+                data-action="family-mob-acc-toggle"
+                data-section="${sec.id}"
+                aria-expanded="${isOpen ? 'true' : 'false'}"
+                aria-controls="family-mob-body-${sec.id}">
+                <div class="family-mob-acc-header-left">
+                  <span class="family-master-icon-wrap">${familySvg(sec.iconKey, 24)}</span>
+                  <div class="family-master-text-group">
+                    <span class="family-master-title">${escapeHtml(sec.title)}</span>
+                    <span class="family-status-badge-mini ${sec.isComplete ? 'complete' : 'incomplete'}">
+                      ${sec.isComplete ? 'Completo' : 'Falta información'}
+                    </span>
                   </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span class="family-status-badge-mini ${sec.isComplete ? 'complete' : 'incomplete'}">
-                    ${sec.isComplete ? 'Completo' : 'Incompleto'}
-                  </span>
-                  <span class="family-acc-chevron">${isOpen ? '▲' : '▼'}</span>
-                </div>
-              </div>
+                <span class="family-acc-chevron">${familySvg('chevronDown', 18)}</span>
+              </button>
 
               ${isOpen ? `
-                <div class="family-mob-acc-body">
+                <div class="family-mob-acc-body" id="family-mob-body-${sec.id}">
+                  <p class="family-mob-note">${escapeHtml(sec.note)}</p>
                   ${isMobileEditing ? `
-                    <form>
-                      <div class="family-form-grid-2col">
+                    <form id="familySectionEditFormMobile">
+                      <div class="family-form-grid-1col">
                         ${sec.fields.map(f => `
                           <div class="family-form-group">
-                            <label>${escapeHtml(f.label)}</label>
-                            <input type="${f.type || 'text'}" value="${escapeHtml(f.val)}">
+                            <label for="mob_field_${escapeHtml(f.name)}">${escapeHtml(f.label)}</label>
+                            <input id="mob_field_${escapeHtml(f.name)}" type="${f.type || 'text'}" name="${f.name}" value="${escapeHtml(f.editVal !== undefined ? f.editVal : f.val)}" ${f.readonly ? 'readonly' : ''}>
                           </div>
                         `).join('')}
                       </div>
-                      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 14px;">
-                        <button type="button" class="family-btn-solid-teal" style="width: 100%; justify-content: center;" data-action="family-profile-save" data-section="${sec.id}">Guardar información</button>
-                        <button type="button" class="family-btn-outline" style="width: 100%; justify-content: center;" data-action="family-profile-cancel">Cancelar</button>
+                      <div class="family-mobile-edit-actions">
+                        <button type="button" class="family-btn-solid-teal" data-action="family-profile-save" data-section="${sec.id}">Guardar información</button>
+                        <button type="button" class="family-btn-outline" data-action="family-profile-cancel">Cancelar</button>
                       </div>
                     </form>
                   ` : `
-                    <div class="family-detail-view-grid" style="grid-template-columns: 1fr; gap: 10px;">
+                    <div class="family-mob-view-list">
                       ${sec.fields.map(f => `
-                        <div class="family-detail-item">
-                          <span>${escapeHtml(f.label)}</span>
-                          <strong>${escapeHtml(f.val)}</strong>
+                        <div class="family-mob-view-row">
+                          <span class="family-mob-label">${escapeHtml(f.label)}</span>
+                          <strong class="family-mob-val">${escapeHtml(f.val || '—')}</strong>
                         </div>
                       `).join('')}
                     </div>
                     ${sec.canEdit ? `
-                      <button type="button" class="family-btn-solid-teal" style="width: 100%; justify-content: center; margin-top: 14px;" data-action="family-profile-edit" data-section="${sec.id}">
-                        ${familySvg('edit', 16)} <span>Editar</span>
-                      </button>
+                      <div style="margin-top: 16px;">
+                        <button type="button" class="family-btn-solid-teal" style="width: 100%; min-height: 44px; font-size: 15px; font-weight: 600; justify-content: center;" data-action="family-profile-edit" data-section="${sec.id}">
+                          ${familySvg('edit', 16)} <span>Editar</span>
+                        </button>
+                      </div>
                     ` : ''}
                   `}
                 </div>
@@ -2758,6 +2840,36 @@ window.familyMessage = familyMessage;
         }).join('')}
       </div>
     `;
+
+    // Soporte de navegación por teclado para el tablist accesible
+    const nav = host.querySelector('.family-master-nav');
+    if (nav) {
+      nav.addEventListener('keydown', (e) => {
+        const tabs = Array.from(nav.querySelectorAll('.family-master-nav-item'));
+        const currentIndex = tabs.findIndex(tab => tab === document.activeElement);
+        if (currentIndex === -1) return;
+
+        let nextIndex = currentIndex;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          nextIndex = (currentIndex + 1) % tabs.length;
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          nextIndex = 0;
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          nextIndex = tabs.length - 1;
+        }
+
+        if (nextIndex !== currentIndex) {
+          tabs[nextIndex].focus();
+          tabs[nextIndex].click();
+        }
+      });
+    }
   }
 
   // ------------------------------------------------------------------------
@@ -3021,7 +3133,12 @@ window.familyMessage = familyMessage;
     if (id === 'familyOverview') renderModernOverview();
     else if (id === 'familyTasks') renderModernTasks();
     else if (id === 'familyGrades') renderModernGrades();
-    else if (id === 'familyProfile') renderModernProfileAccordion();
+    else if (id === 'familyProfile') {
+      if (typeof window !== 'undefined' && window.innerWidth < 900 && familyProfileEditingSection === -1) {
+        familyProfileMobileOpenSection = -1;
+      }
+      renderModernProfileAccordion();
+    }
     else if (id === 'familyAccount') renderModernAccount();
     else if (id === 'familyWeeklyReport') renderModernWeeklyReport();
   }
@@ -3237,6 +3354,8 @@ window.familyMessage = familyMessage;
       familyProfileActiveSection = secId;
       familyProfileEditingSection = -1;
       renderModernProfileAccordion();
+      const btn = document.querySelector(`.family-master-nav-item[data-section="${secId}"]`);
+      if (btn) btn.focus();
     }
   };
 
@@ -3253,7 +3372,12 @@ window.familyMessage = familyMessage;
     renderModernProfileAccordion();
   };
 
-  window.actions['family-profile-save'] = () => {
+  window.actions['family-profile-save'] = (btn) => {
+    const secId = Number(btn?.dataset?.section ?? familyProfileEditingSection);
+    const form = document.querySelector('#familySectionEditForm') || document.querySelector('#familySectionEditFormMobile');
+    if (form && !isNaN(secId) && secId >= 0) {
+      saveProfileSectionData(secId, form);
+    }
     familyProfileEditingSection = -1;
     renderModernProfileAccordion();
     if (typeof toast === 'function') toast('Información familiar guardada correctamente.');
