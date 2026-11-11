@@ -1156,6 +1156,14 @@ async function startFamilyPortal(){
       return;
     }
 
+    // En producción o acceso normal, asegurar que ningún modo ni fixture demo permanezca activo
+    window.__familyDemoActive = false;
+    try {
+      delete window.FAMILY_PORTAL_DEMO_FIXTURE;
+    } catch (_) {
+      window.FAMILY_PORTAL_DEMO_FIXTURE = undefined;
+    }
+
     const resetParam = urlParams.get('recuperar') || '';
     if (resetParam) {
       sessionStorage.setItem(RECOVERY_STORAGE_KEY, resetParam);
@@ -1254,7 +1262,42 @@ function renderFamilyPortal(){const data=familyPortalData;if(!data)return;$('#fa
 function renderFamilyAcademic(){const academic=familyPortalData?.academic;if(!academic)return;const fields=academic.fields||[],summary=academic.taskSummary||{},periodLabel=academic.periodLabel||('Trimestre '+(academic.trimester||1));const grades=fields.map(field=>field.grade).filter(value=>value!=null),average=grades.length?grades.reduce((a,b)=>a+Number(b),0)/grades.length:null;const attendance=fields.map(field=>field.scores?.Asistencia).filter(value=>value!=null),attendanceScore=attendance.length?attendance.reduce((a,b)=>a+Number(b),0)/attendance.length:null;const conducts=fields.map(field=>field.scores?.Conducta).filter(value=>value!=null),conductScore=conducts.length?conducts.reduce((a,b)=>a+Number(b),0)/conducts.length:null,conduct=familyConductFace(conductScore);$('#familyUpdatedAt').textContent='Actualizado: '+formatCancunDateTime(academic.updatedAt,{dateStyle:'medium',timeStyle:'short'});$('#familyOverview').innerHTML=`<p class="family-period-label">${escapeHtml(periodLabel)}</p><div class="family-overview-grid"><article class="family-metric"><span>Tareas realizadas</span><strong>${summary.completed||0} de ${summary.total||0}</strong><div class="family-progress"><i style="width:${Math.min(summary.percentage||0,100)}%"></i></div><small>${summary.percentage||0}% de cumplimiento</small></article><article class="family-metric"><span>Promedio provisional</span><strong>${familyNumber(average)}</strong><small>Promedio de los 4 campos formativos</small></article><article class="family-metric"><span>Asistencia registrada</span><strong>${familyNumber(attendanceScore)}</strong><small>Componente actual de asistencia</small></article><article class="family-metric"><span>Conducta</span><strong>${conduct.face} ${conduct.label}</strong><small>${familyNumber(conductScore)} de 10</small></article></div><article class="family-info-note"><b>Información en proceso.</b> Los resultados cambian cuando el maestro agrega tareas, asistencias, participación, conducta o examen.</article><div class="family-field-preview">${fields.map(field=>`<article><span>${familyFieldIcon(field.name)}</span><div><h3>${escapeHtml(field.name)}</h3><p>${field.completed} de ${field.total} tareas · Calificación ${familyNumber(field.grade)}</p>${field.sources?.length>1?`<small>Matemático ${familyNumber(field.sources[0].grade)} · Científico ${familyNumber(field.sources[1].grade)}</small>`:''}</div></article>`).join('')}</div>`;$('#familyTasks').innerHTML=`<div class="family-page-title"><div><p class="eyebrow">${escapeHtml(periodLabel)}</p><h2>Tareas</h2></div><strong>${summary.completed||0} de ${summary.total||0}</strong></div><p class="muted">Se muestran tareas entregadas, incompletas, no entregadas y pendientes de evaluar. Matemático y Científico se reúnen en Saberes y Pensamiento Científico.</p><div class="family-task-fields">${fields.map((field,index)=>familyTaskFieldHtml(field,index)).join('')}</div>`;$('#familyGrades').innerHTML=familyGradesHtml(fields)}
 function familyTaskFieldHtml(field,index){const percentage=field.total?Math.round(field.completed*1000/field.total)/10:0;const sourceDetail=field.sources?.length>1?`<div class="family-source-pills">${field.sources.map(source=>`<span>${escapeHtml(source.name.replace('Saberes y Pensamiento ',''))}: ${source.completed}/${source.total}</span>`).join('')}</div>`:'';const pending=field.pending||[];return `<article class="family-task-card"><div class="family-task-head"><div class="family-field-icon">${familyFieldIcon(field.name)}</div><div><h3>${escapeHtml(field.name)}</h3><p><b>${field.completed} de ${field.total}</b> tareas realizadas · ${pending.length} pendientes</p></div></div><div class="family-progress"><i style="width:${percentage}%"></i></div>${sourceDetail}<button class="btn small" data-action="toggle-family-pending" data-index="${index}">${pending.length?'Ver pendientes':'Sin tareas pendientes'}</button><div id="familyPending${index}" class="family-pending-list hidden-control">${pending.length?pending.map(task=>`<div><span class="family-pending-state">${escapeHtml(task.status)}</span><h4>${escapeHtml(task.name)}</h4><p>${escapeHtml(formatDateShort(task.date))}${task.start?' · '+escapeHtml(formatTime(task.start)):''} · ${escapeHtml(task.source)}</p><small>${escapeHtml(task.project||'Sin proyecto')}</small></div>`).join(''):'<p>El alumno no tiene tareas pendientes en este campo.</p>'}</div></article>`}
 function familyGradesHtml(fields){const weights=fields.find(field=>field.weights?.length)?.weights||[];return `<div class="family-page-title"><div><p class="eyebrow">EVALUACIÓN CONTINUA</p><h2>Calificaciones</h2></div><span class="family-provisional">PROVISIONALES</span></div><article class="family-info-note">La calificación se actualiza automáticamente. Los criterios que todavía no tienen registros no se cuentan como cero.</article>${weights.length?`<article class="family-weight-card"><h3>Ponderación definida por el maestro</h3><div>${weights.map(weight=>`<span>${escapeHtml(weight.criterio)} <b>${Number(weight.porcentaje)}%</b></span>`).join('')}</div></article>`:''}<div class="family-grade-grid">${fields.map((field,index)=>`<article class="family-grade-card ${familyStatusClass(field.grade)}"><div><span class="family-field-icon">${familyFieldIcon(field.name)}</span><h3>${escapeHtml(field.name)}</h3></div><strong>${familyNumber(field.grade)}</strong>${field.sources?.length>1?`<p>Matemático: <b>${familyNumber(field.sources[0].grade)}</b> · Científico: <b>${familyNumber(field.sources[1].grade)}</b></p>`:`<p>${field.completed} de ${field.total} tareas realizadas</p>`}<details><summary>Ver desglose</summary>${(field.weights||[]).map(weight=>`<div class="family-grade-line"><span>${escapeHtml(weight.criterio)} · ${Number(weight.porcentaje)}%</span><b>${familyNumber(field.scores?.[weight.criterio])}</b></div>`).join('')||'<p>Sin registros en este periodo.</p>'}</details></article>`).join('')}</div><p class="family-grade-foot">No es la calificación final del trimestre.</p>`}
-async function loadFamilyDirectoryProfile(){if(!familyPortalData)return;setLoading(true,'Cargando los datos familiares…',()=>loadFamilyDirectoryProfile());try{const data=await familyServer('getFamilyProfile');familyPortalData.profile=data.profile;familyPortalData.contacts=data.contacts;familyPortalData.account=data.account||familyPortalData.account;$('#familyProfileForm').innerHTML=directoryFieldsHtml(familyPortalData,true);renderFamilyAccount()}catch(error){familyMessage(error.message,true)}finally{setLoading(false)}}
+let familyProfileLoading = false;
+let familyProfileLoadError = null;
+async function loadFamilyDirectoryProfile(){
+  if(!familyPortalData) return;
+  familyProfileLoading = true;
+  familyProfileLoadError = null;
+  if(typeof renderModernProfileAccordion === 'function' && typeof familyActiveTab !== 'undefined' && familyActiveTab === 'familyProfile'){
+    renderModernProfileAccordion();
+  }
+  setLoading(true,'Cargando los datos familiares…',()=>loadFamilyDirectoryProfile());
+  try{
+    const data = await familyServer('getFamilyProfile');
+    if(data){
+      familyPortalData.profile = data.profile || {};
+      familyPortalData.tutor = familyPortalData.profile;
+      familyPortalData.contacts = data.contacts || [];
+      familyPortalData.account = data.account || familyPortalData.account;
+      if(data.student && typeof data.student === 'object'){
+        familyPortalData.student = Object.assign({}, familyPortalData.student, data.student);
+      }
+    }
+    const legacyForm = $('#familyProfileForm');
+    if(legacyForm) legacyForm.innerHTML = directoryFieldsHtml(familyPortalData,true);
+    renderFamilyAccount();
+    if(typeof renderModernAccount === 'function') renderModernAccount();
+  }catch(error){
+    familyProfileLoadError = error.message || 'No fue posible cargar la información';
+    familyMessage(familyProfileLoadError, true);
+  }finally{
+    familyProfileLoading = false;
+    setLoading(false);
+    if(typeof renderModernProfileAccordion === 'function' && typeof familyActiveTab !== 'undefined' && familyActiveTab === 'familyProfile'){
+      renderModernProfileAccordion();
+    }
+  }
+}
 function renderFamilyAccount(){if(!familyPortalData)return;const form=$('#familyAccountForm'),account=familyPortalData.account||{};if(!form)return;form.elements.username.value=account.username||'';form.elements.email.value=account.email||'';form.elements.phone.value=account.phone||familyPortalData.profile?.tutorTelefono||'';form.elements.password.value='';form.elements.passwordConfirmation.value=''}
 async function saveFamilyAccountSettings(e){e.preventDefault();const form=e.currentTarget,payload=formData(form);setLoading(true,'Guardando los cambios de la cuenta…');try{const result=await familyServer('saveFamilyAccountSettings',payload);storeFamilySession(result.token,localStorage.getItem(FAMILY_REMEMBER_KEY)==='true');familyPortalData.account=result.account;renderFamilyAccount();familyMessage(result.message);toast(result.message)}catch(error){familyMessage(error.message,true)}finally{setLoading(false)}}
 async function saveFamilyProfile(e){e.preventDefault();const form=e.currentTarget,payload=directoryPayloadFromForm(form);setLoading(true,'Guardando los datos familiares…');try{const result=await familyServer('saveFamilyProfile',payload);const data=result.data||{};familyPortalData.profile=data.profile||familyPortalData.profile;familyPortalData.contacts=data.contacts||familyPortalData.contacts;$('#familyProfileForm').innerHTML=directoryFieldsHtml(familyPortalData,true);familyMessage('Los datos fueron guardados con éxito.');toast('Los datos fueron guardados con éxito.')}catch(error){familyMessage(error.message,true)}finally{setLoading(false)}}
@@ -1269,7 +1312,19 @@ function resetFamilyIdleTimer(){
 }
 window.resetFamilyIdleTimer = resetFamilyIdleTimer;
 
-function familyLogout(confirmFirst=true,message=''){if(confirmFirst&&!confirm('¿Cerrar la sesión familiar?'))return;familySessionToken='';clearTimeout(familyIdleTimer);localStorage.removeItem(FAMILY_SESSION_KEY);localStorage.removeItem(FAMILY_REMEMBER_KEY);sessionStorage.removeItem(FAMILY_SESSION_KEY);if(message)sessionStorage.setItem('family_logout_message',message);location.href=siteBaseUrl()+'?familia=acceso'}
+function familyLogout(confirmFirst=true,message=''){
+  if(confirmFirst&&!confirm('¿Cerrar la sesión familiar?'))return;
+  familySessionToken='';
+  familyPortalData=null;
+  familyProfileLoading=false;
+  familyProfileLoadError=null;
+  clearTimeout(familyIdleTimer);
+  localStorage.removeItem(FAMILY_SESSION_KEY);
+  localStorage.removeItem(FAMILY_REMEMBER_KEY);
+  sessionStorage.removeItem(FAMILY_SESSION_KEY);
+  if(message)sessionStorage.setItem('family_logout_message',message);
+  location.href=siteBaseUrl()+'?familia=acceso'
+}
 function paymentMoney(value){return new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(value)||0)}
 
 function openWhatsappDialog(studentId, phone, studentName) {
@@ -1599,7 +1654,8 @@ window.familyMessage = familyMessage;
 
   // Teléfono seguro en modo demostración
   function getSafePhone(phone) {
-    if (!phone || window.__familyDemoActive || String(phone).includes('TELÉFONO') || String(phone).includes('999')) {
+    if (!phone) return '';
+    if (window.__familyDemoActive) {
       return 'TELÉFONO FICTICIO NO UTILIZABLE';
     }
     return phone;
@@ -2585,32 +2641,74 @@ window.familyMessage = familyMessage;
     const contacts = familyPortalData.contacts || [];
     const school = familyPortalData.school || {};
 
-    const curpRaw = student.curp || 'HELM160315HQRNPD01';
-    // Máscara de CURP para privacidad en consulta
-    const curpMasked = curpRaw.length >= 6 ? (curpRaw.slice(0, 4) + '••••••••••' + curpRaw.slice(-2)) : '••••••••••••';
+    // 1. Alumno
+    // Prioridad segura: student.name || tutor.alumnoNombreCompleto || 'Información no disponible'
+    const studentFullName = student.name || tutor.alumnoNombreCompleto || (familyProfileLoading ? 'Cargando información…' : 'Información no disponible');
 
-    const tutor2Full = tutor.tutor2Nombre !== undefined ? tutor.tutor2Nombre : 'CARLOS HERNÁNDEZ GÓMEZ';
-    const tutor2Phone = tutor.tutor2Telefono !== undefined ? tutor.tutor2Telefono : '998-555-0102';
+    // CURP real del alumno: student.curp || tutor.alumnoCurp || ''
+    const studentCurpRaw = (student.curp || tutor.alumnoCurp || '').trim();
+    let curpDisplay = '';
+    if (familyProfileLoading && !studentCurpRaw) {
+      curpDisplay = 'Cargando información…';
+    } else if (studentCurpRaw) {
+      curpDisplay = studentCurpRaw.length >= 6
+        ? (studentCurpRaw.slice(0, 4) + '••••••••••' + studentCurpRaw.slice(-2))
+        : '••••••••••••';
+    } else if (familyProfileLoadError) {
+      curpDisplay = 'No fue posible cargar la información';
+    } else {
+      curpDisplay = 'No registrada';
+    }
 
-    const emergName = tutor.contactoEmergenciaNombre || tutor.contactoEmergencia || '';
-    const emergPhone = tutor.contactoEmergenciaTelefono || '';
+    // Grado y grupo real: student.grade, student.group, school.group, tutor.alumnoGrupo
+    const gradeGroupVal = student.group || school.group || tutor.alumnoGrupo || (student.grade ? `${student.grade}.º ${student.group || ''}`.trim() : '');
+    const gradeGroupDisplay = gradeGroupVal ? `${gradeGroupVal} · Turno vespertino` : (familyProfileLoading ? 'Cargando información…' : 'No registrado');
 
+    // 2. Tutor secundario: tutor.tutor2Nombre, tutor.tutor2Telefono (sin inventar datos)
+    const tutor2NomRaw = (tutor.tutor2Nombre || '').trim();
+    const tutor2TelRaw = (tutor.tutor2Telefono || '').trim();
+    const hasTutor2 = Boolean(tutor2NomRaw && tutor2TelRaw);
+
+    const tutor2NameDisplay = tutor2NomRaw || 'Sin registrar';
+    const tutor2TelDisplay = tutor2TelRaw ? getSafePhone(tutor2TelRaw) : 'Sin registrar';
+    const tutor2ParentescoDisplay = (tutor.tutor2Parentesco || '').trim() || (hasTutor2 ? '' : 'Sin registrar');
+    const tutor2OcupacionDisplay = (tutor.tutor2Ocupacion || '').trim() || (hasTutor2 ? '' : 'Sin registrar');
+
+    // 3. Contacto de emergencia (sin fallbacks inventados)
+    const emergName = (tutor.contactoEmergenciaNombre || tutor.contactoEmergencia || '').trim();
+    const emergPhone = (tutor.contactoEmergenciaTelefono || '').trim();
+    const hasEmerg = Boolean(emergName && emergPhone);
+
+    const emergNameDisplay = emergName || 'Sin registrar';
+    const emergPhoneDisplay = emergPhone ? getSafePhone(emergPhone) : 'Sin registrar';
+    const emergParentescoDisplay = (tutor.contactoEmergenciaParentesco || '').trim() || (hasEmerg ? '' : 'Sin registrar');
+    const emergReferenciaDisplay = (tutor.contactoEmergenciaReferencia || '').trim() || (hasEmerg ? '' : 'Sin registrar');
+
+    // 4. Tutor principal
+    const tutor1Nom = (tutor.tutorNombres || tutor.nombres || '').trim();
+    const tutor1ApP = (tutor.tutorApellidoPaterno || tutor.apellidoPaterno || '').trim();
+    const tutor1ApM = (tutor.tutorApellidoMaterno || tutor.apellidoMaterno || '').trim();
+    const tutor1Par = (tutor.tutorParentesco || tutor.parentesco || '').trim();
+    const tutor1Tel = (tutor.tutorTelefono || tutor.telefono || '').trim();
+    const tutor1TelAlt = (tutor.tutorTelefonoAlterno || '').trim();
+    const hasTutor1 = Boolean((tutor1Nom || tutor.tutorNombreCompleto) && tutor1Tel && tutor1Par);
+
+    // 5. Contactos autorizados
     const contact1 = contacts[0] || { nombres: '', parentesco: '', telefono: '' };
     const contact2 = contacts[1] || { nombres: '', parentesco: '', telefono: '' };
 
-    // Definición de las 6 secciones estructuradas con cálculo dinámico de estado
+    // Definición de las 6 secciones estructuradas con cálculo dinámico de estado (sin datos demo)
     const sections = [
       {
         id: 0,
         title: 'Alumno',
         iconKey: 'graduationCap',
-        isComplete: Boolean((student.nombres || student.name) && student.curp && (school.group || student.group)),
+        isComplete: Boolean(!familyProfileLoading && !familyProfileLoadError && (student.name || tutor.alumnoNombreCompleto) && studentCurpRaw && gradeGroupVal),
         canEdit: false,
         fields: [
-          { label: 'Nombre(s)', val: student.nombres || 'MATEO', name: 'alumnoNombres', readonly: true },
-          { label: 'Apellidos', val: `${student.apellidoPaterno || 'HERNÁNDEZ'} ${student.apellidoMaterno || 'LÓPEZ'}`.trim(), name: 'alumnoApellidos', readonly: true },
-          { label: 'CURP', val: curpMasked, name: 'alumnoCurp', readonly: true },
-          { label: 'Grado y Grupo', val: `${school.group || '4.º A'} · Turno vespertino`, name: 'alumnoGrupo', readonly: true }
+          { label: 'Nombre completo del alumno', val: studentFullName, name: 'alumnoNombreCompleto', readonly: true },
+          { label: 'CURP', val: curpDisplay, name: 'alumnoCurp', readonly: true },
+          { label: 'Grado y Grupo', val: gradeGroupDisplay, name: 'alumnoGrupo', readonly: true }
         ],
         note: 'Los datos oficiales del alumno son administrados por la dirección del plantel.'
       },
@@ -2618,15 +2716,15 @@ window.familyMessage = familyMessage;
         id: 1,
         title: 'Tutor principal',
         iconKey: 'userRound',
-        isComplete: Boolean((tutor.tutorNombres || tutor.nombres) && (tutor.tutorTelefono || tutor.telefono) && (tutor.tutorParentesco || tutor.parentesco)),
+        isComplete: Boolean(!familyProfileLoading && !familyProfileLoadError && hasTutor1),
         canEdit: true,
         fields: [
-          { label: 'Nombre(s)', val: tutor.tutorNombres || tutor.nombres || '', name: 'tutorNombres' },
-          { label: 'Apellido Paterno', val: tutor.tutorApellidoPaterno || tutor.apellidoPaterno || '', name: 'tutorApellidoPaterno' },
-          { label: 'Apellido Materno', val: tutor.tutorApellidoMaterno || tutor.apellidoMaterno || '', name: 'tutorApellidoMaterno' },
-          { label: 'Parentesco', val: tutor.tutorParentesco || tutor.parentesco || '', name: 'tutorParentesco' },
-          { label: 'Teléfono móvil / WhatsApp', val: getSafePhone(tutor.tutorTelefono || tutor.telefono), editVal: tutor.tutorTelefono || tutor.telefono || '', name: 'tutorTelefono', type: 'tel' },
-          { label: 'Teléfono alterno', val: getSafePhone(tutor.tutorTelefonoAlterno), editVal: tutor.tutorTelefonoAlterno || '', name: 'tutorTelefonoAlterno', type: 'tel' }
+          { label: 'Nombre(s)', val: tutor1Nom || (hasTutor1 ? '' : 'Sin registrar'), editVal: tutor1Nom, name: 'tutorNombres' },
+          { label: 'Apellido Paterno', val: tutor1ApP || (hasTutor1 ? '' : 'Sin registrar'), editVal: tutor1ApP, name: 'tutorApellidoPaterno' },
+          { label: 'Apellido Materno', val: tutor1ApM || (hasTutor1 ? '' : 'Sin registrar'), editVal: tutor1ApM, name: 'tutorApellidoMaterno' },
+          { label: 'Parentesco', val: tutor1Par || (hasTutor1 ? '' : 'Sin registrar'), editVal: tutor1Par, name: 'tutorParentesco' },
+          { label: 'Teléfono móvil / WhatsApp', val: tutor1Tel ? getSafePhone(tutor1Tel) : 'Sin registrar', editVal: tutor1Tel, name: 'tutorTelefono', type: 'tel' },
+          { label: 'Teléfono alterno', val: tutor1TelAlt ? getSafePhone(tutor1TelAlt) : (hasTutor1 ? 'No registrado' : 'Sin registrar'), editVal: tutor1TelAlt, name: 'tutorTelefonoAlterno', type: 'tel' }
         ],
         note: 'Este número se utiliza para las notificaciones y recuperación asistida de cuenta.'
       },
@@ -2634,13 +2732,13 @@ window.familyMessage = familyMessage;
         id: 2,
         title: 'Tutor secundario',
         iconKey: 'usersRound',
-        isComplete: Boolean(tutor2Full && tutor2Phone),
+        isComplete: Boolean(!familyProfileLoading && !familyProfileLoadError && hasTutor2),
         canEdit: true,
         fields: [
-          { label: 'Nombre completo', val: tutor2Full, name: 'tutor2Nombre' },
-          { label: 'Parentesco', val: tutor.tutor2Parentesco !== undefined ? tutor.tutor2Parentesco : 'Padre', name: 'tutor2Parentesco' },
-          { label: 'Teléfono de contacto', val: getSafePhone(tutor2Phone), editVal: tutor2Phone || '', name: 'tutor2Telefono', type: 'tel' },
-          { label: 'Ocupación / Empleo', val: tutor.tutor2Ocupacion !== undefined ? tutor.tutor2Ocupacion : 'Empleado comercial', name: 'tutor2Ocupacion' }
+          { label: 'Nombre completo', val: tutor2NameDisplay, editVal: tutor2NomRaw, name: 'tutor2Nombre' },
+          { label: 'Parentesco', val: tutor2ParentescoDisplay, editVal: tutor.tutor2Parentesco || '', name: 'tutor2Parentesco' },
+          { label: 'Teléfono de contacto', val: tutor2TelDisplay, editVal: tutor2TelRaw, name: 'tutor2Telefono', type: 'tel' },
+          { label: 'Ocupación / Empleo', val: tutor2OcupacionDisplay, editVal: tutor.tutor2Ocupacion || '', name: 'tutor2Ocupacion' }
         ],
         note: 'Contacto secundario en caso de no localizar al tutor principal.'
       },
@@ -2648,13 +2746,13 @@ window.familyMessage = familyMessage;
         id: 3,
         title: 'Contacto de emergencia',
         iconKey: 'phoneCall',
-        isComplete: Boolean(emergName && emergPhone),
+        isComplete: Boolean(!familyProfileLoading && !familyProfileLoadError && hasEmerg),
         canEdit: true,
         fields: [
-          { label: 'Nombre completo', val: emergName, name: 'contactoEmergenciaNombre' },
-          { label: 'Parentesco con el alumno', val: tutor.contactoEmergenciaParentesco !== undefined ? tutor.contactoEmergenciaParentesco : 'Tía materna', name: 'contactoEmergenciaParentesco' },
-          { label: 'Teléfono de llamada inmediata', val: getSafePhone(emergPhone), editVal: emergPhone || '', name: 'contactoEmergenciaTelefono', type: 'tel' },
-          { label: 'Referencia / Domicilio', val: tutor.contactoEmergenciaReferencia !== undefined ? tutor.contactoEmergenciaReferencia : 'Cerca del plantel educativo', name: 'contactoEmergenciaReferencia' }
+          { label: 'Nombre completo', val: emergNameDisplay, editVal: emergName, name: 'contactoEmergenciaNombre' },
+          { label: 'Parentesco con el alumno', val: emergParentescoDisplay, editVal: tutor.contactoEmergenciaParentesco || '', name: 'contactoEmergenciaParentesco' },
+          { label: 'Teléfono de llamada inmediata', val: emergPhoneDisplay, editVal: emergPhone, name: 'contactoEmergenciaTelefono', type: 'tel' },
+          { label: 'Referencia / Domicilio', val: emergReferenciaDisplay, editVal: tutor.contactoEmergenciaReferencia || '', name: 'contactoEmergenciaReferencia' }
         ],
         note: 'Se contactará únicamente en emergencias médicas o escolares.'
       },
@@ -2662,13 +2760,13 @@ window.familyMessage = familyMessage;
         id: 4,
         title: 'Domicilio familiar',
         iconKey: 'mapPinHouse',
-        isComplete: Boolean((tutor.calle || tutor.tutorDomicilio) && tutor.colonia && tutor.codigoPostal),
+        isComplete: Boolean(!familyProfileLoading && !familyProfileLoadError && (tutor.calle || tutor.tutorDomicilio) && tutor.colonia && tutor.codigoPostal),
         canEdit: true,
         fields: [
-          { label: 'Calle y número', val: tutor.calle ? `${tutor.calle} ${tutor.numeroExterior ? '#' + tutor.numeroExterior : ''}`.trim() : (tutor.tutorDomicilio || ''), name: 'calle' },
-          { label: 'Entre calles', val: tutor.entreCalles || '', name: 'entreCalles' },
-          { label: 'Colonia / Fraccionamiento', val: tutor.colonia || '', name: 'colonia' },
-          { label: 'Código Postal', val: tutor.codigoPostal || '', name: 'codigoPostal' }
+          { label: 'Calle y número', val: tutor.calle ? `${tutor.calle} ${tutor.numeroExterior ? '#' + tutor.numeroExterior : ''}`.trim() : (tutor.tutorDomicilio || 'Sin registrar'), editVal: tutor.calle || tutor.tutorDomicilio || '', name: 'calle' },
+          { label: 'Entre calles', val: tutor.entreCalles || 'Sin registrar', editVal: tutor.entreCalles || '', name: 'entreCalles' },
+          { label: 'Colonia / Fraccionamiento', val: tutor.colonia || 'Sin registrar', editVal: tutor.colonia || '', name: 'colonia' },
+          { label: 'Código Postal', val: tutor.codigoPostal || 'Sin registrar', editVal: tutor.codigoPostal || '', name: 'codigoPostal' }
         ],
         note: 'Domicilio oficial para avisos domiciliarios o traslados escolares.'
       },
@@ -2676,15 +2774,15 @@ window.familyMessage = familyMessage;
         id: 5,
         title: 'Personas autorizadas',
         iconKey: 'shieldCheck',
-        isComplete: Boolean(contacts && contacts.length > 0 && contacts[0].nombres && contacts[0].telefono),
+        isComplete: Boolean(!familyProfileLoading && !familyProfileLoadError && contacts && contacts.length > 0 && contacts[0].nombres && contacts[0].telefono),
         canEdit: true,
         fields: [
-          { label: 'Persona autorizada 1 - Nombre', val: contact1.nombres || '', name: 'persona1Nombre' },
-          { label: 'Persona autorizada 1 - Parentesco', val: contact1.parentesco || '', name: 'persona1Parentesco' },
-          { label: 'Persona autorizada 1 - Teléfono', val: getSafePhone(contact1.telefono), editVal: contact1.telefono || '', name: 'persona1Tel', type: 'tel' },
-          { label: 'Persona autorizada 2 - Nombre', val: contact2.nombres || '', name: 'persona2Nombre' },
-          { label: 'Persona autorizada 2 - Parentesco', val: contact2.parentesco || '', name: 'persona2Parentesco' },
-          { label: 'Persona autorizada 2 - Teléfono', val: getSafePhone(contact2.telefono), editVal: contact2.telefono || '', name: 'persona2Tel', type: 'tel' }
+          { label: 'Persona autorizada 1 - Nombre', val: contact1.nombres || 'Sin registrar', editVal: contact1.nombres || '', name: 'persona1Nombre' },
+          { label: 'Persona autorizada 1 - Parentesco', val: contact1.parentesco || 'Sin registrar', editVal: contact1.parentesco || '', name: 'persona1Parentesco' },
+          { label: 'Persona autorizada 1 - Teléfono', val: contact1.telefono ? getSafePhone(contact1.telefono) : 'Sin registrar', editVal: contact1.telefono || '', name: 'persona1Tel', type: 'tel' },
+          { label: 'Persona autorizada 2 - Nombre', val: contact2.nombres || 'Sin registrar', editVal: contact2.nombres || '', name: 'persona2Nombre' },
+          { label: 'Persona autorizada 2 - Parentesco', val: contact2.parentesco || 'Sin registrar', editVal: contact2.parentesco || '', name: 'persona2Parentesco' },
+          { label: 'Persona autorizada 2 - Teléfono', val: contact2.telefono ? getSafePhone(contact2.telefono) : 'Sin registrar', editVal: contact2.telefono || '', name: 'persona2Tel', type: 'tel' }
         ],
         note: 'Por seguridad, se solicitará identificación oficial en el plantel al recoger al alumno.'
       }
@@ -2698,6 +2796,17 @@ window.familyMessage = familyMessage;
         <h2 class="family-section-main-title">Información y Directorio Familiar</h2>
         <p class="family-section-subtitle">Datos oficiales de contacto, emergencias y personas autorizadas para recoger al alumno.</p>
       </div>
+
+      ${familyProfileLoading ? `
+        <div class="family-info-note" style="max-width: 1280px; margin: 0 auto 16px; background: #f0fdfa; border-color: #0d9488; color: #0f766e;">
+          <b>Cargando información…</b> Consultando los datos familiares oficiales en el servidor escolar.
+        </div>
+      ` : ''}
+      ${familyProfileLoadError ? `
+        <div class="family-info-note" style="max-width: 1280px; margin: 0 auto 16px; background: #fef2f2; border-color: #ef4444; color: #b91c1c;">
+          <b>Error:</b> ${escapeHtml(familyProfileLoadError)}. <button type="button" class="btn small" data-action="family-profile-retry" style="margin-left: 8px;">Reintentar</button>
+        </div>
+      ` : ''}
 
       <!-- DISEÑO 1: COMPUTADORA DESDE 900px (MAESTRO-DETALLE UNIFICADO) -->
       <div class="family-master-detail-layout">
@@ -2903,24 +3012,24 @@ window.familyMessage = familyMessage;
         note: 'Los datos de usuario y acceso oficial son administrados por la dirección del plantel.',
         canEdit: false,
         fields: [
-          { label: 'Alumno vinculado', val: student.name || 'MATEO HERNÁNDEZ LÓPEZ' },
-          { label: 'Nombre de usuario', val: account.username || 'demo.tutor' },
+          { label: 'Alumno vinculado', val: student.name || 'Alumno(a)' },
+          { label: 'Nombre de usuario', val: account.username || 'No disponible' },
           { label: 'Estado de la cuenta', val: 'Activa y confirmada' },
-          { label: 'Último acceso', val: account.lastAccess ? (typeof formatCancunDateTime === 'function' ? formatCancunDateTime(account.lastAccess) : String(account.lastAccess)) : '10 de noviembre de 2026, 08:30 hrs' }
+          { label: 'Último acceso', val: account.lastAccess ? (typeof formatCancunDateTime === 'function' ? formatCancunDateTime(account.lastAccess) : String(account.lastAccess)) : 'Sesión actual' }
         ]
       },
       {
         id: 1,
         title: 'Medios de recuperación',
-        badgeText: 'Verificado',
-        badgeClass: 'complete',
+        badgeText: (account.email || account.phone || tutor.tutorTelefono) ? 'Verificado' : 'Pendiente',
+        badgeClass: (account.email || account.phone || tutor.tutorTelefono) ? 'complete' : 'incomplete',
         iconKey: 'phone',
         note: 'Se utilizan para restablecer el acceso a tu cuenta en caso de extravío o cambio de credenciales.',
         canEdit: true,
         fields: [
-          { name: 'email', label: 'Correo de recuperación', val: account.email || 'tutor.demo@ejemplo.com', type: 'email' },
-          { name: 'phone', label: 'Teléfono o WhatsApp de recuperación', val: getSafePhone(account.phone || tutor.tutorTelefono || tutor.telefono), type: 'tel' },
-          { name: 'status', label: 'Estado de verificación', val: 'Verificado' },
+          { name: 'email', label: 'Correo de recuperación', val: account.email || 'Sin registrar', type: 'email' },
+          { name: 'phone', label: 'Teléfono o WhatsApp de recuperación', val: getSafePhone(account.phone || tutor.tutorTelefono || tutor.telefono) || 'Sin registrar', type: 'tel' },
+          { name: 'status', label: 'Estado de verificación', val: (account.email || account.phone || tutor.tutorTelefono) ? 'Verificado' : 'Pendiente de registrar' },
           { name: 'method', label: 'Método activo de recuperación', val: 'Enlace de un solo uso vía WhatsApp' }
         ]
       },
@@ -2934,7 +3043,7 @@ window.familyMessage = familyMessage;
         canEdit: false,
         fields: [
           { label: 'Estado de protección', val: 'Protegida con credenciales seguras' },
-          { label: 'Última modificación', val: account.lastPasswordChange || '10 de septiembre de 2026' }
+          { label: 'Última modificación', val: account.lastPasswordChange ? (typeof formatCancunDateTime === 'function' ? formatCancunDateTime(account.lastPasswordChange) : String(account.lastPasswordChange)) : 'Sin cambios recientes' }
         ]
       }
     ];
@@ -3007,11 +3116,11 @@ window.familyMessage = familyMessage;
               <div class="family-form-grid-2col">
                 <div class="family-form-group">
                   <label for="accEditEmail">Correo de recuperación</label>
-                  <input id="accEditEmail" type="email" name="email" value="${escapeHtml(account.email || 'tutor.demo@ejemplo.com')}" required>
+                  <input id="accEditEmail" type="email" name="email" value="${escapeHtml(account.email || '')}" placeholder="ejemplo@correo.com">
                 </div>
                 <div class="family-form-group">
                   <label for="accEditPhone">Teléfono o WhatsApp de recuperación</label>
-                  <input id="accEditPhone" type="tel" name="phone" value="${escapeHtml(account.phone || tutor.tutorTelefono || tutor.telefono || '998-123-4567')}" required>
+                  <input id="accEditPhone" type="tel" name="phone" value="${escapeHtml(account.phone || tutor.tutorTelefono || tutor.telefono || '')}" placeholder="10 dígitos">
                 </div>
                 <div class="family-form-group">
                   <label>Estado de verificación</label>
@@ -3107,11 +3216,11 @@ window.familyMessage = familyMessage;
                       <div class="family-form-grid-1col">
                         <div class="family-form-group">
                           <label for="mobAccEditEmail">Correo de recuperación</label>
-                          <input id="mobAccEditEmail" type="email" name="email" value="${escapeHtml(account.email || 'tutor.demo@ejemplo.com')}" required>
+                          <input id="mobAccEditEmail" type="email" name="email" value="${escapeHtml(account.email || '')}" placeholder="ejemplo@correo.com">
                         </div>
                         <div class="family-form-group">
                           <label for="mobAccEditPhone">Teléfono o WhatsApp de recuperación</label>
-                          <input id="mobAccEditPhone" type="tel" name="phone" value="${escapeHtml(account.phone || tutor.tutorTelefono || tutor.telefono || '998-123-4567')}" required>
+                          <input id="mobAccEditPhone" type="tel" name="phone" value="${escapeHtml(account.phone || tutor.tutorTelefono || tutor.telefono || '')}" placeholder="10 dígitos">
                         </div>
                       </div>
                       <div class="family-mobile-edit-actions">
@@ -3223,8 +3332,21 @@ window.familyMessage = familyMessage;
     const student = familyPortalData.student || {};
     const school = familyPortalData.school || {};
     const academic = familyPortalData.academic || {};
-    const studentName = student.name || 'MATEO HERNÁNDEZ LÓPEZ';
-    const groupName = school.group || '4.º A';
+
+    if (!student || !student.name) {
+      host.innerHTML = `
+        <div class="family-weekly-report-container" style="padding: 32px 16px; text-align: center;">
+          <p style="color: #b91c1c; font-weight: 600; font-size: 15px;">No fue posible generar el reporte semanal porque no se cuenta con una identidad válida del alumno.</p>
+          <button type="button" class="family-btn-outline" data-action="family-report-back" style="margin-top: 16px;">
+            ← Volver al portal
+          </button>
+        </div>
+      `;
+      return;
+    }
+
+    const studentName = student.name;
+    const groupName = school.group || student.group || '4.º A';
     const periodStr = academic.periodLabel || 'Semana 1 · Del 31 de agosto al 4 de septiembre de 2026';
 
     const attendanceDays = [
@@ -3312,7 +3434,9 @@ window.familyMessage = familyMessage;
 
           <div class="family-report-section-ribbon">OBSERVACIONES Y RECOMENDACIONES DEL MAESTRO</div>
           <div style="border: 1px solid #cbd5e1; padding: 12px 14px; font-size: 12px; line-height: 1.5; color: #334155; margin-bottom: 24px;">
-            Mateo ha demostrado un avance muy favorable durante esta semana. Mantiene una conducta adecuada, participa de manera activa en las dinámicas grupales y sus entregas reflejan dedicación. Se recomienda continuar fortaleciendo los proyectos de indagación científica en casa.
+            ${window.__familyDemoActive
+              ? 'Mateo ha demostrado un avance muy favorable durante esta semana. Mantiene una conducta adecuada, participa de manera activa en las dinámicas grupales y sus entregas reflejan dedicación. Se recomienda continuar fortaleciendo los proyectos de indagación científica en casa.'
+              : `${escapeHtml(studentName)} mantiene un avance constante en sus actividades académicas y formativas. Los registros de evaluación se actualizan permanentemente en el portal escolar.`}
           </div>
 
           <div style="display: flex; justify-content: space-around; margin-top: 36px; padding-top: 14px; text-align: center; font-size: 11.5px; color: #475569;">
@@ -3368,6 +3492,9 @@ window.familyMessage = familyMessage;
     else if (id === 'familyProfile') {
       if (typeof window !== 'undefined' && window.innerWidth < 900 && familyProfileEditingSection === -1) {
         familyProfileMobileOpenSection = -1;
+      }
+      if (!window.__familyDemoActive && !familyPortalData?.profile && !familyProfileLoading) {
+        loadFamilyDirectoryProfile();
       }
       renderModernProfileAccordion();
     }
@@ -3607,6 +3734,10 @@ window.familyMessage = familyMessage;
   window.actions['family-profile-cancel'] = () => {
     familyProfileEditingSection = -1;
     renderModernProfileAccordion();
+  };
+
+  window.actions['family-profile-retry'] = () => {
+    loadFamilyDirectoryProfile();
   };
 
   window.actions['family-profile-save'] = (btn) => {
