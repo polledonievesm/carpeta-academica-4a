@@ -1109,7 +1109,9 @@ function renderStudentRecordFamilyTab(student, token) {
     const username = hasAccount ? acc.username : 'Sin usuario creado';
     const statusText = !acc ? 'Sin cuenta' : (acc.accessRevoked ? 'Acceso revocado' : (!acc.active ? 'Bloqueada' : 'Activo y Vinculado'));
     const isSuccess = acc && acc.active && !acc.accessRevoked;
-    const lastAccessText = acc?.lastAccess ? new Date(acc.lastAccess).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : 'Sin accesos registrados aún';
+    const lastAccessText = acc?.lastAccess
+      ? (typeof formatCancunDateTime === 'function' ? formatCancunDateTime(acc.lastAccess) : (window.formatCancunDateTime ? window.formatCancunDateTime(acc.lastAccess) : acc.lastAccess))
+      : 'Sin accesos registrados aún';
     const password = acc?.temporaryPassword || '';
 
     portalCard.innerHTML = `

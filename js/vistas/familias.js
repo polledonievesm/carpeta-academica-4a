@@ -101,25 +101,55 @@ window.checkAndNotifyIncompleteFamilyProfile = checkAndNotifyIncompleteFamilyPro
 // ZONA HORARIA Y FORMATEO DE FECHAS OFICIAL (AMERICA/CANCUN)
 // ==========================================================================
 const CANCUN_TZ = 'America/Cancun';
+
 function formatCancunDate(val, options = {}) {
-  if (!val) return '—';
+  if (val === null || val === undefined) return '—';
+  const str = String(val).trim();
+  if (!str) return '—';
+
+  const dateOnlyMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, y, m, d] = dateOnlyMatch;
+    return `${d}/${m}/${y}`;
+  }
+
   try {
-    const d = new Date(Number(val) || val);
+    const num = Number(str);
+    const d = !isNaN(num) && str !== '' ? new Date(num) : new Date(str);
     if (isNaN(d.getTime())) return '—';
     return d.toLocaleDateString('es-MX', Object.assign({ timeZone: CANCUN_TZ }, options));
   } catch(e) {
     return String(val);
   }
 }
+
 function formatCancunDateTime(val, options = {}) {
-  if (!val) return '—';
+  if (val === null || val === undefined) return '—';
+  const str = String(val).trim();
+  if (!str) return '—';
+
+  // 1. Detección estricta de formato histórico de solo fecha YYYY-MM-DD
+  const dateOnlyMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, y, m, d] = dateOnlyMatch;
+    // Mostrar la fecha original como componentes de calendario en formato mexicano DD/MM/YYYY sin hora
+    return `${d}/${m}/${y}`;
+  }
+
+  // 2. Timestamp completo ISO, milisegundos numéricos o fecha con hora
   try {
-    const d = new Date(Number(val) || val);
+    const num = Number(str);
+    const d = !isNaN(num) && str !== '' ? new Date(num) : new Date(str);
     if (isNaN(d.getTime())) return '—';
     return d.toLocaleString('es-MX', Object.assign({ timeZone: CANCUN_TZ }, options));
   } catch(e) {
     return String(val);
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.formatCancunDate = formatCancunDate;
+  window.formatCancunDateTime = formatCancunDateTime;
 }
 
 // ==========================================================================
