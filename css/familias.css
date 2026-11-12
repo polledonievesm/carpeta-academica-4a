@@ -2512,3 +2512,19 @@
 #familyAccount.active ~ .family-period-selector-row {
   display: none !important;
 }
+
+/* ==========================================================================
+   CONTROL DE VISIBILIDAD DE NAVEGACIÓN PRIVADA (SIN SESIÓN FAMILIAR)
+   ========================================================================== */
+#familyPortal:not(.family-authenticated) .family-bottom-nav,
+#familyPortal:not(.family-authenticated) .family-mobile-menu-button,
+#familyPortal:not(.family-authenticated) .family-mobile-menu,
+#familyPortal:not(.family-authenticated) .family-student-nav-topbar,
+#familyPortal:not(.family-authenticated) .family-header-actions,
+#familyPortal:not(.family-authenticated) .family-logout-btn,
+.family-bottom-nav.hidden-control,
+.family-mobile-menu-button.hidden-control,
+.family-mobile-menu.hidden-control,
+.family-student-nav-topbar.hidden-control {
+  display: none !important;
+}

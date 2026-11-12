@@ -1125,6 +1125,42 @@ if (typeof document !== 'undefined') {
 
 const RECOVERY_STORAGE_KEY = 'carpeta_academica_family_reset_token';
 
+function updateFamilyNavigationVisibility(hasValidSession) {
+  const isAuth = Boolean(hasValidSession);
+
+  // 0. Clase de autenticación en el contenedor raíz del portal
+  const portal = document.getElementById('familyPortal');
+  if (portal) {
+    portal.classList.toggle('family-authenticated', isAuth);
+  }
+
+  // 1. Barra inferior móvil (.family-bottom-nav)
+  const bottomNavs = document.querySelectorAll('.family-bottom-nav');
+  bottomNavs.forEach(nav => {
+    nav.classList.toggle('hidden-control', !isAuth);
+  });
+
+  // 2. Botón menú móvil superior (#familyMobileMenuButton) y menú desplegable (#familyMobileMenu)
+  const mobileMenuBtn = document.getElementById('familyMobileMenuButton');
+  if (mobileMenuBtn) {
+    mobileMenuBtn.classList.toggle('hidden-control', !isAuth);
+    if (!isAuth) {
+      mobileMenuBtn.setAttribute('aria-expanded', 'false');
+    }
+  }
+  const mobileMenu = document.getElementById('familyMobileMenu');
+  if (mobileMenu) {
+    mobileMenu.classList.add('hidden-control');
+  }
+
+  // 3. Barra del alumno y pestañas superiores (#familyStudentNavTopBar)
+  const studentNavTopBar = document.getElementById('familyStudentNavTopBar');
+  if (studentNavTopBar) {
+    studentNavTopBar.classList.toggle('hidden-control', !isAuth);
+  }
+}
+window.updateFamilyNavigationVisibility = updateFamilyNavigationVisibility;
+
 function showFamilyPanel(id){
   ['familyInvitationPanel','familyGroupPanel','familyLoginPanel','familyForgotPanel','familyResetPanel','familyOnboardingPanel','familyAppPanel'].forEach(panel=>$('#'+panel).classList.toggle('hidden-control',panel!==id));
   $('#familyMessage').classList.add('hidden-control');
@@ -1132,6 +1168,7 @@ function showFamilyPanel(id){
     sessionStorage.removeItem(RECOVERY_STORAGE_KEY);
     familyResetToken = '';
   }
+  updateFamilyNavigationVisibility(id === 'familyAppPanel');
 }
 function familyMessage(message,error=false){const box=$('#familyMessage');box.textContent=message;box.classList.remove('hidden-control');box.classList.toggle('family-error',error)}
 
@@ -1151,6 +1188,7 @@ async function startFamilyPortal(){
   document.body.classList.add('family-mode');
   $('#app').classList.add('hidden-control');
   $('#familyPortal').classList.remove('hidden-control');
+  updateFamilyNavigationVisibility(false);
   setLoading(false);
   try{
     const urlParams = new URLSearchParams(location.search);
@@ -1352,6 +1390,9 @@ function familyLogout(confirmFirst=true,message=''){
   localStorage.removeItem(FAMILY_SESSION_KEY);
   localStorage.removeItem(FAMILY_REMEMBER_KEY);
   sessionStorage.removeItem(FAMILY_SESSION_KEY);
+  if (typeof updateFamilyNavigationVisibility === 'function') {
+    updateFamilyNavigationVisibility(false);
+  }
   if(message)sessionStorage.setItem('family_logout_message',message);
   location.href=siteBaseUrl()+'?familia=acceso'
 }
@@ -1525,6 +1566,8 @@ window.familyMessage = familyMessage;
     const header = $('#familyPortal .family-header');
     if (header) {
       const schoolName = familyPortalData?.school?.name || 'Escuela Primaria Francisco Hoil Torres T.V.';
+      const mobileBtn = header.querySelector('#familyMobileMenuButton');
+      const mobileMenu = header.querySelector('#familyMobileMenu');
       header.innerHTML = `
         <div class="family-header-brand-wrap">
           <img src="school-logo.webp" alt="Logo de la escuela" width="38" height="38">
@@ -1540,6 +1583,8 @@ window.familyMessage = familyMessage;
           </button>
         </div>
       `;
+      if (mobileBtn) header.appendChild(mobileBtn);
+      if (mobileMenu) header.appendChild(mobileMenu);
     }
 
     // 2. TOP BAR 2: Barra del alumno + 5 pestañas desktop (48px)
