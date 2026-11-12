@@ -1270,7 +1270,7 @@ let groupSearchTimer=0;function searchGroupStudents(){clearTimeout(groupSearchTi
 function selectGroupStudent(id,name){const form=$('#familyGroupRegisterForm');form.elements.studentId.value=id;$('#familyGroupStudent').textContent='Cuenta para '+name;form.classList.remove('hidden-control');form.scrollIntoView({behavior:'smooth'})}
 async function registerGroupFamilyAccount(e){e.preventDefault();const payload=formData(e.currentTarget);payload.groupToken=familyGroupToken;familyMessage('Creando la cuenta…');try{const result=await apiRequest('registerGroupFamilyAccount',[payload],'');storeFamilySession(result.token,false);familyGroupToken='';history.replaceState({},'',siteBaseUrl()+'?familia=acceso');await loadFamilyProfile()}catch(error){familyMessage(error.message,true)}}
 async function registerFamilyAccount(e){e.preventDefault();const payload=formData(e.currentTarget);payload.invitationToken=familyInvitationToken;familyMessage('Creando la cuenta…');try{const result=await apiRequest('registerFamilyAccount',[payload],'');storeFamilySession(result.token,false);familyInvitationToken='';history.replaceState({},'',siteBaseUrl()+'?familia=acceso');await loadFamilyProfile()}catch(error){familyMessage(error.message,true)}}
-async function familyLogin(e){e.preventDefault();const form=e.currentTarget,data=formData(form),remember=Boolean(form.elements.remember?.checked);familyMessage('Comprobando el acceso…');try{const result=await apiRequest('familyLogin',[data.email,data.password],'');storeFamilySession(result.token,remember);await loadFamilyProfile()}catch(error){familyMessage(error.message,true)}}
+async function familyLogin(e){e.preventDefault();const form=e.currentTarget,data=formData(form),remember=Boolean(form.elements.remember?.checked);familyMessage('Comprobando el acceso…');try{const result=await apiRequest('familyLogin',[data.email,data.password],'');if(typeof window.resetFamilyCurrentDate==='function')window.resetFamilyCurrentDate();sessionStorage.removeItem('family_demo_week');storeFamilySession(result.token,remember);await loadFamilyProfile()}catch(error){familyMessage(error.message,true)}}
 async function requestFamilyReset(e){e.preventDefault();const data=formData(e.currentTarget);familyMessage('Enviando el enlace…');try{const result=await apiRequest('requestFamilyPasswordReset',[data.email],'');familyMessage(result.message);showFamilyPanel('familyLoginPanel');familyMessage(result.message)}catch(error){familyMessage(error.message,true)}}
 
 function validateFamilyPasswordClient(password, confirmation) {
@@ -1390,6 +1390,10 @@ function familyLogout(confirmFirst=true,message=''){
   localStorage.removeItem(FAMILY_SESSION_KEY);
   localStorage.removeItem(FAMILY_REMEMBER_KEY);
   sessionStorage.removeItem(FAMILY_SESSION_KEY);
+  sessionStorage.removeItem('family_demo_week');
+  if (typeof window.resetFamilyCurrentDate === 'function') {
+    window.resetFamilyCurrentDate();
+  }
   if (typeof updateFamilyNavigationVisibility === 'function') {
     updateFamilyNavigationVisibility(false);
   }
@@ -1489,9 +1493,44 @@ window.familyMessage = familyMessage;
 (function () {
   'use strict';
 
+  function getCancunTodayDate() {
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: 'America/Cancun'
+      }).formatToParts(new Date()).reduce((acc, p) => {
+        acc[p.type] = p.value;
+        return acc;
+      }, {});
+      if (parts.year && parts.month && parts.day) {
+        return `${parts.year}-${parts.month}-${parts.day}`;
+      }
+    } catch (_) {}
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function resolveSchoolDate(isoStr) {
+    const iso = isoStr || getCancunTodayDate();
+    const period = getPeriodForDate(iso);
+    if (period) {
+      if (iso >= period.startMondayIso && iso <= period.endFridayIso) {
+        return iso;
+      }
+      return period.defaultDate || period.startMondayIso;
+    }
+    return iso;
+  }
+
   // Variables de estado del rediseño
   let familyActiveTab = 'familyOverview';
-  let familyCurrentDate = '2026-08-31';
+  let familyCurrentDate = null;
+  window.resetFamilyCurrentDate = () => { familyCurrentDate = null; window.familyCurrentDate = null; };
   let familyTasksScope = 'week'; // 'week' | 'day'
   let familyTasksFilter = 'all'; // 'all' | 'entregada' | 'pendiente' | 'incompleta' | 'tarde'
   let familyEditingAccordion = null; // null | 0..5
@@ -1826,7 +1865,10 @@ window.familyMessage = familyMessage;
   };
 
   function parseIsoDate(isoStr) {
-    if (!isoStr || typeof isoStr !== 'string') return new Date(2026, 7, 31, 12, 0, 0);
+    if (!isoStr || typeof isoStr !== 'string') {
+      const parts = getCancunTodayDate().split('-').map(Number);
+      return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+    }
     const parts = isoStr.split('-').map(Number);
     return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
   }
@@ -2388,13 +2430,12 @@ window.familyMessage = familyMessage;
       allTasks = academic.weeklyReport.tasks;
     }
 
-    const calendar = window.CARPETA_PLANNING_CALENDAR;
-    const info = calendar?.resolve ? calendar.resolve(familyCurrentDate) : null;
-    const days = calendar?.daysFor && info ? calendar.daysFor(info) : getWeekDaysForDate(familyCurrentDate);
+    const curPeriod = getPeriodForDate(familyCurrentDate);
+    const days = getWeekDaysForPeriod(curPeriod, familyCurrentDate);
 
     let scopedTasks = familyTasksScope === 'day'
       ? allTasks.filter(t => t.date === familyCurrentDate)
-      : allTasks;
+      : allTasks.filter(t => t.date >= curPeriod.startMondayIso && t.date <= curPeriod.endFridayIso);
 
     const totalCount = scopedTasks.length;
     const completedCount = scopedTasks.filter(t => /entregad/i.test(t.status) && !/no entregad/i.test(t.status)).length;
@@ -2424,7 +2465,7 @@ window.familyMessage = familyMessage;
       <div class="family-tasks-top-header">
         <div class="family-tasks-headline">
           <h2>Tareas de la semana</h2>
-          <p>${familyTasksScope === 'day' ? 'Mostrando tareas de ' + escapeHtml(formatDayLong(familyCurrentDate)) : escapeHtml(academic.periodLabel || 'Semana del 31 de agosto al 4 de septiembre de 2026')}</p>
+          <p>${familyTasksScope === 'day' ? 'Mostrando tareas de ' + escapeHtml(formatDayLong(familyCurrentDate)) : 'Semana ' + curPeriod.number + ' · ' + escapeHtml(curPeriod.rangeLabel)}</p>
         </div>
         <div class="family-tasks-delivered-pill">
           ✓ ${completedCount} de ${totalCount} entregadas
@@ -2512,7 +2553,7 @@ window.familyMessage = familyMessage;
       ` : `
         <div class="family-tasks-empty-card">
           <div style="display: flex; justify-content: center; color: #94a3b8;">${familySvg('clipboardCheck', 40)}</div>
-          <p>${familyTasksScope === 'day' ? escapeHtml(dayEmptyMessage) : 'No se encontraron tareas con el filtro seleccionado.'}</p>
+          <p>${familyTasksScope === 'day' ? escapeHtml(dayEmptyMessage) : (totalCount === 0 ? 'No se encontraron tareas registradas para esta semana.' : 'No se encontraron tareas con el filtro seleccionado.')}</p>
         </div>
       `}
     `;
@@ -3422,7 +3463,8 @@ window.familyMessage = familyMessage;
 
     const studentName = student.name;
     const groupName = school.group || student.group || '4.º A';
-    const periodStr = academic.periodLabel || 'Semana 1 · Del 31 de agosto al 4 de septiembre de 2026';
+    const curPeriod = getPeriodForDate(familyCurrentDate);
+    const periodStr = `Semana ${curPeriod.number} · ${curPeriod.rangeLabel}`;
 
     const attendanceDays = [
       { day: 'Lunes 31', status: 'Presente' },
@@ -3618,9 +3660,21 @@ window.familyMessage = familyMessage;
     }
     if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
       familyCurrentDate = dateParam;
+    } else if (!familyCurrentDate) {
+      familyCurrentDate = resolveSchoolDate(getCancunTodayDate());
     }
 
     ensureModernShell();
+
+    if (window.__familyDemoActive && typeof window.setDemoWeek === 'function') {
+      const p = getPeriodForDate(familyCurrentDate);
+      const demoWeek = sessionStorage.getItem('family_demo_week');
+      if (!demoWeek) {
+        window.setDemoWeek(p.number, familyCurrentDate, false);
+        return;
+      }
+    }
+
     showFamilyViewModern(familyActiveTab, false);
 
     // Comprobar popup de actualización si aplica
@@ -3645,9 +3699,14 @@ window.familyMessage = familyMessage;
   };
 
   window.actions['family-date-today'] = () => {
-    const curPeriod = getPeriodForDate(familyCurrentDate);
-    const targetDate = curPeriod.defaultDate || curPeriod.startMondayIso;
-    setFamilyDateModern(targetDate, true);
+    const todayIso = resolveSchoolDate(getCancunTodayDate());
+    familyPeriodPanelOpen = false;
+    const p = getPeriodForDate(todayIso);
+    if (window.__familyDemoActive && typeof window.setDemoWeek === 'function') {
+      window.setDemoWeek(p.number, todayIso, true);
+    } else {
+      setFamilyDateModern(todayIso, true);
+    }
   };
 
   window.actions['family-date-prev-day'] = () => {
@@ -3655,9 +3714,14 @@ window.familyMessage = familyMessage;
     if (calendar?.shiftDay) {
       setFamilyDateModern(calendar.shiftDay(familyCurrentDate, -1), true);
     } else {
-      const d = new Date(familyCurrentDate + 'T00:00:00');
+      const d = parseIsoDate(familyCurrentDate);
       d.setDate(d.getDate() - 1);
-      setFamilyDateModern(d.toISOString().split('T')[0], true);
+      if (d.getDay() === 0) {
+        d.setDate(d.getDate() - 2);
+      } else if (d.getDay() === 6) {
+        d.setDate(d.getDate() - 1);
+      }
+      setFamilyDateModern(toIsoDate(d), true);
     }
   };
 
@@ -3666,9 +3730,14 @@ window.familyMessage = familyMessage;
     if (calendar?.shiftDay) {
       setFamilyDateModern(calendar.shiftDay(familyCurrentDate, 1), true);
     } else {
-      const d = new Date(familyCurrentDate + 'T00:00:00');
+      const d = parseIsoDate(familyCurrentDate);
       d.setDate(d.getDate() + 1);
-      setFamilyDateModern(d.toISOString().split('T')[0], true);
+      if (d.getDay() === 6) {
+        d.setDate(d.getDate() + 2);
+      } else if (d.getDay() === 0) {
+        d.setDate(d.getDate() + 1);
+      }
+      setFamilyDateModern(toIsoDate(d), true);
     }
   };
 
