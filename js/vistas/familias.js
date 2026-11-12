@@ -147,9 +147,32 @@ function formatCancunDateTime(val, options = {}) {
   }
 }
 
+function formatCancunLastAccess(raw) {
+  if (raw === null || raw === undefined) return 'Último acceso: no disponible';
+  const str = String(raw).trim();
+  if (!str) return 'Último acceso: no disponible';
+
+  const formatted = typeof formatCancunDateTime === 'function'
+    ? formatCancunDateTime(str, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      })
+    : '';
+
+  if (!formatted || formatted === '—' || formatted === 'Invalid Date') {
+    return 'Último acceso: no disponible';
+  }
+  return `Último acceso: ${formatted}`;
+}
+
 if (typeof window !== 'undefined') {
   window.formatCancunDate = formatCancunDate;
   window.formatCancunDateTime = formatCancunDateTime;
+  window.formatCancunLastAccess = formatCancunLastAccess;
 }
 
 // ==========================================================================
@@ -1141,12 +1164,11 @@ function updateFamilyNavigationVisibility(hasValidSession) {
   });
 
   // 2. Botón menú móvil superior (#familyMobileMenuButton) y menú desplegable (#familyMobileMenu)
+  // En el diseño oficial moderno no se muestra el menú de 3 rayas; se oculta sin destruir el DOM
   const mobileMenuBtn = document.getElementById('familyMobileMenuButton');
   if (mobileMenuBtn) {
-    mobileMenuBtn.classList.toggle('hidden-control', !isAuth);
-    if (!isAuth) {
-      mobileMenuBtn.setAttribute('aria-expanded', 'false');
-    }
+    mobileMenuBtn.classList.add('hidden-control');
+    mobileMenuBtn.setAttribute('aria-expanded', 'false');
   }
   const mobileMenu = document.getElementById('familyMobileMenu');
   if (mobileMenu) {
@@ -1400,6 +1422,9 @@ function familyLogout(confirmFirst=true,message=''){
   if(message)sessionStorage.setItem('family_logout_message',message);
   location.href=siteBaseUrl()+'?familia=acceso'
 }
+if (typeof window !== 'undefined') {
+  window.familyLogout = familyLogout;
+}
 function paymentMoney(value){return new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(value)||0)}
 
 function openWhatsappDialog(studentId, phone, studentName) {
@@ -1605,25 +1630,60 @@ window.familyMessage = familyMessage;
     const header = $('#familyPortal .family-header');
     if (header) {
       const schoolName = familyPortalData?.school?.name || 'Escuela Primaria Francisco Hoil Torres T.V.';
-      const mobileBtn = header.querySelector('#familyMobileMenuButton');
-      const mobileMenu = header.querySelector('#familyMobileMenu');
-      header.innerHTML = `
-        <div class="family-header-brand-wrap">
+      const rawAccess = familyPortalData?.account?.lastAccess || familyPortalData?.account?.ultimoAcceso;
+      const lastAccessText = typeof formatCancunLastAccess === 'function'
+        ? formatCancunLastAccess(rawAccess)
+        : (rawAccess ? `Último acceso: ${rawAccess}` : 'Último acceso: no disponible');
+
+      // Ocultar elementos institucionales legacy sin destruirlos del DOM
+      const legacyBrand = header.querySelector('.brand');
+      if (legacyBrand) legacyBrand.style.display = 'none';
+      const legacySchool = header.querySelector('#familySchoolName');
+      if (legacySchool) legacySchool.style.display = 'none';
+
+      // 1A. Contenedor de marca y títulos institucionales
+      let brandWrap = header.querySelector('.family-header-brand-wrap');
+      if (!brandWrap) {
+        brandWrap = document.createElement('div');
+        brandWrap.className = 'family-header-brand-wrap';
+        brandWrap.innerHTML = `
           <img src="school-logo.webp" alt="Logo de la escuela" width="38" height="38">
           <div class="family-header-titles">
             <span class="family-header-app-title">Carpeta Académica</span>
             <span class="family-header-sep">|</span>
             <span class="family-header-school-name" title="${escapeHtml(schoolName)}">${escapeHtml(schoolName)}</span>
           </div>
-        </div>
-        <div class="family-header-actions">
+        `;
+        header.insertBefore(brandWrap, header.firstChild);
+      } else {
+        const schoolNameEl = brandWrap.querySelector('.family-header-school-name');
+        if (schoolNameEl) {
+          schoolNameEl.textContent = schoolName;
+          schoolNameEl.title = schoolName;
+        }
+      }
+
+      // 1B. Bloque de acciones (Cerrar sesión + Último acceso)
+      let actions = header.querySelector('.family-header-actions');
+      if (!actions) {
+        actions = document.createElement('div');
+        actions.className = 'family-header-actions';
+        actions.innerHTML = `
           <button type="button" class="family-logout-btn" data-action="family-logout">
             ${familySvg('logout', 16)} <span>Cerrar sesión</span>
           </button>
-        </div>
-      `;
-      if (mobileBtn) header.appendChild(mobileBtn);
-      if (mobileMenu) header.appendChild(mobileMenu);
+          <span class="family-header-last-access">${escapeHtml(lastAccessText)}</span>
+        `;
+        header.appendChild(actions);
+      } else {
+        let lastAccessEl = actions.querySelector('.family-header-last-access');
+        if (!lastAccessEl) {
+          lastAccessEl = document.createElement('span');
+          lastAccessEl.className = 'family-header-last-access';
+          actions.appendChild(lastAccessEl);
+        }
+        lastAccessEl.textContent = lastAccessText;
+      }
     }
 
     // 2. TOP BAR 2: Barra del alumno + 5 pestañas desktop (48px)

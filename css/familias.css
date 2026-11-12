@@ -411,6 +411,25 @@
   background: rgba(255, 255, 255, 0.2) !important;
 }
 
+.family-header-actions {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  justify-content: center !important;
+  gap: 2px !important;
+  flex-shrink: 0 !important;
+}
+
+.family-header-last-access {
+  font-family: "Roboto Condensed", "Arial Narrow", Roboto, Arial, sans-serif !important;
+  font-size: 10.5px !important;
+  font-weight: 400 !important;
+  color: rgba(255, 255, 255, 0.75) !important;
+  white-space: nowrap !important;
+  letter-spacing: 0.01em !important;
+  line-height: 1.2 !important;
+}
+
 /* TOP BAR 2 (48px) */
 .family-student-nav-topbar {
   position: sticky !important;
@@ -2321,6 +2340,54 @@
     display: none !important;
   }
 
+  .family-portal .family-header {
+    padding: 6px 10px !important;
+    height: auto !important;
+    min-height: 56px !important;
+  }
+
+  .family-header-brand-wrap {
+    gap: 7px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .family-header-brand-wrap img {
+    width: 32px !important;
+    height: 32px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .family-header-titles {
+    font-size: 14px !important;
+  }
+
+  .family-header-actions {
+    max-width: 175px !important;
+  }
+
+  .family-logout-btn {
+    padding: 3px 8px !important;
+    font-size: 11px !important;
+    gap: 4px !important;
+    height: 24px !important;
+  }
+
+  .family-logout-btn svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  .family-header-last-access {
+    font-size: 10px !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    max-width: 175px !important;
+    white-space: normal !important;
+    text-align: right !important;
+    line-height: 1.15 !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+
   .family-compact-date-bar {
     padding: 8px 12px !important;
   }
@@ -2530,15 +2597,26 @@
 /* ==========================================================================
    CONTROL DE VISIBILIDAD DE NAVEGACIÓN PRIVADA (SIN SESIÓN FAMILIAR)
    ========================================================================== */
+#familyPortal.family-authenticated .family-header > .brand,
+#familyPortal.family-authenticated #familySchoolName {
+  display: none !important;
+}
+
+#familyPortal:not(.family-authenticated) .family-header-brand-wrap,
 #familyPortal:not(.family-authenticated) .family-bottom-nav,
 #familyPortal:not(.family-authenticated) .family-mobile-menu-button,
 #familyPortal:not(.family-authenticated) .family-mobile-menu,
 #familyPortal:not(.family-authenticated) .family-student-nav-topbar,
 #familyPortal:not(.family-authenticated) .family-header-actions,
 #familyPortal:not(.family-authenticated) .family-logout-btn,
+#familyPortal:not(.family-authenticated) .family-header-last-access,
 .family-bottom-nav.hidden-control,
 .family-mobile-menu-button.hidden-control,
 .family-mobile-menu.hidden-control,
-.family-student-nav-topbar.hidden-control {
+.family-student-nav-topbar.hidden-control,
+#familyPortal #familyMobileMenuButton,
+#familyPortal #familyMobileMenu,
+#familyPortal .family-mobile-menu-button,
+#familyPortal .family-mobile-menu {
   display: none !important;
 }
