@@ -452,7 +452,7 @@ function showView(id, pushHistory = true){
       else if (id === 'directory' && typeof renderDirectory === 'function') { renderDirectory(); if (typeof renderDirectoryBuilder === 'function') renderDirectoryBuilder(); }
       else if (id === 'family-access' && typeof renderFamilyAccess === 'function') renderFamilyAccess();
       else if (id === 'grades' && typeof openGrades === 'function') openGrades();
-      else if (id === 'attendance' && typeof renderAttendanceList === 'function') renderAttendanceList();
+      else if (id === 'attendance') { if (typeof openAttendance === 'function') openAttendance(false, { skipShowView: true }); else if (typeof renderAttendanceList === 'function') renderAttendanceList(); }
       else if (id === 'enrollment-admin' && typeof renderEnrollmentAdmin === 'function') renderEnrollmentAdmin();
       else if (id === 'daily' && typeof openClassForm === 'function') openClassForm();
       else if (id === 'observations' && window.loadObservations) window.loadObservations();

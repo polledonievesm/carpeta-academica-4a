@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="css/inscripcion.css">
   <link rel="stylesheet" href="css/modales.css">
   <link rel="stylesheet" href="css/expediente.css">
+  <link rel="stylesheet" href="css/asistencia.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&display=swap" rel="stylesheet">
@@ -108,9 +109,9 @@
               <svg class="nav-sub-icon icon-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
               <span>Observaciones por PDA</span>
             </button>
-            <button class="nav-item" data-view="attendance" data-tooltip="Asistencia">
+            <button class="nav-item" data-view="attendance" data-tooltip="Pase de lista">
               <svg class="nav-sub-icon icon-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>
-              <span>Asistencia</span>
+              <span>Pase de lista</span>
             </button>
             <button class="nav-item" data-view="drafts" data-tooltip="Borradores">
               <svg class="nav-sub-icon icon-coral" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 22h2a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/><circle cx="8" cy="16" r="6"/><path d="M9.5 17.5 8 16.25V14"/></svg>
@@ -1021,24 +1022,102 @@
         <div id="instrumentGrid" class="instrument-grid"></div>
       </section>
       <section id="attendance" class="view">
-        <div class="page-head"><div><p class="eyebrow">CONTROL DEL GRUPO</p><h1>Pase de lista</h1><p class="muted">Registra asistencia, falta, retardo o justificación sin perder el historial.</p></div><div class="button-row"><button class="btn" data-action="attendance-report">Reporte individual</button><button class="btn primary" data-action="save-attendance">Guardar asistencia</button></div></div>
-        <div class="attendance-layout">
-          <article class="panel">
-            <div class="attendance-date"><label>Fecha<input id="attendanceDate" type="date"></label><div><strong id="attendanceDisplayDate">Selecciona una fecha</strong><p id="attendanceNotice" class="muted"></p></div></div>
-            <div class="button-row attendance-tools"><button class="btn" data-action="all-present">Marcar todos A</button><button class="btn" data-action="no-class">Registrar día sin clases</button><span class="attendance-legend"><b>A</b> Asistencia · <b>F</b> Falta · <b>R</b> Retardo · <b>J</b> Justificada</span></div>
-            <div id="attendanceSavedSummary" class="attendance-saved-summary hidden-control"></div>
-            <div id="attendanceList" class="attendance-list"></div>
-          </article>
-          <article class="panel attendance-report-panel">
-            <h2>Reporte individual de asistencia</h2>
+        <p class="attendance-eyebrow">ALUMNOS · PASE DE LISTA</p>
+        <header class="attendance-card-header">
+          <div class="attendance-header-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="18" height="18" x="3" y="4" rx="2"/>
+              <path d="M16 2v4M8 2v4M3 10h18"/>
+              <path d="m9 16 2 2 4-4"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="attendance-title">Pase de lista</h1>
+            <p class="attendance-subtitle" id="attendanceGroupSubtitle">Registro diario de asistencia</p>
+          </div>
+        </header>
+
+        <div class="attendance-panel">
+          <div class="attendance-top-bar">
+            <div class="attendance-mode-selector">
+              <button type="button" class="attendance-mode-pill" aria-current="page">Pase diario</button>
+            </div>
+            <div class="attendance-date-group">
+              <input id="attendanceDate" type="date" class="attendance-date-input" aria-label="Fecha de asistencia">
+              <button type="button" class="btn attendance-today-btn" data-action="attendance-today" title="Ir a la fecha de hoy">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                Hoy
+              </button>
+              <span id="attendanceDisplayDate" class="attendance-display-badge">Selecciona una fecha</span>
+            </div>
+          </div>
+
+          <div class="attendance-toolbar">
+            <div class="attendance-quick-actions">
+              <span class="attendance-toolbar-label">Acciones rápidas:</span>
+              <button type="button" class="btn attendance-quick-btn teal" data-action="all-present" title="Marcar A a todos conservando notas">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+                Todos con asistencia
+              </button>
+              <button type="button" class="btn attendance-quick-btn danger-soft" data-action="clear-day" title="Limpiar marcas no guardadas">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                Limpiar día
+              </button>
+            </div>
+            <div class="attendance-toolbar-divider" aria-hidden="true"></div>
+            <div class="attendance-legend-bar">
+              <span class="attendance-toolbar-label">Leyenda:</span>
+              <span class="attendance-legend-item"><span class="status-badge status-a">A</span> Asistencia</span>
+              <span class="attendance-legend-item"><span class="status-badge status-f">F</span> Falta</span>
+              <span class="attendance-legend-item"><span class="status-badge status-r">R</span> Retardo</span>
+              <span class="attendance-legend-item"><span class="status-badge status-j">J</span> Justificada</span>
+            </div>
+          </div>
+
+          <div id="attendanceNotice" class="attendance-notice"></div>
+          <div id="attendanceSavedSummary" class="attendance-saved-summary hidden-control"></div>
+
+          <div class="attendance-table-header" aria-hidden="true">
+            <span class="col-num">#</span>
+            <span class="col-name">Alumno</span>
+            <span class="col-status">Estado</span>
+            <span class="col-note">Observación opcional</span>
+          </div>
+
+          <div id="attendanceList" class="attendance-list" role="region" aria-label="Lista de alumnos"></div>
+
+          <div class="attendance-footer">
+            <div class="attendance-footer-left">
+              <button type="button" class="btn small" data-action="toggle-attendance-reports" style="color:#0f766e;font-weight:700;">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Reporte individual
+              </button>
+            </div>
+            <div class="attendance-footer-right">
+              <button type="button" class="btn primary attendance-save-btn" data-action="save-attendance">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Guardar asistencia del día
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <article id="attendanceReportContainer" class="panel attendance-report-container hidden-control">
+          <h2>Reporte individual de asistencia</h2>
+          <div class="form-grid two">
             <label>Alumno<select id="attendanceStudent"><option value="">Selecciona un alumno</option></select></label>
             <label>Tipo de reporte<select id="attendanceReportType"><option value="weekly">Semanal</option><option value="monthly">Mensual</option></select></label>
+          </div>
+          <div class="form-grid two">
             <label id="attendanceWeekControl">Semana que contiene la fecha<input id="attendanceReportDate" type="date"></label>
             <label id="attendanceMonthControl" class="hidden-control">Mes<select id="attendancePeriod"></select></label>
-            <button class="btn primary" data-action="attendance-report">Consultar reporte</button>
-            <div id="attendanceReport" class="attendance-report-empty">Selecciona un alumno para consultar su asistencia.</div>
-          </article>
-        </div>
+          </div>
+          <div class="button-row" style="margin-top:12px;">
+            <button type="button" class="btn primary" data-action="attendance-report">Consultar reporte</button>
+            <button type="button" class="btn" data-action="toggle-attendance-reports">Cerrar reporte</button>
+          </div>
+          <div id="attendanceReport" class="attendance-report-empty" style="margin-top:16px;">Selecciona un alumno para consultar su asistencia.</div>
+        </article>
       </section>
       <section id="attendance-reports" class="view">
         <div class="page-head"><div><p class="eyebrow">ASISTENCIA DEL GRUPO</p><h1>Reporte mensual y del ciclo</h1><p class="muted">Consulta en una sola lista las asistencias y faltas de todos los alumnos, de septiembre a julio.</p></div><button class="btn" data-action="load-attendance-cycle">Actualizar</button></div>
