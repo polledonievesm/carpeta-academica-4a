@@ -42,6 +42,17 @@
   let jornadaStudents = []; // Alumnos a evaluar (presentes + justificados)
   let jornadaEvaluations = {}; // actId -> { studentId -> { entrega, desempeno, observacion, conducta, nota, evaluated } }
   let isSavingJornada = false;
+  let activeJornadaDate = ''; // Fecha actualmente activa en el modelo en memoria
+  let jornadaStudentsDate = ''; // Fecha a la que pertenecen los alumnos y asistencia vigentes en memoria
+  let isDateAttendanceLoading = false; // Indica si hay una consulta de asistencia en curso
+  let loadDateRequestId = 0;   // Secuencia para descartar respuestas asíncronas tardías de fecha
+  let evalDataRequestId = 0;   // Secuencia para descartar respuestas asíncronas tardías de actividad
+
+  // Invalidar cualquier consulta de detalle en vuelo al cambiar de contexto
+  function invalidateDetailQueries() {
+    evalDataRequestId++;
+    currentEvaluatingActId = null;
+  }
 
   function getToday() {
     if (typeof window.todayCancun === 'function') {
@@ -141,10 +152,23 @@
   }
 
   // Guardado continuo automático en borrador (localStorage)
-  function saveDraftToStorage() {
+  function saveDraftToStorage(customDate) {
     try {
       const dateInput = document.getElementById('jornadaDate');
-      const date = dateInput?.value || getToday();
+      const date = customDate || activeJornadaDate || dateInput?.value || getToday();
+      if (!date) return false;
+
+      // Si se pasa customDate y es diferente de la fecha activa en memoria,
+      // no debemos sobreescribir customDate con las actividades o evaluaciones de la fecha activa
+      if (customDate && activeJornadaDate && customDate !== activeJornadaDate) {
+        return false;
+      }
+
+      // Evitar serializar un estado incompleto o transitorio durante la carga de una nueva fecha
+      if (isDateAttendanceLoading && (!jornadaActivities || !jornadaActivities.length)) {
+        return false;
+      }
+
       const draft = {
         date,
         activities: jornadaActivities,
@@ -153,8 +177,61 @@
       };
       localStorage.setItem(DRAFT_JORNADA_KEY + '_' + date, JSON.stringify(draft));
       showAutosaveIndicator();
+      return true;
     } catch (e) {
       console.warn('Error al guardar borrador local:', e);
+      return false;
+    }
+  }
+
+  // Actualizar borrador almacenado de una fecha específica sin alterar la fecha visual activa
+  function updateStoredDraftForDate(date, actId, serverClassId, sentActRev, evalRevsSnapshot) {
+    try {
+      const raw = localStorage.getItem(DRAFT_JORNADA_KEY + '_' + date);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (!draft || !Array.isArray(draft.activities)) return;
+
+      const act = draft.activities.find(a => a.id === actId);
+      if (act) {
+        if (serverClassId) act.serverClassId = serverClassId;
+        // Solo marcar guardada si la versión en borrador coincide exactamente con la enviada
+        if ((act._rev || 1) === sentActRev) {
+          act.saved = true;
+          act._dirty = false;
+          if (act._pendingOperation && act._pendingOperation.sentRev === sentActRev) {
+            act._pendingOperation = null;
+          }
+        }
+      }
+
+      if (draft.evaluations && draft.evaluations[actId] && evalRevsSnapshot) {
+        Object.keys(evalRevsSnapshot).forEach(sid => {
+          const e = draft.evaluations[actId][sid];
+          if (e && (e._rev || 1) === evalRevsSnapshot[sid]) {
+            e._dirty = false;
+          }
+        });
+      }
+
+      // Comprobar si todas las actividades de esa fecha están guardadas y no tienen modificaciones pendientes
+      const allActsSaved = draft.activities.every(a => a.saved && !a._dirty);
+      let hasAnyDirty = false;
+      if (draft.evaluations) {
+        draft.activities.forEach(a => {
+          const actE = draft.evaluations[a.id] || {};
+          if (Object.values(actE).some(e => e._dirty)) hasAnyDirty = true;
+        });
+      }
+
+      if (allActsSaved && !hasAnyDirty) {
+        clearDraftFromStorage(date);
+      } else {
+        draft.updatedAt = new Date().toISOString();
+        localStorage.setItem(DRAFT_JORNADA_KEY + '_' + date, JSON.stringify(draft));
+      }
+    } catch (e) {
+      console.warn('Error al actualizar borrador en segundo plano:', e);
     }
   }
 
@@ -163,7 +240,20 @@
       const raw = localStorage.getItem(DRAFT_JORNADA_KEY + '_' + date);
       if (!raw) return false;
       const draft = JSON.parse(raw);
-      if (draft && draft.activities && draft.evaluations) {
+      if (draft && Array.isArray(draft.activities) && draft.evaluations) {
+        // Compatibilidad con borradores previos: asegurar _rev y _dirty válidos
+        draft.activities.forEach(a => {
+          if (typeof a._rev !== 'number') a._rev = 1;
+          if (typeof a._dirty !== 'boolean') a._dirty = !a.saved;
+        });
+        Object.keys(draft.evaluations).forEach(actId => {
+          const actE = draft.evaluations[actId] || {};
+          Object.keys(actE).forEach(sid => {
+            const ev = actE[sid];
+            if (typeof ev._rev !== 'number') ev._rev = 1;
+            if (typeof ev._dirty !== 'boolean') ev._dirty = false;
+          });
+        });
         jornadaActivities = draft.activities;
         jornadaEvaluations = draft.evaluations;
         return true;
@@ -303,7 +393,12 @@
   }
 
   // Cambiar entre pestañas principales: 'jornada', 'single', 'consulta'
-  function switchMode(mode) {
+  function switchMode(mode, options = {}) {
+    const skipLoadAttendance = Boolean(options && options.skipLoadAttendance);
+    if (currentDailyMode === 'jornada' && mode !== 'jornada') {
+      invalidateDetailQueries();
+    }
+    const isAlreadyInMode = (currentDailyMode === mode);
     currentDailyMode = mode;
     const btnJornada = document.getElementById('btnModeJornada');
     const btnSingle = document.getElementById('btnModeSingleActivity');
@@ -328,22 +423,27 @@
       if (typeof window.renderClassOptions === 'function') window.renderClassOptions();
       const dateEl = document.getElementById('classDate');
       if (dateEl && !dateEl.value) dateEl.value = getToday();
-      if (typeof window.loadClassAttendance === 'function') window.loadClassAttendance();
+      if (!skipLoadAttendance && (!isAlreadyInMode || !singleWrap || singleWrap.classList.contains('hidden-control')) && typeof window.loadClassAttendance === 'function') {
+        window.loadClassAttendance();
+      }
     } else if (mode === 'consulta') {
       initConsultaView();
     }
   }
   window.switchDailyMode = switchMode;
+  window.openJornadaCapture = function (options) {
+    switchMode('jornada', options);
+  };
 
   // Mostrar Paso 1 (actividades) o Paso 2 (calificar actividad)
   async function showStep(step, actId = null) {
     currentStep = step;
-    currentEvaluatingActId = actId;
 
     const stepActivities = document.getElementById('jornadaActivitiesStep');
     const stepEvaluation = document.getElementById('jornadaEvaluationStep');
 
     if (step === 'activities') {
+      invalidateDetailQueries();
       stepActivities?.classList.remove('hidden-control');
       stepEvaluation?.classList.add('hidden-control');
       renderActivitiesList();
@@ -352,14 +452,34 @@
       stepActivities?.classList.add('hidden-control');
       stepEvaluation?.classList.remove('hidden-control');
 
-      // Si la actividad ya estaba guardada en el servidor y no tenemos sus evaluaciones en memoria, cargarlas
+      const targetDate = activeJornadaDate || document.getElementById('jornadaDate')?.value || getToday();
+      const targetActId = actId;
+      const thisEvalRequestId = ++evalDataRequestId;
+      currentEvaluatingActId = actId;
+
+      renderEvaluationView(actId);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Si la actividad ya estaba guardada en el servidor, cargar evaluaciones remotas
       const act = jornadaActivities.find(a => a.id === actId);
       if (act && act.saved && act.serverClassId && typeof window.server === 'function') {
         try {
           const classData = await window.server('getClassRecord', act.serverClassId);
+          // Validar vigencia estricta: si hubo un cambio de actividad (1 -> 2 -> 1) o de fecha, descartar
+          if (thisEvalRequestId !== evalDataRequestId ||
+              targetDate !== activeJornadaDate ||
+              currentEvaluatingActId !== targetActId ||
+              currentStep !== 'evaluation') {
+            return;
+          }
           if (classData && Array.isArray(classData.evaluations)) {
             if (!jornadaEvaluations[actId]) jornadaEvaluations[actId] = {};
             classData.evaluations.forEach(row => {
+              const currentEval = jornadaEvaluations[actId][row.alumnoId];
+              // Punto 3: No sobrescribir si el alumno tiene modificaciones locales pendientes (_dirty)
+              if (currentEval && currentEval._dirty) {
+                return;
+              }
               const hasEntrega = Boolean(row.trabajo && row.trabajo !== 'Pendiente');
               jornadaEvaluations[actId][row.alumnoId] = {
                 entrega: row.trabajo === 'Completo' ? 'Entregado' : (row.trabajo === 'No trabajó' ? 'No entregado' : (row.trabajo || '')),
@@ -367,17 +487,24 @@
                 observacion: row.observacionLibre || '',
                 conducta: row.conducta || '',
                 nota: '',
-                evaluated: hasEntrega
+                evaluated: hasEntrega,
+                _dirty: false,
+                _rev: currentEval?._rev || 1,
+                _modifiedAt: 0
               };
             });
+            renderEvaluationView(actId);
           }
         } catch (e) {
+          if (thisEvalRequestId !== evalDataRequestId ||
+              targetDate !== activeJornadaDate ||
+              currentEvaluatingActId !== targetActId ||
+              currentStep !== 'evaluation') {
+            return;
+          }
           console.warn('Carga de evaluaciones de la actividad:', e);
         }
       }
-
-      renderEvaluationView(actId);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
 
@@ -402,22 +529,147 @@
     const justText = document.getElementById('jornadaJustifiedText');
     if (!date) return;
 
+    const isSameDate = (activeJornadaDate === date);
+
+    // Evitar solicitudes concurrentes redundantes para la misma fecha en vuelo
+    if (isSameDate && isDateAttendanceLoading) {
+      return;
+    }
+
+    // Si había una fecha previa activa y es distinta, persistir su borrador antes de cambiar
+    if (activeJornadaDate && !isSameDate) {
+      const savedOk = saveDraftToStorage(activeJornadaDate);
+      if (!savedOk) {
+        const dateInputEl = document.getElementById('jornadaDate');
+        if (dateInputEl && dateInputEl.value !== activeJornadaDate) {
+          dateInputEl.value = activeJornadaDate;
+        }
+        showToast('No se pudo respaldar el borrador en disco. Cambio de fecha cancelado para no perder datos.', true);
+        return;
+      }
+    }
+
+    // Invalidar cualquier consulta de detalle pendiente al iniciar una nueva carga de fecha
+    invalidateDetailQueries();
+
+    const thisRequestId = ++loadDateRequestId;
+    activeJornadaDate = date;
+    isDateAttendanceLoading = true;
+
+    const dateInput = document.getElementById('jornadaDate');
+    if (dateInput && dateInput.value !== date) {
+      dateInput.value = date;
+    }
+
     if (notice) {
       notice.className = 'class-attendance-notice';
       notice.textContent = 'Consultando asistencia y actividades de la fecha…';
     }
 
+    let hasLocalDraft = false;
+
+    if (!isSameDate) {
+      // Cambio de fecha: desvincular inmediatamente alumnos y asistencia previos
+      jornadaStudents = [];
+      dayAttendanceMap = {};
+      jornadaStudentsDate = '';
+
+      // Si estábamos en evaluación de una actividad de la fecha anterior, volver al listado
+      if (currentStep === 'evaluation') {
+        showStep('activities');
+      }
+
+      hasLocalDraft = restoreDraftFromStorage(date);
+      if (!hasLocalDraft) {
+        jornadaActivities = [
+          { id: 'act-1', materia: 'Lenguajes', actividad: '', material: 'Lenguajes', tipoActividad: 'Clase', paginas: '', pdaTema: '', saved: false, _dirty: false, _rev: 1 },
+          { id: 'act-2', materia: 'Saberes y Pensamiento Científico', actividad: '', material: 'Saberes y Pensamiento Científico', tipoActividad: 'Clase', paginas: '', pdaTema: '', saved: false, _dirty: false, _rev: 1 }
+        ];
+        jornadaEvaluations = {};
+      }
+    } else {
+      // Misma fecha activa (reentrada, recarga o evento de actualización):
+      // NUNCA descartar ni sobrescribir los cambios recientes en memoria.
+      // Reconciliar con localStorage protegiendo el trabajo pendiente en memoria:
+      try {
+        const raw = localStorage.getItem(DRAFT_JORNADA_KEY + '_' + date);
+        if (raw) {
+          const stored = JSON.parse(raw);
+          if (stored && Array.isArray(stored.activities)) {
+            hasLocalDraft = true;
+            stored.activities.forEach(sAct => {
+              const memAct = jornadaActivities.find(a => a.id === sAct.id);
+              if (!memAct) {
+                jornadaActivities.push(sAct);
+              } else if (!memAct._dirty && (sAct._rev || 1) > (memAct._rev || 1)) {
+                Object.assign(memAct, sAct);
+              }
+            });
+            if (stored.evaluations) {
+              Object.keys(stored.evaluations).forEach(actId => {
+                if (!jornadaEvaluations[actId]) jornadaEvaluations[actId] = {};
+                const sEvals = stored.evaluations[actId] || {};
+                Object.keys(sEvals).forEach(sid => {
+                  const sEval = sEvals[sid];
+                  const memEval = jornadaEvaluations[actId][sid];
+                  if (!memEval) {
+                    jornadaEvaluations[actId][sid] = sEval;
+                  } else if (!memEval._dirty && (sEval._rev || 1) > (memEval._rev || 1)) {
+                    jornadaEvaluations[actId][sid] = sEval;
+                  }
+                });
+              });
+            }
+          }
+        }
+      } catch (storageErr) {
+        // Si falla localStorage, se conserva el estado en memoria intacto
+        console.warn('Lectura de almacenamiento local omitida:', storageErr);
+      }
+    }
+
+    renderActivitiesList();
+
     try {
       let dayData = null;
       let dailyReport = null;
+      let queryError = null;
 
       if (typeof window.server === 'function') {
-        const [dData, dRep] = await Promise.all([
-          window.server('getDayData', date).catch(() => null),
-          window.server('getDailyAcademicReport', date).catch(() => null)
-        ]);
-        dayData = dData;
-        dailyReport = dRep;
+        try {
+          const results = await Promise.all([
+            window.server('getDayData', date),
+            window.server('getDailyAcademicReport', date)
+          ]);
+          dayData = results[0];
+          dailyReport = results[1];
+        } catch (err) {
+          queryError = err;
+        }
+      }
+
+      // Validar vigencia estricta post-await 1: si la solicitud es obsoleta (ej. A -> B -> A), descartar
+      if (thisRequestId !== loadDateRequestId || date !== activeJornadaDate) {
+        return;
+      }
+
+      if (queryError) {
+        isDateAttendanceLoading = false;
+        console.warn('Error al consultar datos de la fecha:', queryError);
+        const isSessionErr = (typeof window.isSessionError === 'function' && window.isSessionError(queryError?.message));
+        if (notice && !isSessionErr) {
+          notice.className = 'class-attendance-notice error';
+          notice.textContent = 'No se pudo consultar el servidor. Conservando la información local.';
+        }
+        if (jornadaStudentsDate !== date) {
+          jornadaStudents = [];
+          dayAttendanceMap = {};
+        }
+        renderActivitiesList();
+        if (currentStep === 'evaluation' && currentEvaluatingActId) {
+          renderEvaluationView(currentEvaluatingActId);
+        }
+        return;
       }
 
       const existing = dayData?.existing || {};
@@ -457,11 +709,18 @@
       if (!allStudents.length && typeof window.server === 'function') {
         try {
           const boot = await window.server('getBootstrapDataLite');
+          // Validar vigencia estricta post-await 2:
+          if (thisRequestId !== loadDateRequestId || date !== activeJornadaDate) {
+            return;
+          }
           if (boot?.students?.length) {
             window.state = Object.assign(window.state || {}, boot);
             allStudents = boot.students;
           }
         } catch (e) {
+          if (thisRequestId !== loadDateRequestId || date !== activeJornadaDate) {
+            return;
+          }
           console.warn('Carga diferida de alumnos:', e);
         }
       }
@@ -476,31 +735,60 @@
         const isJust = justifiedIds.has(sid) || (!isNaN(snum) && justifiedIds.has(String(snum))) || justifiedIds.has(String(idx + 1));
         return isPres || isJust;
       });
+      jornadaStudentsDate = date;
+      isDateAttendanceLoading = false;
 
-      // 1. Si el servidor tiene actividades registradas en esta fecha, cargarlas
+      // 1. Si el servidor tiene actividades registradas en esta fecha, reconciliar con el borrador local
       if (dailyReport && Array.isArray(dailyReport.activities) && dailyReport.activities.length > 0) {
-        jornadaActivities = dailyReport.activities.map((a, i) => {
-          const pdaStr = a.instrucciones ? String(a.instrucciones).replace(/^PDA:s*/i, '').trim() : '';
+        const remoteActs = dailyReport.activities.map((a, i) => {
+          const pdaStr = a.instrucciones ? String(a.instrucciones).replace(/^PDA:\s*/i, '').trim() : '';
           return {
             id: 'srv-act-' + (a.id || i + 1),
-            serverClassId: a.id || '',
+            serverClassId: String(a.id || ''),
             materia: a.subject || 'Lenguajes',
             actividad: a.name || 'Actividad del día',
             material: a.material || a.subject || 'Lenguajes',
             tipoActividad: a.tipoActividad || 'Clase',
             paginas: a.paginas || '',
             pdaTema: pdaStr || a.name || '',
-            saved: true
+            saved: true,
+            _dirty: false,
+            _rev: 1
           };
         });
+
+        const hasPendingLocalWork = hasLocalDraft || jornadaActivities.some(a => a._dirty || a.actividad);
+        if (!hasPendingLocalWork) {
+          jornadaActivities = remoteActs;
+        } else {
+          // Reconciliación: conservar locales con trabajo pendiente e incorporar remotas faltantes
+          const reconciled = jornadaActivities.filter(loc => loc._dirty || loc.actividad || loc.serverClassId);
+          remoteActs.forEach(rem => {
+            const localMatch = reconciled.find(loc => loc.serverClassId && String(loc.serverClassId) === String(rem.serverClassId));
+            if (localMatch) {
+              // Misma actividad: actualizar metadatos del servidor solo si no hay cambios locales pendientes
+              if (!localMatch._dirty) {
+                localMatch.materia = rem.materia;
+                localMatch.actividad = rem.actividad;
+                localMatch.material = rem.material;
+                localMatch.tipoActividad = rem.tipoActividad;
+                localMatch.paginas = rem.paginas;
+                localMatch.pdaTema = rem.pdaTema;
+                localMatch.saved = true;
+              }
+            } else {
+              // Actividad remota que no estaba en el borrador: agregarla sin duplicar
+              reconciled.push(rem);
+            }
+          });
+          jornadaActivities = reconciled.length ? reconciled : remoteActs;
+          saveDraftToStorage(date);
+        }
       } else {
-        // Intentar restaurar borrador guardado localmente si existe
-        const hasDraft = restoreDraftFromStorage(date);
-        if (!hasDraft) {
-          // Inicialización por defecto para día nuevo
+        if (!hasLocalDraft && (!jornadaActivities || !jornadaActivities.length)) {
           jornadaActivities = [
-            { id: 'act-1', materia: 'Lenguajes', actividad: '', material: 'Lenguajes', tipoActividad: 'Clase', paginas: '', pdaTema: '', saved: false },
-            { id: 'act-2', materia: 'Saberes y Pensamiento Científico', actividad: '', material: 'Saberes y Pensamiento Científico', tipoActividad: 'Clase', paginas: '', pdaTema: '', saved: false }
+            { id: 'act-1', materia: 'Lenguajes', actividad: '', material: 'Lenguajes', tipoActividad: 'Clase', paginas: '', pdaTema: '', saved: false, _dirty: false, _rev: 1 },
+            { id: 'act-2', materia: 'Saberes y Pensamiento Científico', actividad: '', material: 'Saberes y Pensamiento Científico', tipoActividad: 'Clase', paginas: '', pdaTema: '', saved: false, _dirty: false, _rev: 1 }
           ];
         }
       }
@@ -518,14 +806,17 @@
               observacion: isJust ? 'Pendiente de entrega (falta justificada con tolerancia de 5 días).' : '',
               conducta: '',
               nota: '',
-              evaluated: false
+              evaluated: false,
+              _dirty: false,
+              _rev: 1
             };
           } else {
-            // Si viene de un borrador previo no evaluado pero precargado con 'Entregado'
             const e = jornadaEvaluations[act.id][st.id];
+            if (typeof e._rev !== 'number') e._rev = 1;
+            if (typeof e._dirty !== 'boolean') e._dirty = false;
+            // Si viene de un borrador previo no evaluado pero precargado con 'Entregado'
+            const isJust = (dayAttendanceMap[st.id]?.status === 'J');
             if (!e.evaluated && e.entrega === 'Entregado' && e.desempeno === 'Logrado' && e.conducta === 'Positiva') {
-              const att = dayAttendanceMap[st.id]?.status || '';
-              const isJust = (att === 'J');
               e.entrega = isJust ? 'Pendiente' : '';
               e.desempeno = isJust ? 'Pendiente' : '';
               e.observacion = isJust ? 'Pendiente de entrega (falta justificada con tolerancia de 5 días).' : '';
@@ -561,11 +852,32 @@
         }
       }
 
-      renderActivitiesList();
+      if (currentStep === 'evaluation' && currentEvaluatingActId) {
+        if (jornadaActivities.some(a => a.id === currentEvaluatingActId)) {
+          renderEvaluationView(currentEvaluatingActId);
+        } else {
+          showStep('activities');
+        }
+      } else {
+        renderActivitiesList();
+      }
     } catch (err) {
+      // Validar vigencia también en error para no alterar otra fecha ni retirar indicador vigente
+      if (thisRequestId !== loadDateRequestId || date !== activeJornadaDate) {
+        return;
+      }
+      isDateAttendanceLoading = false;
+      if (jornadaStudentsDate !== date) {
+        jornadaStudents = [];
+        dayAttendanceMap = {};
+      }
       if (notice) {
         notice.className = 'class-attendance-notice error';
         notice.textContent = 'Error al consultar asistencia: ' + (err.message || 'Verifica la conexión');
+      }
+    } finally {
+      if (thisRequestId === loadDateRequestId) {
+        isDateAttendanceLoading = false;
       }
     }
   }
@@ -580,7 +892,9 @@
       tipoActividad: 'Clase',
       paginas: '',
       pdaTema: '',
-      saved: false
+      saved: false,
+      _dirty: true,
+      _rev: 1
     };
     jornadaActivities.push(newAct);
 
@@ -594,7 +908,9 @@
         observacion: isJust ? 'Pendiente de entrega (falta justificada con tolerancia de 5 días).' : '',
         conducta: '',
         nota: '',
-        evaluated: false
+        evaluated: false,
+        _dirty: false,
+        _rev: 1
       };
     });
 
@@ -608,9 +924,22 @@
       showToast('Debes mantener al menos una actividad en la jornada.', true);
       return;
     }
+    const previousActivities = [...jornadaActivities];
+    const previousEvaluation = jornadaEvaluations[actId];
+
     jornadaActivities = jornadaActivities.filter(a => a.id !== actId);
     delete jornadaEvaluations[actId];
-    saveDraftToStorage();
+
+    const savedOk = saveDraftToStorage();
+    if (!savedOk) {
+      jornadaActivities = previousActivities;
+      if (previousEvaluation !== undefined) {
+        jornadaEvaluations[actId] = previousEvaluation;
+      }
+      showToast('No se pudo actualizar el almacenamiento local. Se canceló la eliminación para no perder datos.', true);
+      renderActivitiesList();
+      return;
+    }
     renderActivitiesList();
   }
 
@@ -798,8 +1127,19 @@
     updateEvaluationCounters(actId);
 
     if (!host) return;
-    if (!jornadaStudents.length) {
-      host.innerHTML = '<div class="panel" style="text-align:center;padding:24px;"><p class="muted">No hay alumnos registrados con asistencia o justificación en esta fecha.</p></div>';
+    if (isDateAttendanceLoading) {
+      host.innerHTML = '<div class="panel" style="text-align:center;padding:24px;"><p class="muted">Consultando alumnos y asistencia de la fecha…</p></div>';
+      return;
+    }
+    if (jornadaStudentsDate !== activeJornadaDate || !jornadaStudents.length) {
+      const isNoAttendanceDay = !dayAttendanceMap || Object.keys(dayAttendanceMap).length === 0;
+      const msg = isNoAttendanceDay
+        ? 'Primero guarda la asistencia de esta fecha para cargar los alumnos presentes.'
+        : 'No hay alumnos disponibles para calificar en esta fecha.';
+      const actionBtn = isNoAttendanceDay
+        ? '<div style="margin-top:12px;"><button type="button" class="btn small primary" data-action="go-attendance-date">Ir a Pase de lista →</button></div>'
+        : '';
+      host.innerHTML = `<div class="panel" style="text-align:center;padding:24px;"><p class="muted">${msg}</p>${actionBtn}</div>`;
       return;
     }
 
@@ -974,6 +1314,10 @@
   // Aplicar calificación masiva a alumnos específicos por número de lista
   function applyBatchGrading(actId) {
     if (!actId || !jornadaEvaluations[actId]) return;
+    if (isDateAttendanceLoading || jornadaStudentsDate !== activeJornadaDate || !jornadaStudents.length) {
+      showToast('No es posible calificar: la lista de alumnos no corresponde a la fecha activa o está cargando.', true);
+      return;
+    }
     const act = jornadaActivities.find(a => a.id === actId);
     const numInput = document.getElementById('batchStudentNumbers');
     const numbersSet = parseStudentNumbers(numInput?.value || '');
@@ -1007,6 +1351,9 @@
           }
           if (conductaVal) e.conducta = conductaVal;
           e.evaluated = true;
+          e._dirty = true;
+          e._rev = (e._rev || 1) + 1;
+          e._modifiedAt = Date.now();
           appliedCount++;
           appliedNames.push(`#${studentNum} ${st.name || st.nombre || ''}`.trim());
         }
@@ -1016,6 +1363,13 @@
     if (appliedCount === 0) {
       showToast(`No se encontraron alumnos con los números indicados en la lista del día.`, true);
       return;
+    }
+
+    if (act) {
+      act.saved = false;
+      act._dirty = true;
+      act._rev = (act._rev || 1) + 1;
+      act._modifiedAt = Date.now();
     }
 
     saveDraftToStorage();
@@ -1070,6 +1424,10 @@
   // Regla de las 5:20 PM: Cerrar y autocompletar no entregados
   function applyAutoClose520(actId) {
     if (!actId || !jornadaEvaluations[actId]) return;
+    if (isDateAttendanceLoading || jornadaStudentsDate !== activeJornadaDate || !jornadaStudents.length) {
+      showToast('No es posible calificar: la lista de alumnos no corresponde a la fecha activa o está cargando.', true);
+      return;
+    }
     let modified = 0;
 
     jornadaStudents.forEach(st => {
@@ -1083,9 +1441,20 @@
         e.desempeno = 'Requiere apoyo';
         e.observacion = 'No presentó la actividad en la fecha programada.';
         e.evaluated = true;
+        e._dirty = true;
+        e._rev = (e._rev || 1) + 1;
+        e._modifiedAt = Date.now();
         modified++;
       }
     });
+
+    const actClose = jornadaActivities.find(a => a.id === actId);
+    if (actClose) {
+      actClose.saved = false;
+      actClose._dirty = true;
+      actClose._rev = (actClose._rev || 1) + 1;
+      actClose._modifiedAt = Date.now();
+    }
 
     saveDraftToStorage();
     renderEvaluationView(actId);
@@ -1095,6 +1464,10 @@
   // Acciones masivas: Todos entregaron
   function markAllDelivered(actId) {
     if (!actId || !jornadaEvaluations[actId]) return;
+    if (isDateAttendanceLoading || jornadaStudentsDate !== activeJornadaDate || !jornadaStudents.length) {
+      showToast('No es posible calificar: la lista de alumnos no corresponde a la fecha activa o está cargando.', true);
+      return;
+    }
     const act = jornadaActivities.find(a => a.id === actId);
 
     jornadaStudents.forEach(st => {
@@ -1104,10 +1477,20 @@
         e.entrega = 'Entregado';
         e.desempeno = 'Logrado';
         e.evaluated = true;
+        e._dirty = true;
+        e._rev = (e._rev || 1) + 1;
+        e._modifiedAt = Date.now();
         const obsList = getObservationsForPda(act?.materia, act?.pdaTema, 'Logrado');
         e.observacion = obsList[0] || 'Alcanzó satisfactoriamente el aprendizaje esperado del día.';
       }
     });
+
+    if (act) {
+      act.saved = false;
+      act._dirty = true;
+      act._rev = (act._rev || 1) + 1;
+      act._modifiedAt = Date.now();
+    }
 
     saveDraftToStorage();
     renderEvaluationView(actId);
@@ -1117,10 +1500,27 @@
   // Acciones masivas: Conducta positiva a todos
   function markAllConductAdequate(actId) {
     if (!actId || !jornadaEvaluations[actId]) return;
+    if (isDateAttendanceLoading || jornadaStudentsDate !== activeJornadaDate || !jornadaStudents.length) {
+      showToast('No es posible calificar: la lista de alumnos no corresponde a la fecha activa o está cargando.', true);
+      return;
+    }
+    const act = jornadaActivities.find(a => a.id === actId);
+
     jornadaStudents.forEach(st => {
       const e = jornadaEvaluations[actId][st.id];
       e.conducta = 'Positiva';
+      e._dirty = true;
+      e._rev = (e._rev || 1) + 1;
+      e._modifiedAt = Date.now();
     });
+
+    if (act) {
+      act.saved = false;
+      act._dirty = true;
+      act._rev = (act._rev || 1) + 1;
+      act._modifiedAt = Date.now();
+    }
+
     saveDraftToStorage();
     renderEvaluationView(actId);
     showToast('✓ Conducta Positiva (10 pts) asignada a todos los alumnos');
@@ -1130,7 +1530,7 @@
   async function saveJornadaActivitiesOnly(e) {
     if (e && e.preventDefault) e.preventDefault();
     const dateInput = document.getElementById('jornadaDate');
-    const date = dateInput?.value || getToday();
+    const date = activeJornadaDate || dateInput?.value || getToday();
 
     if (!jornadaActivities.length) {
       showToast('Agrega al menos una actividad.', true);
@@ -1145,84 +1545,203 @@
       }
     }
 
-    saveDraftToStorage();
+    saveDraftToStorage(date);
     showToast(`✓ Se guardó la configuración de las ${jornadaActivities.length} actividades del día ${date}. Ahora puedes calificar cada una.`);
     renderActivitiesList();
   }
 
   // Guardar calificaciones de una actividad específica (Paso 2)
   async function saveSingleActivityEvaluations() {
-    if (!currentEvaluatingActId) return;
+    if (isSavingJornada || !currentEvaluatingActId) return;
     const act = jornadaActivities.find(a => a.id === currentEvaluatingActId);
     if (!act) return;
 
-    const dateInput = document.getElementById('jornadaDate');
-    const date = dateInput?.value || getToday();
+    const savingDate = activeJornadaDate || document.getElementById('jornadaDate')?.value || getToday();
+
+    // Verificación rigurosa de vigencia de alumnos:
+    // Si la fecha está cargando o los alumnos en memoria no pertenecen exactamente a la fecha que se va a guardar,
+    // o no hay alumnos disponibles, abortar antes de cualquier await sin enviar payload
+    if (isDateAttendanceLoading || jornadaStudentsDate !== savingDate || !jornadaStudents.length) {
+      showToast('No es posible guardar: la lista de alumnos no corresponde a la fecha seleccionada o aún se está consultando.', true);
+      return;
+    }
+
+    // Bloqueo inmediato para evitar doble clic o reentradas concurrentes
+    isSavingJornada = true;
     const saveBtn = document.getElementById('btnSaveActivityEvaluations');
     const saveBtnTop = document.getElementById('btnSaveActivityEvaluationsTop');
-
-    if (isSavingJornada) return;
-    isSavingJornada = true;
-
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Guardando en Google Sheets…'; }
     if (saveBtnTop) { saveBtnTop.disabled = true; }
 
     try {
-      // 1. Obtener ID de proyecto obligatorio para evitar "Selecciona un proyecto válido"
-      const projectId = await resolveValidProjectId(act.materia);
+      // 1. CAPTURA INMUTABLE DE CONTEXTO ANTES DE CUALQUIER AWAIT
+      const savingActId = currentEvaluatingActId;
+      const sentActRev = act._rev || 1;
 
-      const evals = jornadaEvaluations[act.id] || {};
-      const evaluacionesPayload = jornadaStudents.map(st => {
-        const e = evals[st.id] || {};
-        const rawEntrega = e.entrega || 'Pendiente';
+      // Comprobar si existe una operación previa en estado 'uncertain' para EXACTAMENTE esta revisión
+      const existingOp = act._pendingOperation;
+      const isUncertainRetry = Boolean(
+        existingOp &&
+        existingOp.status === 'uncertain' &&
+        existingOp.sentRev === sentActRev &&
+        existingOp.payload
+      );
 
-        // Mapear al estándar que reconoce Google Sheets
-        let trabajoStandard = 'Completo';
-        if (rawEntrega === 'Incompleto') trabajoStandard = 'Incompleto';
-        else if (rawEntrega === 'No entregado') trabajoStandard = 'No trabajó';
-        else if (rawEntrega === 'Pendiente' || !rawEntrega) trabajoStandard = 'Pendiente';
+      let requestKey = '';
+      let payload = null;
+      let evalRevsSnapshot = {};
 
-        return {
-          alumnoId: st.id,
-          trabajo: trabajoStandard,
-          conducta: e.conducta || 'Positiva',
-          participacion: 'Media',
-          desempeno: e.desempeno || 'Pendiente',
-          observacionLibre: e.observacion || (trabajoStandard === 'Pendiente' ? 'Pendiente de entrega / regularización.' : '')
+      if (isUncertainRetry) {
+        // Reintento de operación incierta: conservar exactamente la misma clave y el mismo payload capturado originalmente
+        requestKey = existingOp.requestKey;
+        payload = JSON.parse(JSON.stringify(existingOp.payload));
+        evalRevsSnapshot = existingOp.evalRevs || {};
+        if (act.serverClassId && !payload.id) {
+          payload.id = act.serverClassId;
+        }
+      } else {
+        // Nueva operación: capturar snapshots inmutables del estado actual
+        const actSnapshot = {
+          id: act.id,
+          serverClassId: act.serverClassId || '',
+          materia: act.materia,
+          actividad: (act.actividad || '').trim() || 'Actividad del día',
+          material: act.material || act.materia,
+          tipoActividad: act.tipoActividad || 'Clase',
+          paginas: act.paginas || '',
+          pdaTema: act.pdaTema || ''
         };
-      });
 
-      const payload = {
-        id: act.serverClassId || '', // Si ya existía, actualiza
-        materia: act.materia,
-        fecha: date,
-        actividad: act.actividad.trim() || 'Actividad del día',
-        material: act.material || act.materia,
-        tipoActividad: act.tipoActividad || 'Clase',
-        paginas: act.paginas || '',
-        instrucciones: act.pdaTema ? ('PDA: ' + act.pdaTema) : '',
-        proyectoId: projectId || '', // ID de proyecto válido
-        horaInicio: '13:00',
-        horaFin: '14:00',
-        requestKey: `ACT-${Date.now()}-${act.id}`,
-        evaluaciones: evaluacionesPayload
+        const studentsSnapshot = jornadaStudents.map(st => ({
+          id: String(st.id),
+          name: st.name || st.nombre || ''
+        }));
+
+        const evalsMap = jornadaEvaluations[savingActId] || {};
+        const evalsSnapshot = {};
+
+        studentsSnapshot.forEach(st => {
+          const e = evalsMap[st.id] || {};
+          evalsSnapshot[st.id] = {
+            entrega: e.entrega || '',
+            desempeno: e.desempeno || '',
+            observacion: e.observacion || '',
+            conducta: e.conducta || '',
+            nota: e.nota || '',
+            evaluated: !!e.evaluated
+          };
+          evalRevsSnapshot[st.id] = e._rev || 1;
+        });
+
+        const evaluacionesPayload = studentsSnapshot.map(st => {
+          const e = evalsSnapshot[st.id];
+          const rawEntrega = e.entrega || 'Pendiente';
+
+          let trabajoStandard = 'Completo';
+          if (rawEntrega === 'Incompleto') trabajoStandard = 'Incompleto';
+          else if (rawEntrega === 'No entregado') trabajoStandard = 'No trabajó';
+          else if (rawEntrega === 'Pendiente' || !rawEntrega) trabajoStandard = 'Pendiente';
+
+          return {
+            alumnoId: st.id,
+            trabajo: trabajoStandard,
+            conducta: e.conducta || 'Positiva',
+            participacion: 'Media',
+            desempeno: e.desempeno || 'Pendiente',
+            observacionLibre: e.observacion || (trabajoStandard === 'Pendiente' ? 'Pendiente de entrega / regularización.' : '')
+          };
+        });
+
+        // 2. Obtener ID de proyecto (primer await de la nueva operación)
+        const projectId = await resolveValidProjectId(actSnapshot.materia);
+
+        // Clave de operación determinista y estable para esta revisión
+        requestKey = `ACT-${savingDate}-${actSnapshot.id}-R${sentActRev}-${Date.now().toString(36)}`;
+
+        payload = {
+          id: actSnapshot.serverClassId || '',
+          materia: actSnapshot.materia,
+          fecha: savingDate,
+          actividad: actSnapshot.actividad,
+          material: actSnapshot.material,
+          tipoActividad: actSnapshot.tipoActividad,
+          paginas: actSnapshot.paginas,
+          instrucciones: actSnapshot.pdaTema ? ('PDA: ' + actSnapshot.pdaTema) : '',
+          proyectoId: projectId || '',
+          horaInicio: '13:00',
+          horaFin: '14:00',
+          requestKey: requestKey,
+          evaluaciones: evaluacionesPayload
+        };
+      }
+
+      // Registrar operación activa e indexarla en borrador antes de contactar al servidor
+      act._pendingOperation = {
+        requestKey: requestKey,
+        sentRev: sentActRev,
+        evalRevs: evalRevsSnapshot,
+        payload: payload,
+        status: 'in_flight',
+        startedAt: Date.now()
       };
+      saveDraftToStorage(savingDate);
 
       let result = null;
       if (typeof window.server === 'function') {
         result = await window.server('saveClassRecord', payload);
-        if (result && result.activity && result.activity.id) {
-          act.serverClassId = result.activity.id;
-        }
       }
 
-      act.saved = true;
-      saveDraftToStorage();
+      const returnedServerId = result?.activity?.id || act.serverClassId || payload.id || '';
 
-      // Si todas las actividades de la jornada ya están guardadas en el servidor, limpiar el borrador local
-      const allSaved = jornadaActivities.every(a => a.saved);
-      if (allSaved) {
-        clearDraftFromStorage(date);
+      // Confirmación exitosa: limpiar operación pendiente para esta revisión
+      if (act._pendingOperation && act._pendingOperation.sentRev === sentActRev) {
+        act._pendingOperation = null;
+      }
+
+      // 3. Reconciliación basada estrictamente en revisiones exactas (_rev):
+      if (activeJornadaDate === savingDate) {
+        const targetAct = jornadaActivities.find(a => a.id === savingActId);
+        if (targetAct) {
+          if (returnedServerId) targetAct.serverClassId = returnedServerId;
+          // Solo marcar guardada si no hubo modificaciones locales posteriores al momento de enviar
+          if ((targetAct._rev || 1) === sentActRev) {
+            targetAct.saved = true;
+            targetAct._dirty = false;
+          }
+        }
+
+        // Limpiar _dirty solo en las evaluaciones cuya revisión no cambió durante el guardado
+        const curEvals = jornadaEvaluations[savingActId] || {};
+        Object.keys(evalRevsSnapshot).forEach(sid => {
+          const e = curEvals[sid];
+          if (e && (e._rev || 1) === evalRevsSnapshot[sid]) {
+            e._dirty = false;
+          }
+        });
+
+        // Guardar el borrador de la fecha activa
+        saveDraftToStorage(savingDate);
+
+        // Limpiar borrador local de savingDate SOLO si TODAS las actividades están guardadas
+        // y ninguna tiene modificaciones pendientes (_dirty)
+        const allActsSaved = jornadaActivities.every(a => a.saved && !a._dirty);
+        let hasAnyDirty = false;
+        jornadaActivities.forEach(a => {
+          const actE = jornadaEvaluations[a.id] || {};
+          if (Object.values(actE).some(e => e._dirty)) hasAnyDirty = true;
+        });
+
+        if (allActsSaved && !hasAnyDirty) {
+          clearDraftFromStorage(savingDate);
+        }
+
+        // Solo regresar al Paso 1 si seguimos evaluando esa misma actividad en esa fecha
+        if (currentEvaluatingActId === savingActId) {
+          showStep('activities');
+        }
+      } else {
+        // El usuario ya navegó a otra fecha (B): actualizar borrador de savingDate sin tocar fecha B
+        updateStoredDraftForDate(savingDate, savingActId, returnedServerId, sentActRev, evalRevsSnapshot);
       }
 
       // Notificar al sistema global que se guardó una actividad
@@ -1232,12 +1751,16 @@
       }
       window.dispatchEvent(new CustomEvent('class-saved', { detail: payload }));
 
-      showToast(`✓ Calificaciones guardadas exitosamente para: ${act.actividad}`);
-
-      // Regresar al Paso 1 con contadores actualizados
-      showStep('activities');
+      showToast(`✓ Calificaciones guardadas exitosamente para: ${payload.actividad}`);
     } catch (err) {
       console.error('Error al guardar evaluaciones:', err);
+      // Registrar resultado incierto con el payload exacto para reintento fiel
+      if (act && act._pendingOperation && act._pendingOperation.sentRev === (act._rev || 1)) {
+        act._pendingOperation.status = 'uncertain';
+        act._pendingOperation.lastError = err.message || 'Error de comunicación';
+        act._pendingOperation.failedAt = Date.now();
+      }
+      saveDraftToStorage(savingDate);
       showToast('Error al guardar: ' + (err.message || 'Intente de nuevo'), true);
     } finally {
       isSavingJornada = false;
@@ -1501,51 +2024,8 @@
       }
     });
 
-    // Delegación de clics
-    document.addEventListener('click', e => {
-      // Abrir calificación de una actividad
-      const evalBtn = e.target.closest('[data-action="open-eval-act"]');
-      if (evalBtn) {
-        const actId = evalBtn.dataset.id;
-        showStep('evaluation', actId);
-        return;
-      }
-
-      // Quitar actividad
-      const removeBtn = e.target.closest('[data-action="remove-jornada-act"]');
-      if (removeBtn) {
-        removeActivity(removeBtn.dataset.id);
-        return;
-      }
-
-      // Enlace para ir a pasar lista
-      const goAttBtn = e.target.closest('[data-action="go-attendance-date"]');
-      if (goAttBtn) {
-        if (typeof window.showView === 'function') {
-          window.showView('attendance');
-          const attDate = document.getElementById('attendanceDate');
-          const jDate = document.getElementById('jornadaDate');
-          if (attDate && jDate && jDate.value) {
-            attDate.value = jDate.value;
-            if (typeof window.loadAttendanceDay === 'function') window.loadAttendanceDay();
-          }
-        }
-        return;
-      }
-
-      // Consulta de actividades
-      if (e.target.closest('[data-action="run-consult-daily"]')) {
-        loadConsultaDaily();
-        return;
-      }
-      if (e.target.closest('[data-action="run-consult-weekly"]')) {
-        loadConsultaWeekly();
-        return;
-      }
-    });
-
     // Inputs dinámicos en Paso 1 (Actividades)
-    document.addEventListener('input', e => {
+    const handleActivityField = (e) => {
       const field = e.target.closest('.j-field');
       if (field) {
         const card = field.closest('.jornada-activity-card');
@@ -1554,6 +2034,9 @@
         const act = jornadaActivities.find(a => a.id === actId);
         if (act && prop) {
           act[prop] = field.value;
+          act._rev = (act._rev || 1) + 1;
+          act._dirty = true;
+          act.saved = false;
           // Si cambió la materia, recargar selector de PDA
           if (prop === 'materia') {
             renderActivitiesList();
@@ -1561,10 +2044,18 @@
           saveDraftToStorage();
         }
       }
+    };
+    document.addEventListener('input', handleActivityField);
+    document.addEventListener('change', handleActivityField);
 
-      // Inputs dinámicos en Paso 2 (Evaluaciones por alumno)
+    // Inputs dinámicos en Paso 2 (Evaluaciones por alumno)
+    document.addEventListener('input', e => {
       const evalField = e.target.closest('.j-eval-field');
       if (evalField && currentEvaluatingActId) {
+        if (isDateAttendanceLoading || jornadaStudentsDate !== activeJornadaDate) {
+          e.preventDefault();
+          return;
+        }
         const row = evalField.closest('.eval-student-card');
         const studentId = row?.dataset.student;
         const prop = evalField.dataset.prop;
@@ -1572,6 +2063,17 @@
         if (studentId && jornadaEvaluations[currentEvaluatingActId]?.[studentId]) {
           const evalItem = jornadaEvaluations[currentEvaluatingActId][studentId];
           evalItem.evaluated = true; // Marcado explícitamente
+          evalItem._dirty = true;    // Punto 3: Distinción explícita de modificación local
+          evalItem._rev = (evalItem._rev || 1) + 1;
+          evalItem._modifiedAt = Date.now();
+
+          const curAct = jornadaActivities.find(a => a.id === currentEvaluatingActId);
+          if (curAct) {
+            curAct.saved = false;
+            curAct._dirty = true;
+            curAct._rev = (curAct._rev || 1) + 1;
+            curAct._modifiedAt = Date.now();
+          }
 
           if (prop === 'observacionSelect') {
             evalItem.observacion = evalField.value;
@@ -1629,9 +2131,43 @@
     document.getElementById('consultaDailyDate')?.addEventListener('change', loadConsultaDaily);
   }
 
+  // Registro descentralizado de acciones para el despachador de navegación (Regla 2)
+  window.actions = window.actions || {};
+  window.actions['open-eval-act'] = (el) => {
+    const actId = el?.dataset?.id || (typeof el === 'string' ? el : null);
+    if (actId) showStep('evaluation', actId);
+  };
+  window.actions['remove-jornada-act'] = (el) => {
+    const actId = el?.dataset?.id || (typeof el === 'string' ? el : null);
+    if (actId) removeActivity(actId);
+  };
+  window.actions['go-attendance-date'] = () => {
+    if (typeof window.showView === 'function') {
+      window.showView('attendance');
+      const attDate = document.getElementById('attendanceDate');
+      const jDate = document.getElementById('jornadaDate');
+      if (attDate && jDate && jDate.value) {
+        attDate.value = jDate.value;
+        if (typeof window.loadAttendanceDay === 'function') window.loadAttendanceDay();
+      }
+    }
+  };
+  window.actions['run-consult-daily'] = () => loadConsultaDaily();
+  window.actions['run-consult-weekly'] = () => loadConsultaWeekly();
+
   // Inicialización global
   document.addEventListener('DOMContentLoaded', () => {
     bindEvents();
+    // Observar salida de vista de registro diario para invalidar consultas de detalle
+    const dailyViewEl = document.getElementById('daily');
+    if (dailyViewEl && typeof MutationObserver !== 'undefined') {
+      const observer = new MutationObserver(() => {
+        if (!dailyViewEl.classList.contains('active')) {
+          invalidateDetailQueries();
+        }
+      });
+      observer.observe(dailyViewEl, { attributes: true, attributeFilter: ['class'] });
+    }
     // Exponer función de apertura para integración con app.js
     window.openJornadaCapture = function () {
       switchMode('jornada');

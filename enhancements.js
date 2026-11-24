@@ -179,7 +179,10 @@
     $('#instrumentForm')?.addEventListener('change',event=>{if(event.target.matches('input[name="tipo"]'))generateInstrumentDraft(true)});
     installDraftAutosave($('#instrumentForm'),DRAFT_KEYS.instrument,instrumentDraftExtra,'instrumentDraftStatus');
     window.addEventListener('pagehide',()=>{if($('#instrumentDialog')?.open)writeDraft($('#instrumentForm'),DRAFT_KEYS.instrument,instrumentDraftExtra,'instrumentDraftStatus')});
-    const collapse=$('#sidebarCollapse');collapse?.addEventListener('click',()=>{const collapsed=$('#sidebar').classList.toggle('collapsed');$('.main').classList.toggle('sidebar-collapsed',collapsed);localStorage.setItem('carpeta_sidebar_collapsed',collapsed?'1':'0')});if(localStorage.getItem('carpeta_sidebar_collapsed')==='1'&&innerWidth>900){$('#sidebar').classList.add('collapsed');$('.main').classList.add('sidebar-collapsed')}
+    if (localStorage.getItem('carpeta_sidebar_collapsed') === '1' && innerWidth > 900) {
+      $('#sidebar')?.classList.add('collapsed');
+      $('.main')?.classList.add('sidebar-collapsed');
+    }
     enhancePasswords();renderInstrumentOptions();renderInstruments();addSaveOverlay();
   });
 })();

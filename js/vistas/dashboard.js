@@ -42,8 +42,33 @@ function renderProjectWorkspace(){
   $('#projectActivityCount').textContent=`${activities.length} ${activities.length===1?'actividad':'actividades'}`;
   $('#projectActivities').innerHTML=activities.length?activities.map(a=>`<article class="history-card"><div class="history-main"><span class="history-date">${escapeHtml(formatDateShort(a.fecha))} · ${escapeHtml(formatTime(a.horaInicio))}–${escapeHtml(formatTime(a.horaFin))}</span><h3>${escapeHtml(a.actividad)}</h3><p>${escapeHtml(a.materia)} · ${escapeHtml(a.material)}</p></div><div class="history-results"><span class="result complete"><b>${a.totals.complete}</b> completas</span><span class="result partial"><b>${a.totals.partial}</b> incompletas</span><span class="result none"><b>${a.totals.none}</b> no trabajaron</span><span class="result conduct"><b>${a.totals.conduct}</b> conducta</span></div><button class="btn" data-action="edit-class" data-id="${a.id}">Ver o editar</button></article>`).join(''):'<div class="empty-history"><strong>Aún no hay actividades</strong><p>Presiona “Registrar actividad” para evaluar al grupo.</p></div>';
 }
-async function openClassForm(projectId='',classId=''){
-  renderClassOptions();
+let _isOpenClassFormLoading = false;
+async function openClassForm(projectId='',classId='',targetMode=''){
+  if (_isOpenClassFormLoading) return;
+  _isOpenClassFormLoading = true;
+  const startView = document.querySelector('.view.active')?.id || '';
+  try {
+    const isIndividual = Boolean(classId || projectId || targetMode === 'single');
+
+    // Separación explícita: Apertura general de Jornada (menú lateral, Inicio o modo jornada)
+    if (!isIndividual) {
+      const currentView = document.querySelector('.view.active')?.id;
+      if (currentView !== 'daily') {
+        showView('daily');
+      }
+      if (typeof window.openDailyView === 'function') {
+        window.openDailyView();
+      } else if (typeof window.renderDailyActivitiesList === 'function') {
+        window.renderDailyActivitiesList();
+      } else if (typeof window.openJornadaCapture === 'function') {
+        window.openJornadaCapture();
+      } else if (typeof window.switchDailyMode === 'function') {
+        window.switchDailyMode('jornada');
+      }
+      return;
+    }
+
+    renderClassOptions();
   const form=$('#classForm');form.reset();form.elements.id.value='';form.elements.fecha.value=todayCancun();if(form.elements.horaInicio)form.elements.horaInicio.value='13:00';if(form.elements.horaFin)form.elements.horaFin.value='14:00';
   $('.class-data-panel',form)?.classList.remove('hidden-control');$('#classCompactSummary')?.classList.add('hidden-control');
   $('#classDraftStatus')?.classList.add('hidden-control');
@@ -66,20 +91,17 @@ async function openClassForm(projectId='',classId=''){
   ensureRequestKey(form,'ACT',restoredDraft);
   $('#classFormTitle').textContent=classId?'Editar actividad':'Registrar actividad';
   await loadClassAttendance(savedEvaluations);
-  showView('daily');
-  if (classId) {
-    if (typeof window.switchDailyMode === 'function') {
-      window.switchDailyMode('single');
-    }
-  } else {
-    // Si no es edición y no se ha especificado modo, mantener modo actual o jornada
-    const singleWrap = document.getElementById('classForm');
-    if (singleWrap && !singleWrap.classList.contains('hidden-control')) {
-      // Usuario está en modo individual, no forzar cambio
-    } else if (typeof window.openJornadaCapture === 'function') {
-      window.openJornadaCapture();
-    }
+  const currentView = document.querySelector('.view.active')?.id;
+  if (currentView !== 'daily' && (currentView === startView || !currentView)) {
+    showView('daily');
   }
+  if (typeof window.switchDailyMode === 'function') {
+    window.switchDailyMode('single', { skipLoadAttendance: true });
+  }
+
   if(restoredDraft) toast('Se recuperó el borrador de la actividad.');
+  } finally {
+    _isOpenClassFormLoading = false;
+  }
 }
 function defaultEvaluation(studentId){return {alumnoId:studentId,trabajo:'Completo',conducta:'Adecuada',participacion:'Media',desempeno:'',observacionLibre:''}}

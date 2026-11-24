@@ -767,255 +767,238 @@
         </article>
       </section>
 
-      <section id="daily" class="view">
-      <div class="module-tabs" style="margin-bottom:14px;">
-        <button type="button" class="btn primary" id="btnModeJornada">Captura de jornada (Múltiples actividades)</button>
-        <button type="button" class="btn" id="btnModeSingleActivity">Actividad individual</button>
-        <button type="button" class="btn" id="btnModeConsulta">Consulta de actividades (Día y Semana)</button>
-      </div>
-
-      <div id="jornadaWrap">
+            <section id="daily" class="view">
         <!-- ========================================================
-             PASO 1: CREAR Y GESTIONAR ACTIVIDADES DEL DÍA (Limpio)
+             1. PANTALLA PRINCIPAL: DIARIO DE ACTIVIDADES
              ======================================================== -->
-        <div id="jornadaActivitiesStep">
-          <form id="jornadaForm">
-            <div class="page-head">
-              <div>
-                <p class="eyebrow">REGISTRO ÁGIL DE LA JORNADA</p>
-                <h1>Actividades del día</h1>
-                <p class="muted">Registra las actividades de la jornada, asocia su PDA y luego califica cada una de forma independiente.</p>
-              </div>
-              <div class="button-row">
-                <button type="button" class="btn" id="btnLimpiarJornada" data-action="cancel-jornada">Limpiar</button>
-                <button type="submit" class="btn primary" id="btnSubmitJornadaTop">Guardar actividades del día</button>
-              </div>
-            </div>
-
-            <article class="panel">
-              <!-- Navegador de Fecha (Ayer · Selector · Mañana · Hoy) -->
-              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line);">
-                <label style="margin:0;font-weight:700;display:flex;align-items:center;gap:6px;">
-                  <span>Fecha:</span>
-                  <button type="button" class="btn small" id="btnJornadaPrevDay" title="Día anterior" style="padding:4px 9px;">◀</button>
-                  <input type="date" id="jornadaDate" required style="font-weight:700;padding:5px 9px;">
-                  <button type="button" class="btn small" id="btnJornadaNextDay" title="Día siguiente" style="padding:4px 9px;">▶</button>
-                  <button type="button" class="btn small" id="btnJornadaToday" style="padding:4px 10px;">Hoy</button>
-                </label>
-                <div id="jornadaAttendanceNotice" class="class-attendance-notice" style="flex:1;margin:0;">Selecciona una fecha para cargar la asistencia.</div>
-              </div>
-
-              <!-- Alerta de Alumnos con Justificante (Tolerancia 5 días) -->
-              <div id="jornadaJustifiedAlert" class="hidden-control" style="background:#fffbe6;border:1px solid #ffe58f;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:0.85rem;color:#874d00;display:flex;align-items:center;justify-content:space-between;">
-                <span id="jornadaJustifiedText">⏳ Alumnos con justificante</span>
-              </div>
-
-              <div class="section-head" style="margin-bottom:10px;">
-                <div>
-                  <h3 style="font-size:1rem;margin:0;">Materias y actividades realizadas</h3>
-                  <span class="muted" style="font-size:0.82rem;">Define las materias, el nombre de la actividad, vincula el PDA y califica de manera independiente</span>
-                </div>
-              </div>
-
-              <!-- Lista dinámica de tarjetas de actividades -->
-              <div id="jornadaActivitiesList"></div>
-
-              <div style="margin-top:14px;display:flex;gap:10px;align-items:center;">
-                <button type="button" class="btn" id="btnAddJornadaActivity">+ Agregar otra actividad al día</button>
-                <button type="submit" class="btn primary" id="btnSubmitJornadaBottom">Guardar actividades del día</button>
-              </div>
-            </article>
-          </form>
-        </div>
-
-        <!-- ========================================================
-             PASO 2: MODO CALIFICAR ACTIVIDAD ENFOCADA (Con Banco de PDA)
-             ======================================================== -->
-        <div id="jornadaEvaluationStep" class="hidden-control">
-          <div class="page-head" style="align-items:flex-start;">
+        <div id="dailyMainView">
+          <div class="page-head">
             <div>
-              <button type="button" class="btn small" id="btnBackToJornadaActs" style="margin-bottom:8px;">◀ Volver a actividades del día</button>
-              <p class="eyebrow" id="evalStepEyebrow">EVALUACIÓN DE ACTIVIDAD</p>
-              <h1 id="evalStepActivityTitle" style="font-size:1.35rem;margin:2px 0;">Actividad</h1>
-              <p class="muted" id="evalStepActivityMeta" style="margin:2px 0;">Materia · PDA</p>
+              <p class="eyebrow">REGISTRO ACADÉMICO</p>
+              <h1>Diario de actividades</h1>
             </div>
             <div class="button-row">
-              <button type="button" class="btn small" id="btnAutoClose520" title="Aplica regla de las 5:20 PM: marca 'No entregado' y 'Requiere apoyo' a alumnos presentes en blanco">⏰ Cierre 5:20 PM (Marcar no entregados)</button>
-              <button type="button" class="btn primary" id="btnSaveActivityEvaluationsTop">Guardar calificaciones</button>
+              <button type="button" class="btn primary" id="btnCreateActivity" data-action="create-activity">+ Crear actividad</button>
+              <button type="button" class="btn" id="btnEditSelectedActivities" data-action="edit-selected-activities" disabled>✏️ Editar actividades seleccionadas (<span id="editSelectedCount">0</span>)</button>
+              <button type="button" class="btn danger" id="btnDeleteSelectedActivities" data-action="delete-selected-activities" disabled>🗑️ Eliminar actividades seleccionadas (<span id="deleteSelectedCount">0</span>)</button>
             </div>
           </div>
 
-          <!-- Barra de Contadores en Vivo y Acciones Masivas -->
+          <!-- Barra de herramientas: Seleccionar todas y Filtro -->
+          <article class="panel" style="padding:12px 16px;margin-bottom:14px;background:#f8fafc;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <label style="margin:0;display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="selectAllActivities" style="width:18px;height:18px;cursor:pointer;">
+                  <span>Seleccionar todas las visibles</span>
+                </label>
+                <span id="activitiesVisibleCount" class="muted" style="font-size:0.85rem;">0 actividades</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:0.85rem;">
+                  <span>Filtrar fecha:</span>
+                  <input type="date" id="filterDailyDate" style="padding:4px 8px;font-size:0.85rem;">
+                  <button type="button" class="btn small" id="btnClearDailyFilter" style="padding:3px 7px;">Ver todas</button>
+                </label>
+              </div>
+            </div>
+          </article>
+
+          <!-- Contenedor dinámico de lista de actividades con 4 estados explícitos -->
+          <div id="dailyActivitiesContainer">
+            <!-- Estado 1: Cargando -->
+            <div id="dailyActivitiesLoading" class="panel hidden-control" style="text-align:center;padding:28px;">
+              <div class="spinner" style="margin:0 auto 10px;width:24px;height:24px;border:3px solid #cbd5e1;border-top-color:#0b315d;border-radius:50%;animation:spin 1s linear infinite;"></div>
+              <span>Cargando actividades del diario…</span>
+            </div>
+
+            <!-- Estado 2: Consulta fallida con botón Reintentar -->
+            <div id="dailyActivitiesError" class="panel hidden-control" style="text-align:center;padding:24px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;">
+              <p style="font-weight:600;margin:0 0 8px;">No fue posible cargar las actividades del diario.</p>
+              <p id="dailyActivitiesErrorMessage" style="font-size:0.9rem;margin:0 0 14px;color:#b91c1c;">La conexión con Google tardó demasiado. Intenta nuevamente.</p>
+              <button type="button" class="btn primary" id="btnRetryLoadDailyActivities" data-action="retry-load-daily">Reintentar consulta</button>
+            </div>
+
+            <!-- Aviso si falla la actualización conservando datos en memoria -->
+            <div id="dailyActivitiesUpdateNotice" class="panel hidden-control" style="padding:10px 14px;background:#fffbeb;border:1px solid #fef3c7;color:#92400e;border-radius:8px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+              <span id="dailyActivitiesUpdateNoticeText">⚠️ No fue posible actualizar con el servidor. Mostrando datos cargados en memoria local.</span>
+              <button type="button" class="btn small" id="btnRetryUpdateDailyActivities" data-action="retry-load-daily">Reintentar</button>
+            </div>
+
+            <!-- Estado 3: Consulta exitosa sin actividades -->
+            <div id="dailyActivitiesEmpty" class="panel muted hidden-control" style="text-align:center;padding:28px;">
+              No hay actividades registradas aún. Pulsa “+ Crear actividad” para iniciar el registro.
+            </div>
+
+            <!-- Estado 4: Consulta exitosa con actividades -->
+            <div id="dailyActivitiesList" class="daily-activities-grid"></div>
+          </div>
+        </div>
+
+        <!-- ========================================================
+             2. PANTALLA CREAR UNA O VARIAS ACTIVIDADES
+             ======================================================== -->
+        <div id="dailyCreateView" class="hidden-control">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">REGISTRO DE ACTIVIDADES</p>
+              <h1 id="createActivitiesTitle">Crear actividades</h1>
+              <p class="muted">Prepara una o varias actividades para la jornada antes de guardar.</p>
+            </div>
+            <div class="button-row">
+              <button type="button" class="btn" id="btnCancelCreateActivities" data-action="cancel-create-activities">Regresar</button>
+              <button type="button" class="btn primary" id="btnSaveNewActivities" data-action="save-new-activities">Guardar actividades</button>
+            </div>
+          </div>
+
+          <!-- Alerta de borrador recuperable -->
+          <div id="createDraftNotice" class="hidden-control" style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
+            <span>Hay un borrador de actividades sin guardar. ¿Deseas recuperarlo?</span>
+            <div class="button-row" style="gap:6px;">
+              <button type="button" class="btn small" id="btnDiscardCreateDraft">Descartar borrador</button>
+              <button type="button" class="btn small primary" id="btnRestoreCreateDraft">Recuperar borrador</button>
+            </div>
+          </div>
+
+          <div id="createActivitiesList"></div>
+
+          <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
+            <button type="button" class="btn" id="btnAddAnotherCreateActivity">+ Agregar otra actividad</button>
+            <button type="button" class="btn primary" id="btnSaveNewActivitiesBottom">Guardar actividades</button>
+          </div>
+        </div>
+
+        <!-- ========================================================
+             3. PANTALLA EDITAR ACTIVIDADES SELECCIONADAS
+             ======================================================== -->
+        <div id="dailyEditBatchView" class="hidden-control">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">EDICIÓN MÚLTIPLE</p>
+              <h1>Editar actividades seleccionadas</h1>
+              <p class="muted">Modifica independientemente cada actividad seleccionada conservando sus evaluaciones.</p>
+            </div>
+            <div class="button-row">
+              <button type="button" class="btn" id="btnBackFromBatchEdits" data-action="back-from-batch-edits">Regresar</button>
+              <button type="button" class="btn primary" id="btnSaveBatchEdits" data-action="save-batch-edits">Guardar</button>
+            </div>
+          </div>
+
+          <div id="editBatchFeedback" class="hidden-control" style="margin-bottom:14px;"></div>
+          <div id="editBatchActivitiesList"></div>
+
+          <div style="margin-top:16px;display:flex;gap:10px;">
+            <button type="button" class="btn" id="btnBackFromBatchEditsBottom">Regresar</button>
+            <button type="button" class="btn primary" id="btnSaveBatchEditsBottom">Guardar</button>
+          </div>
+        </div>
+
+        <!-- ========================================================
+             4. PANTALLA CALIFICAR ACTIVIDAD ENFOCADA
+             ======================================================== -->
+        <div id="dailyGradingView" class="hidden-control">
+          <div class="page-head" style="align-items:flex-start;">
+            <div>
+              <button type="button" class="btn small" id="btnBackToMainFromGrading" style="margin-bottom:8px;">◀ Regresar a Diario de actividades</button>
+              <p class="eyebrow" id="gradingActivityEyebrow">EVALUACIÓN DE ACTIVIDAD</p>
+              <h1 id="gradingActivityTitle" style="font-size:1.35rem;margin:2px 0;">Actividad</h1>
+              <p class="muted" id="gradingActivityMeta" style="margin:2px 0;">Materia · Fecha</p>
+            </div>
+            <div class="button-row">
+              <button type="button" class="btn primary" id="btnSaveGradingTop">Guardar calificaciones</button>
+            </div>
+          </div>
+
+          <!-- Barra de Contadores y métricas de evaluación -->
           <article class="panel" style="padding:12px 16px;margin-bottom:12px;background:#f8fafc;">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-              <!-- Contadores dinámicos -->
-              <div id="evalCountersBar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"></div>
-              <!-- Acciones Rápidas -->
+              <div id="gradingCountersBar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"></div>
               <div class="button-row">
-                <button type="button" class="btn small" id="btnEvalAllComplete">✓ Todos entregaron (Logrado)</button>
-                <button type="button" class="btn small" id="btnEvalAllAdequate">⭐ Conducta Positiva (10)</button>
+                <button type="button" class="btn small" id="btnGradingAllComplete">✓ Todos entregaron (Logrado)</button>
+                <button type="button" class="btn small" id="btnGradingAllAdequate">⭐ Conducta Positiva</button>
               </div>
             </div>
           </article>
 
-          <!-- Panel de Asignación por Lote y Búsqueda Directa -->
-          <article class="panel batch-eval-panel" style="padding:14px 18px;margin-bottom:14px;background:#f0f9ff;border:1px solid #b9e6fe;border-radius:10px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-              <div style="display:flex;align-items:center;gap:8px;">
-                <span style="font-size:1.15rem;">⚡</span>
-                <strong style="color:#035388;font-size:0.95rem;">Calificar grupo de alumnos al mismo ritmo</strong>
-                <span class="muted" style="font-size:0.8rem;">(Escribe números de lista separados por coma o guion, ej: <b>2, 5, 7</b> o <b>1-4</b>)</span>
-              </div>
-              <!-- Buscador / Filtro rápido por número de lista o nombre -->
-              <div style="display:flex;align-items:center;gap:6px;">
-                <label for="evalQuickSearch" style="margin:0;font-size:0.8rem;font-weight:700;color:#0b315d;">🔍 Buscar:</label>
-                <input type="text" id="evalQuickSearch" placeholder="Núm. de lista o nombre..." style="width:200px;padding:5px 8px;font-size:0.82rem;border-radius:6px;border:1px solid #9ac2dc;background:#fff;">
-                <button type="button" class="btn small" id="btnClearQuickSearch" style="display:none;padding:4px 8px;font-size:0.75rem;" title="Mostrar todos">✕ Ver todos</button>
-              </div>
-            </div>
-
-            <div class="batch-eval-controls">
-              <label style="margin:0;font-size:0.78rem;font-weight:700;color:#17324d;">Números de lista
-                <input type="text" id="batchStudentNumbers" placeholder="Ej. 2, 5, 7 o 1-4" class="input" style="padding:6px 8px;font-size:0.85rem;font-weight:700;background:#fff;border-color:#70b0df;">
-              </label>
-
-              <label style="margin:0;font-size:0.78rem;font-weight:700;color:#17324d;">Entrega
-                <select id="batchEntrega" class="input" style="padding:6px 8px;font-size:0.82rem;font-weight:700;background:#fff;">
-                  <option value="Entregado" selected>Entregado</option>
-                  <option value="Incompleto">Incompleto</option>
-                  <option value="No entregado">No entregado</option>
-                  <option value="Pendiente">Pendiente</option>
-                </select>
-              </label>
-
-              <label style="margin:0;font-size:0.78rem;font-weight:700;color:#17324d;">Desempeño
-                <select id="batchDesempeno" class="input" style="padding:6px 8px;font-size:0.82rem;font-weight:700;background:#fff;">
-                  <option value="Logrado" selected>Logrado</option>
-                  <option value="En proceso">En proceso</option>
-                  <option value="Requiere apoyo">Requiere apoyo</option>
-                  <option value="Pendiente">Pendiente</option>
-                </select>
-              </label>
-
-              <label style="margin:0;font-size:0.78rem;font-weight:700;color:#17324d;">Observación del PDA
-                <select id="batchObservacion" class="input" style="padding:6px 8px;font-size:0.8rem;background:#fff;">
-                  <option value="">-- Misma observación del banco --</option>
-                </select>
-              </label>
-
-              <label style="margin:0;font-size:0.78rem;font-weight:700;color:#17324d;">Conducta diaria
-                <select id="batchConducta" class="input" style="padding:6px 8px;font-size:0.82rem;font-weight:700;background:#fff;">
-                  <option value="Positiva" selected>Positiva (10 pts)</option>
-                  <option value="Seguimiento">Seguimiento (8 pts)</option>
-                  <option value="Requiere apoyo">Requiere apoyo (5 pts)</option>
-                </select>
-              </label>
-
+          <!-- Lista de evaluación por alumno -->
+          <article class="panel">
+            <div class="section-head">
               <div>
-                <button type="button" class="btn primary" id="btnApplyBatchGrading" style="padding:7px 14px;font-size:0.82rem;font-weight:700;white-space:nowrap;background:#0284c7;border-color:#0284c7;">
-                  ⚡ Aplicar a seleccionados
-                </button>
+                <h2 style="font-size:1.05rem;margin:0;">Lista de alumnos a calificar</h2>
+                <p class="muted" style="margin:0;font-size:0.82rem;">Registra entrega, fecha de entrega del alumno, desempeño, conducta y observaciones.</p>
               </div>
             </div>
-            <div id="batchFeedback" style="font-size:0.78rem;margin-top:6px;color:#0369a1;min-height:16px;"></div>
-          </article>
-
-          <!-- Lista de Alumnos para Calificar -->
-          <article class="panel evaluation-panel">
-            <div class="section-head evaluation-heading">
-              <div>
-                <h2>Lista de alumnos del grupo</h2>
-                <p class="muted">Ordenados alfabéticamente A-Z. Selecciona el nivel de desempeño y la observación correspondiente de su PDA.</p>
-              </div>
+            <div id="gradingStudentsList"></div>
+            <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+              <button type="button" class="btn primary" id="btnSaveGradingBottom">Guardar calificaciones</button>
             </div>
-            <div id="jornadaSingleEvaluationList" class="evaluation-list"></div>
           </article>
+        </div>
 
-          <!-- Barra flotante de Guardado -->
-          <div class="sticky-save">
-            <span id="evalStepProgress">0 de 25 alumnos calificados</span>
-            <button type="button" class="btn primary" id="btnSaveActivityEvaluations">Guardar calificaciones de la actividad</button>
+        <!-- MODAL: Desglose de alumnos (Pendientes de entrega / Sin calificar) -->
+        <div id="modalDailyStudentBreakdown" class="modal-backdrop hidden-control" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;">
+          <div class="modal-dialog" style="background:#fff;border-radius:12px;width:90%;max-width:540px;padding:20px;box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin-bottom:14px;">
+              <h3 id="modalBreakdownTitle" style="margin:0;font-size:1.15rem;">Detalle de alumnos</h3>
+              <button type="button" class="btn small" id="btnCloseBreakdownModal">✕</button>
+            </div>
+            <p id="modalBreakdownDescription" class="muted" style="font-size:0.85rem;margin-bottom:12px;"></p>
+            <div id="modalBreakdownStudentList" style="max-height:300px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;margin-bottom:14px;"></div>
+            <div style="display:flex;justify-content:flex-end;">
+              <button type="button" class="btn" id="btnOkBreakdownModal">Cerrar</button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <form id="classForm" class="hidden-control">
+        <!-- MODAL: Confirmación de Eliminación Múltiple -->
+        <div id="modalConfirmDeleteActivities" class="modal-backdrop hidden-control" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;">
+          <div class="modal-dialog" style="background:#fff;border-radius:12px;width:90%;max-width:540px;padding:20px;box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #fed7aa;padding-bottom:10px;margin-bottom:14px;">
+              <h3 style="margin:0;color:#9a3412;font-size:1.15rem;">Confirmar eliminación de actividades</h3>
+              <button type="button" class="btn small" id="btnCancelDeleteModalX">✕</button>
+            </div>
+            <p style="font-size:0.9rem;margin-bottom:12px;">Se eliminarán permanentemente las siguientes actividades y sus registros de evaluación asociados:</p>
+            <div id="modalDeleteActivitiesSummary" style="background:#fff7ed;border:1px solid #ffedd5;border-radius:8px;padding:12px;margin-bottom:14px;font-size:0.85rem;max-height:220px;overflow-y:auto;"></div>
+            <p class="muted" style="font-size:0.8rem;margin-bottom:16px;">Nota: Esta acción NO eliminará proyectos, alumnos ni asistencias.</p>
+            <div style="display:flex;justify-content:flex-end;gap:10px;">
+              <button type="button" class="btn" id="btnCancelDeleteActivities">Cancelar</button>
+              <button type="button" class="btn danger" id="btnConfirmDeleteActivities">Confirmar eliminación</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODAL: Advertencia de Cambios sin Guardar al Regresar -->
+        <div id="modalConfirmDiscardEdits" class="modal-backdrop hidden-control" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;">
+          <div class="modal-dialog" style="background:#fff;border-radius:12px;width:90%;max-width:480px;padding:20px;box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+            <h3 style="margin:0 0 10px;font-size:1.15rem;color:#b45309;">Cambios sin guardar</h3>
+            <p style="font-size:0.9rem;margin-bottom:16px;">Tienes modificaciones sin guardar en las actividades editadas. Si regresas ahora, perderás estos cambios. ¿Deseas descartarlos?</p>
+            <div style="display:flex;justify-content:flex-end;gap:10px;">
+              <button type="button" class="btn" id="btnStayInEdits">Continuar editando</button>
+              <button type="button" class="btn danger" id="btnDiscardEditsAndLeave">Descartar y regresar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Formulario para compatibilidad total con llamadas legacy y contratos de opciones -->
+        <form id="classForm" class="hidden-control" style="display:none;">
           <input type="hidden" name="id">
-          <div class="page-head"><div><p class="eyebrow">REGISTRO ACADÉMICO</p><h1 id="classFormTitle">Registrar actividad</h1><p class="muted">Registra en una sola pantalla la tarea, conducta y participación.</p></div><div class="button-row"><button type="button" class="btn" data-action="cancel-class">Cancelar</button><button type="submit" class="btn primary">Guardar registro</button></div></div>
-          <div id="classDraftStatus" class="draft-status hidden-control"><span>✓ Borrador guardado en este dispositivo</span><button type="button" data-action="discard-class-draft">Descartar borrador</button></div>
-          <article class="panel class-data-panel">
-            <div class="form-grid two"><label>Campo formativo o materia<select id="classSubject" name="materia" required></select></label><label>Fecha<input id="classDate" type="date" name="fecha" required></label></div><input type="hidden" id="classProject" name="proyectoId" value=""><input type="hidden" name="horaInicio" value="13:00"><input type="hidden" name="horaFin" value="14:00">
-            
-            <div id="classAttendanceNotice" class="class-attendance-notice">Selecciona una fecha para cargar a los alumnos presentes.</div>
-            <div class="form-grid two"><label>Nombre de la actividad<input name="actividad" placeholder="Ej. Identificamos los órganos del aparato digestivo" required></label><label>Cuaderno, libro o material<select name="material" required><option value="">Selecciona</option><optgroup label="Cuadernos"><option>Lenguajes</option><option>Saberes y Pensamiento Matemático</option><option>Saberes y Pensamiento Científico</option><option>Ética, Naturaleza y Sociedades</option><option>De lo Humano y lo Comunitario</option><option>Dibujo</option><option>Ortografía</option></optgroup><optgroup label="Libros"><option>Libro de Texto Gratuito (LTG)</option><option>La Guía Escolar</option><option>PRACMATICA</option><option>C.A.P. (Comprender, Aprender y Practicar)</option></optgroup><option>Hoja de trabajo</option><option>Otro material</option></select></label></div>
-            <div class="form-grid three class-report-details"><label>Tipo de actividad<select name="tipoActividad"><option>Clase</option><option>Tarea para casa</option></select></label><label>Páginas realizadas<input name="paginas" placeholder="Ej. 42 y 43"></label><label class="class-instructions-field">Instrucciones completas<textarea name="instrucciones" rows="2" placeholder="Escribe las indicaciones que verá la familia en el reporte"></textarea></label></div>
-            <div class="instrument-choice"><label>Instrumento de evaluación<select id="classInstrument" name="instrumentoId"><option value="">Evaluación sencilla</option></select></label><div id="classInstrumentSummary" class="instrument-summary">Puedes evaluar únicamente la entrega o seleccionar una rúbrica/lista de cotejo reutilizable.</div><button type="button" class="btn small" data-action="open-instruments">Administrar instrumentos</button></div>
-            <div class="class-setup-actions"><button type="button" class="btn primary" data-action="continue-class-evaluation">Continuar a evaluar alumnos →</button></div>
-          </article>
-          <article id="classCompactSummary" class="class-compact-summary hidden-control"><div><span>ACTIVIDAD PREPARADA</span><strong id="classCompactName">Actividad</strong><small id="classCompactMeta">Fecha</small></div><button type="button" class="btn small" data-action="edit-class-setup">Editar datos</button></article>
-          <article class="panel evaluation-panel">
-            <div class="section-head evaluation-heading"><div><h2>Evaluación del grupo</h2><p class="muted">Solo aparecen los alumnos con asistencia o retardo en la fecha seleccionada.</p></div><div class="button-row"><button type="button" class="btn small" data-action="all-complete">Todos entregaron</button><button type="button" class="btn small" data-action="all-adequate">Conducta adecuada</button></div></div>
-            <div class="evaluation-legend"><span><b>Trabajo:</b> completo, incompleto o no trabajó</span><span><b>Participación:</b> alta, media o nula</span></div>
-            <div id="evaluationList" class="evaluation-list"></div>
-          </article>
-          <div class="sticky-save"><span id="evaluationProgress">0 de 35 alumnos</span><button type="submit" class="btn primary">Guardar actividad y evaluaciones</button></div>
+          <select id="classProject" name="proyectoId" style="display:none;"></select>
+          <input type="hidden" name="fecha" id="classDate">
+          <input type="hidden" name="horaInicio">
+          <input type="hidden" name="horaFin">
+          <select id="classSubject" name="materia" style="display:none;"></select>
+          <input type="hidden" name="actividad">
+          <input type="hidden" name="material">
+          <select id="classInstrument" name="instrumentoId" style="display:none;"></select>
+          <input type="hidden" name="instrumentoTipo">
+          <input type="hidden" name="tipoActividad">
+          <input type="hidden" name="paginas">
+          <input type="hidden" name="instrucciones">
+          <span id="classDraftStatus"></span>
+          <div id="evaluationList"></div>
         </form>
-      
-      <!-- Contenedor de Consulta de Actividades (Día y Semana) -->
-      <div id="dailyConsultaWrap" class="hidden-control">
-        <div class="page-head">
-          <div>
-            <p class="eyebrow">CONSULTA Y SEGUIMIENTO</p>
-            <h1>Historial de actividades</h1>
-            <p class="muted">Consulta las actividades realizadas en cualquier fecha del grupo o el concentrado semanal por alumno.</p>
-          </div>
-        </div>
+      </section>
 
-        <div class="dashboard-grid">
-          <!-- Consulta Diaria Grupal -->
-          <article class="panel">
-            <div class="section-head">
-              <div>
-                <h2>Actividades del día (Grupal)</h2>
-                <p class="muted">Selecciona una fecha para ver las tareas y trabajos de todo el grupo.</p>
-              </div>
-            </div>
-            <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;">
-              <label style="margin:0;flex:1;">Fecha a consultar
-                <input type="date" id="consultaDailyDate" class="input">
-              </label>
-              <button type="button" class="btn primary" data-action="run-consult-daily">Consultar día</button>
-            </div>
-            <div id="consultaDailyResults"></div>
-          </article>
-
-          <!-- Consulta Semanal por Alumno -->
-          <article class="panel">
-            <div class="section-head">
-              <div>
-                <h2>Historial semanal por alumno</h2>
-                <p class="muted">Consulta de lunes a viernes todas las tareas entregadas por el alumno.</p>
-              </div>
-            </div>
-            <div class="form-grid two" style="margin-bottom:14px;">
-              <label>Alumno
-                <select id="consultaStudentSelect" class="input">
-                  <option value="">Selecciona un alumno</option>
-                </select>
-              </label>
-              <label>Semana de la fecha
-                <input type="date" id="consultaWeekDate" class="input">
-              </label>
-            </div>
-            <div style="margin-bottom:14px;">
-              <button type="button" class="btn primary" data-action="run-consult-weekly">Consultar semana del alumno</button>
-            </div>
-            <div id="consultaWeeklyResults"></div>
-          </article>
-        </div>
-      </div>
-
-    </section>
       <section id="instruments" class="view">
         <div class="page-head"><div><p class="eyebrow">EVALUACIÓN</p><h1>Instrumentos de evaluación</h1><p class="muted">Elige contenidos y PDA oficiales de 4.º; genera, adapta y reutiliza el instrumento que necesites.</p></div><button class="btn primary" data-action="new-instrument">+ Nuevo instrumento</button></div>
         <div class="toolbar"><input id="instrumentSearch" class="input" placeholder="Buscar por título, contenido o PDA"><select id="instrumentTypeFilter" class="input"><option value="">Todos</option><option value="RUBRICA">Rúbricas</option><option value="LISTA_COTEJO">Listas de cotejo</option><option value="ESCALA_VALORACION">Escalas de valoración</option><option value="EXAMEN">Exámenes</option><option value="CUESTIONARIO">Cuestionarios</option></select></div>
