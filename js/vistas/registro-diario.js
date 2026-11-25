@@ -1245,7 +1245,12 @@ function updateSelectionButtons() {
   const count = window.dailyState.selectedIds.size;
   const btnEdit = document.getElementById('btnEditSelectedActivities');
   const btnDelete = document.getElementById('btnDeleteSelectedActivities');
+  const editCountEl = document.getElementById('editSelectedCount');
+  const deleteCountEl = document.getElementById('deleteSelectedCount');
   const selectAllCb = document.getElementById('selectAllActivities');
+
+  if (editCountEl) editCountEl.textContent = String(count);
+  if (deleteCountEl) deleteCountEl.textContent = String(count);
 
   if (btnEdit) {
     btnEdit.disabled = count === 0;
@@ -1257,10 +1262,14 @@ function updateSelectionButtons() {
   }
 
   const gs = getGlobalState();
-  const allClases = gs.classes || gs.activities || window.dailyState.activities || [];
+  let visibleClases = gs.classes || gs.activities || window.dailyState.activities || [];
+  if (window.dailyState.filterDate) {
+    visibleClases = visibleClases.filter(a => String(a.fecha) === String(window.dailyState.filterDate));
+  }
+  const visibleSelectedCount = visibleClases.filter(a => window.dailyState.selectedIds.has(String(a.id))).length;
   if (selectAllCb) {
-    selectAllCb.checked = allClases.length > 0 && count === allClases.length;
-    selectAllCb.indeterminate = count > 0 && count < allClases.length;
+    selectAllCb.checked = visibleClases.length > 0 && visibleSelectedCount === visibleClases.length;
+    selectAllCb.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleClases.length;
   }
 }
 window.updateSelectionButtons = updateSelectionButtons;
@@ -1282,11 +1291,14 @@ window.toggleSelectActivity = toggleSelectActivity;
 
 function toggleSelectAllActivities(selectAll) {
   const gs = getGlobalState();
-  const allClases = gs.classes || gs.activities || window.dailyState.activities || [];
+  let visibleClases = gs.classes || gs.activities || window.dailyState.activities || [];
+  if (window.dailyState.filterDate) {
+    visibleClases = visibleClases.filter(a => String(a.fecha) === String(window.dailyState.filterDate));
+  }
   if (selectAll) {
-    allClases.forEach(a => window.dailyState.selectedIds.add(String(a.id)));
+    visibleClases.forEach(a => window.dailyState.selectedIds.add(String(a.id)));
   } else {
-    window.dailyState.selectedIds.clear();
+    visibleClases.forEach(a => window.dailyState.selectedIds.delete(String(a.id)));
   }
   renderDailyActivitiesList();
 }
@@ -1988,13 +2000,18 @@ function confirmDeleteSelectedActivities() {
   const toDelete = allClases.filter(c => selectedIds.includes(String(c.id)));
   const affectedEvals = allEvals.filter(e => selectedIds.includes(String(e.claseId)));
 
-  const countEl = document.getElementById('deleteCountText');
-  const namesEl = document.getElementById('deleteNamesList');
-  const evalsEl = document.getElementById('deleteEvalsWarning');
-
-  if (countEl) countEl.textContent = `¿Estás seguro de eliminar ${toDelete.length} actividad(es)?`;
-  if (namesEl) namesEl.innerHTML = toDelete.map(a => `<li>${escapeHtml(a.actividad || a.id)} (Fecha: ${a.fecha || 'Sin fecha'})</li>`).join('');
-  if (evalsEl) evalsEl.textContent = `Esta acción eliminará de forma irreversible ${affectedEvals.length} evaluación(es) asociada(s).`;
+  const summaryEl = document.getElementById('modalDeleteActivitiesSummary');
+  if (summaryEl) {
+    let html = `<div style="font-weight:600;margin-bottom:8px;color:#9a3412;">Actividades a eliminar: ${toDelete.length}</div>`;
+    html += '<ul style="margin:0 0 10px 0;padding-left:20px;line-height:1.4;">';
+    toDelete.forEach(a => {
+      const aEvals = allEvals.filter(e => String(e.claseId) === String(a.id));
+      html += `<li><strong>${escapeHtml(a.actividad || a.id)}</strong> (${a.fecha || 'Sin fecha'}${a.materia ? ' · ' + escapeHtml(a.materia) : ''}) — <span class="muted">${aEvals.length} evaluación(es)</span></li>`;
+    });
+    html += '</ul>';
+    html += `<div style="color:#b45309;font-size:0.8rem;">⚠️ Total de evaluaciones asociadas que se eliminarán: <strong>${affectedEvals.length}</strong></div>`;
+    summaryEl.innerHTML = html;
+  }
 
   const modal = document.getElementById('modalConfirmDeleteActivities');
   if (modal) {
@@ -2007,87 +2024,207 @@ function confirmDeleteSelectedActivities() {
 }
 window.confirmDeleteSelectedActivities = confirmDeleteSelectedActivities;
 
+let _isDeletingActivities = false;
+
+function applyDeletionToLocalState(validConfirmedIds) {
+  const deletedSet = new Set(validConfirmedIds.map(String));
+  const gs = getGlobalState();
+
+  if (gs.classes) {
+    gs.classes = gs.classes.filter(c => !deletedSet.has(String(c.id)));
+  }
+  if (gs.activities) {
+    gs.activities = gs.activities.filter(c => !deletedSet.has(String(c.id)));
+  }
+  if (gs.evaluations) {
+    gs.evaluations = gs.evaluations.filter(e => !deletedSet.has(String(e.claseId)));
+  }
+  if (gs.stats) {
+    gs.stats.activities = (gs.classes || []).length;
+  }
+
+  // Limpieza local que impide recreación por un borrador o reintento antiguo
+  validConfirmedIds.forEach(id => {
+    const strId = String(id);
+    const curDraft = typeof readDraft === 'function' ? readDraft(DRAFT_KEYS.classRecord) : null;
+    if (curDraft && (String(curDraft.data?.id) === strId || String(curDraft.data?.localId) === strId)) {
+      if (typeof clearDraft === 'function') clearDraft(DRAFT_KEYS.classRecord);
+    }
+
+    // Limpiar del registro multicontexto
+    if (typeof getActivityRegistry === 'function') {
+      const reg = getActivityRegistry();
+      const keysToDelete = new Set();
+      const targetIds = new Set([strId]);
+
+      // Primera pasada: identificar alias asociados
+      Object.keys(reg).forEach(k => {
+        const entry = reg[k];
+        if (!entry) return;
+        const entryId = String(entry.id || entry.data?.id || entry.pendingOperation?.payload?.id || entry.payload?.id || '');
+        if (targetIds.has(entryId) || targetIds.has(k)) {
+          keysToDelete.add(k);
+          const locId = String(entry.localId || entry.data?.localId || entry.pendingOperation?.payload?.localId || entry.payload?.localId || '');
+          if (locId) targetIds.add(locId);
+          const reqK = String(entry.requestKey || entry.pendingOperation?.requestKey || entry.pendingOperation?.payload?.requestKey || '');
+          if (reqK) targetIds.add(reqK);
+        }
+      });
+
+      // Segunda pasada: limpiar todas las entradas que coincidan con cualquiera de los alias
+      Object.keys(reg).forEach(k => {
+        const entry = reg[k];
+        if (!entry) return;
+        const entryId = String(entry.id || entry.data?.id || entry.pendingOperation?.payload?.id || entry.payload?.id || '');
+        const locId = String(entry.localId || entry.data?.localId || entry.pendingOperation?.payload?.localId || entry.payload?.localId || '');
+        const reqK = String(entry.requestKey || entry.pendingOperation?.requestKey || entry.pendingOperation?.payload?.requestKey || '');
+        if (targetIds.has(k) || (entryId && targetIds.has(entryId)) || (locId && targetIds.has(locId)) || (reqK && targetIds.has(reqK))) {
+          keysToDelete.add(k);
+        }
+      });
+
+      keysToDelete.forEach(k => delete reg[k]);
+      try { localStorage.setItem(ACTIVITY_REGISTRY_KEY, JSON.stringify(reg)); } catch (e) {}
+    }
+  });
+
+  // Limpiar únicamente los IDs confirmados de la selección
+  validConfirmedIds.forEach(id => window.dailyState.selectedIds.delete(String(id)));
+}
+
 async function executeDeleteSelectedActivities(idsToDelete = null) {
-  const ids = idsToDelete || Array.from(window.dailyState.selectedIds);
+  if (_isDeletingActivities) return;
+  window.dailyState = window.dailyState || {};
+  const ids = (idsToDelete || Array.from(window.dailyState.selectedIds || [])).map(String);
   if (!ids.length) return;
 
   const modal = document.getElementById('modalConfirmDeleteActivities');
   if (modal) modal.classList.add('hidden-control');
 
+  const btnConfirm = document.getElementById('btnConfirmDeleteActivities');
+  if (btnConfirm) btnConfirm.disabled = true;
+
+  _isDeletingActivities = true;
   if (typeof setLoading === 'function') setLoading(true, 'Eliminando actividades seleccionadas...');
+
+  // Gestión de clave estable y reintentos para la operación de eliminación
+  let pending = window.dailyState.pendingDeletion;
+  const currentSet = new Set(ids);
+  let requestKey = '';
+
+  if (pending && Array.isArray(pending.ids) &&
+      pending.ids.length === ids.length &&
+      pending.ids.every(id => currentSet.has(String(id)))) {
+    // Misma selección: reutilizar la clave estable para el reintento
+    requestKey = pending.requestKey;
+  } else {
+    // Selección distinta o nueva: generar nueva clave única
+    requestKey = 'DEL_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    pending = { requestKey, ids: [...ids], status: 'pending' };
+    window.dailyState.pendingDeletion = pending;
+  }
+
   try {
-    const resp = await server('deleteClassRecords', ids);
-    if (resp && resp.ok) {
-      const deletedSet = new Set(ids.map(String));
-      const gs = getGlobalState();
-
-      if (gs.classes) {
-        gs.classes = gs.classes.filter(c => !deletedSet.has(String(c.id)));
-      }
-      if (gs.activities) {
-        gs.activities = gs.activities.filter(c => !deletedSet.has(String(c.id)));
-      }
-      if (gs.evaluations) {
-        gs.evaluations = gs.evaluations.filter(e => !deletedSet.has(String(e.claseId)));
-      }
-      if (gs.stats) {
-        gs.stats.activities = (gs.classes || []).length;
-      }
-
-      // DEFECTO 4: Limpieza local que impide recreación por un borrador o reintento antiguo
-      ids.forEach(id => {
-        const strId = String(id);
-        const curDraft = typeof readDraft === 'function' ? readDraft(DRAFT_KEYS.classRecord) : null;
-        if (curDraft && (String(curDraft.data?.id) === strId || String(curDraft.data?.localId) === strId)) {
-          if (typeof clearDraft === 'function') clearDraft(DRAFT_KEYS.classRecord);
+    // Si la operación previa quedó en estado incierto, consultar getDeletionStatus antes de repetir
+    if (pending.status === 'uncertain') {
+      try {
+        const statusResp = await (typeof server === 'function' ? server('getDeletionStatus', ids) : null);
+        if (statusResp && statusResp.ok === true && statusResp.statusByClass) {
+          const allAlreadyDeleted = ids.every(id => statusResp.statusByClass[id]?.state === 'DELETED');
+          if (allAlreadyDeleted) {
+            // Confirmación recuperada: las actividades ya fueron eliminadas en Sheets
+            applyDeletionToLocalState(ids);
+            window.dailyState.pendingDeletion = null;
+            if (typeof toast === 'function') toast('Eliminación confirmada tras verificar estado del servidor.');
+            else alert('Eliminación confirmada tras verificar estado del servidor.');
+            return;
+          }
         }
+      } catch (statusQueryError) {
+        console.warn('Consulta de estado incierto no disponible o con error, procediendo a reintento seguro:', statusQueryError.message);
+      }
+    }
 
-        // Limpiar del registro multicontexto
-        if (typeof getActivityRegistry === 'function') {
-          const reg = getActivityRegistry();
-          const keysToDelete = new Set();
-          const targetIds = new Set([strId]);
+    const resp = await server('deleteClassRecords', ids, { requestKey });
 
-          // Primera pasada: identificar alias asociados
-          Object.keys(reg).forEach(k => {
-            const entry = reg[k];
-            if (!entry) return;
-            const entryId = String(entry.id || entry.data?.id || entry.pendingOperation?.payload?.id || entry.payload?.id || '');
-            if (targetIds.has(entryId) || targetIds.has(k)) {
-              keysToDelete.add(k);
-              const locId = String(entry.localId || entry.data?.localId || entry.pendingOperation?.payload?.localId || entry.payload?.localId || '');
-              if (locId) targetIds.add(locId);
-              const reqK = String(entry.requestKey || entry.pendingOperation?.requestKey || entry.pendingOperation?.payload?.requestKey || '');
-              if (reqK) targetIds.add(reqK);
-            }
-          });
+    // CONTRATO ESTRICTO DEL CLIENTE:
+    // 1. Debe existir resp y resp.ok === true
+    // 2. deletedClassIds DEBE ser explícito y de tipo Array (rechazar respuestas incompletas o tipos incorrectos)
+    // 3. Los IDs deben pertenecer estrictamente a la lista solicitada (rechazar/ignorar IDs ajenos)
+    if (resp && resp.ok === true) {
+      if (!Array.isArray(resp.deletedClassIds)) {
+        const errorMsg = 'Respuesta del servidor inválida: se recibió confirmación de éxito sin la lista válida de actividades eliminadas (deletedClassIds no es un arreglo). Por seguridad, se conservaron los datos en pantalla.';
+        console.error(errorMsg, resp);
+        if (typeof toast === 'function') toast(errorMsg);
+        else alert(errorMsg);
+        return;
+      }
 
-          // Segunda pasada: limpiar todas las entradas que coincidan con cualquiera de los alias
-          Object.keys(reg).forEach(k => {
-            const entry = reg[k];
-            if (!entry) return;
-            const entryId = String(entry.id || entry.data?.id || entry.pendingOperation?.payload?.id || entry.payload?.id || '');
-            const locId = String(entry.localId || entry.data?.localId || entry.pendingOperation?.payload?.localId || entry.payload?.localId || '');
-            const reqK = String(entry.requestKey || entry.pendingOperation?.requestKey || entry.pendingOperation?.payload?.requestKey || '');
-            if (targetIds.has(k) || (entryId && targetIds.has(entryId)) || (locId && targetIds.has(locId)) || (reqK && targetIds.has(reqK))) {
-              keysToDelete.add(k);
-            }
-          });
+      // Filtrar y validar IDs confirmados contra la solicitud original
+      const requestedSet = new Set(ids.map(String));
+      const validConfirmedIds = [];
+      const alienIds = [];
 
-          keysToDelete.forEach(k => delete reg[k]);
-          try { localStorage.setItem(ACTIVITY_REGISTRY_KEY, JSON.stringify(reg)); } catch (e) {}
+      resp.deletedClassIds.forEach(item => {
+        if (typeof item === 'string' || typeof item === 'number') {
+          const sId = String(item).trim();
+          if (requestedSet.has(sId)) {
+            if (!validConfirmedIds.includes(sId)) validConfirmedIds.push(sId);
+          } else {
+            alienIds.push(sId);
+          }
         }
       });
 
-      window.dailyState.selectedIds.clear();
-      if (typeof toast === 'function') toast('Actividades eliminadas correctamente.');
+      if (alienIds.length > 0) {
+        console.warn('El servidor devolvió confirmación de IDs ajenos a la solicitud:', alienIds);
+      }
+
+      // Si no se confirmó válidamente ningún ID solicitado:
+      if (validConfirmedIds.length === 0) {
+        const warnMsg = resp.message || 'El servidor no confirmó la eliminación de ninguna de las actividades solicitadas.';
+        if (typeof toast === 'function') toast(warnMsg);
+        else alert(warnMsg);
+        return;
+      }
+
+      // Aplicar eliminación al estado local
+      applyDeletionToLocalState(validConfirmedIds);
+
+      // Manejar respuesta parcial
+      const deletedSet = new Set(validConfirmedIds);
+      const remainingUnconfirmed = ids.filter(id => !deletedSet.has(String(id)));
+      if (remainingUnconfirmed.length > 0) {
+        // La operación original para los IDs solicitados ya terminó (parcialmente).
+        // Si se crea una operación nueva para el subconjunto pendiente, debe recibir una clave nueva.
+        const nextRequestKey = 'DEL_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        window.dailyState.pendingDeletion = {
+          requestKey: nextRequestKey,
+          ids: [...remainingUnconfirmed],
+          status: 'pending'
+        };
+        const partialMsg = `Se eliminaron ${validConfirmedIds.length} actividad(es). Quedaron ${remainingUnconfirmed.length} sin confirmar (se mantienen seleccionadas).`;
+        if (typeof toast === 'function') {
+          toast(partialMsg);
+        } else {
+          alert(partialMsg);
+        }
+      } else {
+        window.dailyState.pendingDeletion = null;
+        if (typeof toast === 'function') toast('Actividades eliminadas correctamente.');
+      }
     } else {
-      alert(`No fue posible eliminar: ${resp?.error || 'Error'}`);
+      if (pending) pending.status = 'uncertain';
+      alert(`No fue posible eliminar: ${resp?.error || resp?.message || 'Error'}`);
     }
   } catch (e) {
+    if (pending) pending.status = 'uncertain';
     alert(`Error al eliminar actividades: ${e.message}`);
   } finally {
+    _isDeletingActivities = false;
+    if (btnConfirm) btnConfirm.disabled = false;
     if (typeof setLoading === 'function') setLoading(false);
+    updateSelectionButtons();
     renderDailyActivitiesList();
   }
 }
@@ -3059,13 +3196,17 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnRetryLoadDailyActivities')?.addEventListener('click', () => loadDailyActivities(true));
   document.getElementById('btnRetryUpdateDailyActivities')?.addEventListener('click', () => loadDailyActivities(true));
   document.getElementById('btnConfirmDeleteActivities')?.addEventListener('click', () => executeDeleteSelectedActivities());
-  document.getElementById('btnCancelDeleteActivities')?.addEventListener('click', () => {
+  const closeDeleteModal = () => {
     document.getElementById('modalConfirmDeleteActivities')?.classList.add('hidden-control');
-  });
+  };
+  document.getElementById('btnCancelDeleteActivities')?.addEventListener('click', closeDeleteModal);
+  document.getElementById('btnCancelDeleteModalX')?.addEventListener('click', closeDeleteModal);
 
-  document.getElementById('btnCloseBreakdownModal')?.addEventListener('click', () => {
+  const closeBreakdownModal = () => {
     document.getElementById('modalDailyStudentBreakdown')?.classList.add('hidden-control');
-  });
+  };
+  document.getElementById('btnCloseBreakdownModal')?.addEventListener('click', closeBreakdownModal);
+  document.getElementById('btnOkBreakdownModal')?.addEventListener('click', closeBreakdownModal);
 
   document.getElementById('filterDailyDate')?.addEventListener('change', e => {
     window.dailyState.filterDate = e.target.value;
