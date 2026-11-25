@@ -1,7 +1,7 @@
 /* ==========================================================================
    SERVICE WORKER - CARPETA ACADÉMICA (MODO OFFLINE Y CACHÉ)
    ========================================================================== */
-const CACHE_NAME = 'carpeta-academica-v2.2';
+const CACHE_NAME = 'carpeta-academica-v3.2';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ const STATIC_ASSETS = [
   './config.js',
   './css/base.css',
   './css/sidebar.css',
+  './css/asistencia.css',
   './css/registro-diario.css',
   './css/calificaciones.css',
   './css/familias.css',
@@ -51,7 +52,10 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.filter((key) => key !== CACHE_NAME).map((key) => {
+          console.log('[SW] Purgando caché obsoleta:', key);
+          return caches.delete(key);
+        })
       );
     }).then(() => self.clients.claim())
   );
@@ -60,30 +64,35 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // No interceptar peticiones de Google Apps Script o APIs externas para evitar respuestas obsoletas
-  if (url.hostname.includes('script.google.com') || url.hostname.includes('googleusercontent.com')) {
+  // No interceptar peticiones de Google Apps Script, Supabase o APIs externas
+  if (url.hostname.includes('script.google.com') || url.hostname.includes('googleusercontent.com') || url.hostname.includes('supabase.co')) {
     return;
   }
 
-  // Estrategia Stale-While-Revalidate para recursos estáticos del sitio
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // Estrategia Network-First con fallback a caché (garantiza cambios en vivo inmediatos y soporte offline 100%)
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
           });
         }
         return networkResponse;
-      }).catch(() => {
-        // Fallback offline para navegación principal
-        if (event.request.mode === 'navigate') {
-          return caches.match('./index.html');
-        }
-      });
-
-      return cachedResponse || fetchPromise;
-    })
+      })
+      .catch(() => {
+        // Fallback offline ante pérdida de conexión
+        return caches.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) return cachedResponse;
+          if (event.request.mode === 'navigate') {
+            return caches.match('./index.html');
+          }
+        });
+      })
   );
 });

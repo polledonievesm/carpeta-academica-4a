@@ -10,21 +10,10 @@
   box-sizing: border-box;
 }
 
-/* Encabezado y migas */
-#attendance .attendance-eyebrow {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #0f766e;
-  text-transform: uppercase;
-  margin: 0 0 6px 0;
-}
-
+/* Encabezado interior redundante: Oculto para consolidar en la barra superior unificada */
+#attendance .attendance-eyebrow,
 #attendance .attendance-card-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
+  display: none !important;
 }
 
 #attendance .attendance-header-icon {
@@ -66,30 +55,48 @@
 
 /* Barra superior de controles y fecha */
 #attendance .attendance-top-bar {
-  padding: 16px 20px;
+  padding: 8px 16px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  justify-content: flex-start;
+  gap: 10px;
   border-bottom: 1px solid #edf2f7;
   background: #ffffff;
+  min-height: 44px;
+  box-sizing: border-box;
 }
 
 #attendance .attendance-mode-selector {
   display: inline-flex;
   align-items: center;
   background: #f1f5f9;
-  padding: 4px;
-  border-radius: 10px;
+  padding: 3px;
+  border-radius: 8px;
+  gap: 3px;
+  flex-shrink: 0;
 }
 
 #attendance .attendance-mode-pill {
-  padding: 6px 16px;
+  padding: 5px 12px;
   font-size: 13px;
-  font-weight: 700;
-  border-radius: 8px;
+  font-weight: 600;
+  border-radius: 6px;
   border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+#attendance .attendance-mode-pill:hover:not(.active) {
+  color: #0f766e;
+  background: #e2e8f0;
+}
+
+#attendance .attendance-mode-pill.active {
+  font-weight: 700;
   background: #0f766e;
   color: #ffffff;
   cursor: default;
@@ -99,19 +106,23 @@
 #attendance .attendance-date-group {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
 #attendance .attendance-date-input {
-  padding: 7px 12px;
-  font-size: 14px;
+  padding: 5px 10px;
+  font-size: 13px;
   font-weight: 600;
   color: #1e293b;
   border: 1.5px solid #cbd5e1;
   border-radius: 8px;
   background: #ffffff;
   outline: none;
+  width: 140px;
+  height: 32px;
+  box-sizing: border-box;
   transition: border-color 0.2s;
 }
 
@@ -124,14 +135,17 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
+  padding: 5px 12px;
   font-size: 13px;
   font-weight: 700;
   color: #0f766e;
   background: #f0fdfa;
   border: 1.5px solid #ccfbf1;
   border-radius: 8px;
+  height: 32px;
+  box-sizing: border-box;
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.2s;
 }
 
@@ -147,31 +161,74 @@
 }
 
 #attendance .attendance-display-badge {
+  display: none !important;
+}
+
+#attendance .attendance-daily-top-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+#attendance .attendance-daily-no-class-btn {
+  padding: 5px 12px;
   font-size: 13px;
-  font-weight: 600;
-  color: #475569;
-  background: #f8fafc;
-  padding: 6px 12px;
+  font-weight: 700;
+  height: 32px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+#attendance .attendance-daily-save-btn {
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  height: 32px;
+  border-radius: 8px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Barra secundaria de acciones rápidas y leyenda */
 #attendance .attendance-toolbar {
-  padding: 12px 20px;
+  padding: 6px 16px;
   background: #f8fafc;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  min-height: 38px;
+  box-sizing: border-box;
 }
 
 #attendance .attendance-quick-actions {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#attendance .attendance-quick-actions .attendance-toolbar-label {
+  display: none !important;
+}
+
+#attendance .attendance-toolbar-divider {
+  display: none !important;
+}
+
+#attendance .attendance-legend-bar {
+  display: inline-flex;
+  align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 #attendance .attendance-toolbar-label {
@@ -186,10 +243,12 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
+  padding: 4px 10px;
   font-size: 12px;
   font-weight: 700;
-  border-radius: 8px;
+  height: 28px;
+  box-sizing: border-box;
+  border-radius: 6px;
   border: 1px solid #cbd5e1;
   background: #ffffff;
   color: #334155;
@@ -874,4 +933,1130 @@
     padding: 11px;
     font-size: 14px;
   }
+
+  /* En móviles se permite el acceso a Captura mensual */
+  #attendance .attendance-monthly-pill {
+    display: inline-block;
+  }
+  #attendanceMonthlyView {
+    display: flex;
+  }
 }
+
+/* ==========================================================================
+   ESTILOS DE CAPTURA MENSUAL Y MODO AMPLIADO (OPTIMIZACIÓN VISUAL Y FUNCIONAL)
+   ========================================================================== */
+
+.attendance-monthly-view {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.attendance-monthly-view.hidden-control {
+  display: none !important;
+}
+
+/* Mejora 2: Barra de herramientas compacta y unificada en una sola fila */
+.attendance-monthly-top-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 8px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #edf2f7;
+  flex-wrap: nowrap;
+}
+
+.attendance-monthly-top-bar .attendance-mode-selector {
+  display: inline-flex;
+  background: #f1f5f9;
+  padding: 3px;
+  border-radius: 8px;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.attendance-monthly-top-bar .attendance-mode-pill {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.attendance-monthly-select-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.attendance-month-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: #073b61;
+}
+
+.attendance-month-select {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #073b61;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.attendance-month-select:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+}
+
+.attendance-monthly-legend-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 1;
+}
+
+.attendance-monthly-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.attendance-monthly-no-class-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 1.5px solid #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.attendance-monthly-no-class-btn:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+.attendance-monthly-no-class-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.attendance-monthly-save-btn {
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.attendance-monthly-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Mejora 6: Botón de modo ampliado */
+.attendance-monthly-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 1.5px solid #cbd5e1;
+  background: #f8fafc;
+  color: #073b61;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.attendance-monthly-expand-btn:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.attendance-monthly-expand-btn.is-expanded {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #ffffff;
+}
+
+/* Responsividad de barra superior para pantallas reducidas */
+@media (max-width: 992px) {
+  .attendance-monthly-top-bar {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  .attendance-monthly-legend-bar {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    padding-top: 4px;
+    border-top: 1px dashed #e2e8f0;
+  }
+  .attendance-monthly-actions {
+    margin-left: 0;
+  }
+}
+
+/* Cuadrícula de tabla mensual */
+.attendance-monthly-table-wrap {
+  position: relative;
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+  background: #ffffff;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.attendance-monthly-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+  font-size: 13px;
+}
+
+/* Mejora 3: Altura uniforme y compacta de encabezados */
+.attendance-monthly-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f8fafc;
+  border-bottom: 2px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
+  padding: 4px;
+  text-align: center;
+  height: 44px;
+  max-height: 44px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+.attendance-monthly-table th.th-student-sticky,
+.attendance-monthly-table td.td-student-sticky {
+  position: sticky;
+  left: 0;
+  background: #ffffff;
+  z-index: 5;
+  border-right: 2px solid #cbd5e1;
+  padding: 6px 14px;
+  min-width: 320px;
+  width: max-content;
+  white-space: nowrap;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.attendance-monthly-table thead th.th-student-sticky {
+  z-index: 15;
+  background: #f8fafc;
+  height: 44px;
+  max-height: 44px;
+}
+
+.attendance-monthly-table tbody tr:hover td {
+  background-color: #f8fafc;
+}
+
+.attendance-monthly-table tbody tr:hover td.td-student-sticky {
+  background-color: #f1f5f9;
+}
+
+.attendance-monthly-table td.td-cell {
+  padding: 4px;
+  border-bottom: 1px solid #f1f5f9;
+  border-right: 1px solid #f1f5f9;
+  text-align: center;
+  width: 44px;
+  min-width: 44px;
+  height: 38px;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.attendance-monthly-table th.th-day {
+  min-width: 44px;
+  width: 44px;
+  height: 44px;
+  max-height: 44px;
+  padding: 4px 2px;
+  box-sizing: border-box;
+}
+
+.attendance-monthly-table th.th-day .day-dow {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+  line-height: 1;
+}
+
+.attendance-monthly-table th.th-day .day-num {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  color: #073b61;
+  line-height: 1.1;
+}
+
+/* Ocultar fines de semana en captura mensual */
+.attendance-monthly-table th.th-day.is-weekend,
+.attendance-monthly-table td.td-cell.is-weekend {
+  display: none !important;
+}
+
+.attendance-monthly-table th.th-day.is-outside-cycle {
+  opacity: 0.65;
+}
+
+/* Mejora 4 & Ajustes Finales: Días sin clases: Columna pastel (#fef2f2) y cinta continua estilo precaución */
+.attendance-monthly-grid-container {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+}
+
+.attendance-monthly-ribbons-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.attendance-no-class-column-overlay {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  overflow: hidden;
+  background-color: #fef2f2 !important;
+  opacity: 1 !important;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  user-select: none;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+  border-right: 1px solid #fecaca;
+  z-index: 4;
+}
+
+.attendance-no-class-column-overlay:hover {
+  background-color: #fee2e2 !important;
+  box-shadow: inset 0 0 0 1.5px #ef4444;
+}
+
+.column-ribbon-track {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 800;
+  color: #991b1b !important;
+  opacity: 1 !important;
+  letter-spacing: 0.12em;
+  line-height: 44px;
+  text-align: center;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.column-ribbon-track span {
+  display: inline-block;
+  color: #991b1b !important;
+  opacity: 1 !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.attendance-monthly-table th.th-day.is-no-class,
+.attendance-monthly-table td.td-cell.is-no-class {
+  background-color: #fef2f2 !important;
+  cursor: not-allowed;
+}
+
+.attendance-monthly-table th.th-day.is-no-class .no-class-vert-banner {
+  display: none !important;
+}
+
+.attendance-monthly-table td.td-cell.is-no-class {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+}
+
+.no-class-cell-ribbon {
+  display: none !important;
+}
+
+.attendance-monthly-table td.td-cell.has-conflict-records {
+  background-color: #fffbeb !important;
+  border: 1.5px dashed #f59e0b !important;
+  position: relative;
+  z-index: 5 !important;
+}
+
+/* Cinta de precaución en Pase diario cuando la fecha activa es día sin clases */
+.attendance-notice.is-no-class-notice {
+  margin: 10px 0;
+}
+
+.attendance-no-class-banner {
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+  color: #991b1b;
+  padding: 8px 14px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.08);
+}
+
+.attendance-no-class-banner-track {
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.attendance-no-class-banner-detail {
+  font-weight: 600;
+  font-size: 12px;
+  color: #7f1d1d;
+}
+
+.attendance-no-class-banner-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.attendance-no-class-action-btn {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.attendance-no-class-action-btn.edit {
+  background: #ffffff !important;
+  color: #991b1b !important;
+  border: 1.5px solid #f87171 !important;
+}
+
+.attendance-no-class-action-btn.edit:hover {
+  background: #fee2e2 !important;
+}
+
+.attendance-no-class-action-btn.remove {
+  background: #fef2f2 !important;
+  color: #991b1b !important;
+  border: 1.5px solid #fca5a5 !important;
+}
+
+.attendance-no-class-action-btn.remove:hover {
+  background: #fee2e2 !important;
+  border-color: #ef4444 !important;
+}
+
+/* Insignias de estado mensuales (Modo Consulta) */
+.attendance-monthly-table .monthly-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.attendance-monthly-table .monthly-badge.status-a {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.attendance-monthly-table .monthly-badge.status-f {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.attendance-monthly-table .monthly-badge.status-r {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.attendance-monthly-table .monthly-badge.status-j {
+  background: #e0f2fe;
+  color: #075985;
+  border: 1px solid #bae6fd;
+}
+
+.attendance-monthly-table .monthly-badge .cell-note-dot {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  color: #0284c7;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.attendance-monthly-table .monthly-empty {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.attendance-monthly-table .th-student-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.attendance-monthly-table .th-num {
+  width: 24px;
+  text-align: right;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.attendance-monthly-table .th-name {
+  color: #073b61;
+  font-weight: 800;
+}
+
+.attendance-monthly-table .td-student-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.attendance-monthly-table .col-num {
+  width: 24px;
+  text-align: right;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.attendance-monthly-table .col-num.badge-baja {
+  width: auto;
+  padding: 2px 6px;
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.attendance-monthly-table .col-name {
+  color: #1e293b;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.attendance-monthly-table tr.tr-student.is-inactive td {
+  background-color: #f8fafc;
+  color: #64748b;
+}
+
+.attendance-monthly-table tr.tr-student.is-inactive td.td-student-sticky {
+  background-color: #f8fafc;
+}
+
+.attendance-monthly-table tr.tr-student.is-inactive:hover td,
+.attendance-monthly-table tr.tr-student.is-inactive:hover td.td-student-sticky {
+  background-color: #f1f5f9;
+}
+
+.attendance-monthly-table tr.tr-section-divider td {
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px 14px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Pie de vista mensual */
+.attendance-monthly-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #f8fafc;
+  border-top: 1px solid #edf2f7;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Detalle accesible de observación */
+.attendance-monthly-note-detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #f0fdf4;
+  border-top: 1px solid #bbf7d0;
+  border-bottom: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: 13px;
+  transition: all 0.2s ease;
+}
+
+.attendance-monthly-note-detail.hidden-control {
+  display: none !important;
+}
+
+.attendance-monthly-note-detail .note-detail-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.attendance-monthly-note-detail .note-detail-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.attendance-monthly-note-detail .note-detail-text {
+  line-height: 1.4;
+  color: #0f172a;
+}
+
+.attendance-monthly-note-detail .note-detail-text strong {
+  color: #0f766e;
+}
+
+.attendance-monthly-table button.monthly-badge {
+  font-family: inherit;
+  border: 1px solid transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.attendance-monthly-table button.monthly-badge:focus-visible {
+  outline: 2px solid #0284c7;
+  outline-offset: 1px;
+}
+
+/* Estilo interactivo de celda editable */
+.attendance-monthly-table td.td-cell.is-editable {
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  position: relative;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.attendance-monthly-table td.td-cell.is-editable:hover:not(.is-no-class) {
+  background-color: #f0fdfa !important;
+}
+
+/* Foco visible de celda activa y Resaltado dinámico estilo Excel */
+/* 1. Resaltado de toda la fila correspondiente al alumno */
+.attendance-monthly-table tbody tr.tr-student.is-row-highlighted td.td-cell:not(.is-no-class):not(.is-focused) {
+  background-color: #f0fdfa !important; /* turquesa pastel suave */
+}
+
+/* 2. Resaltado del nombre del alumno (columna fija / sticky) */
+.attendance-monthly-table tbody tr.tr-student.is-row-highlighted td.td-student-sticky,
+.attendance-monthly-table td.td-student-sticky.is-student-highlighted {
+  background-color: #ccfbf1 !important; /* turquesa pastel medio */
+  border-right: 2px solid #0d9488 !important;
+  box-shadow: 2px 0 8px rgba(13, 148, 136, 0.16) !important;
+}
+
+.attendance-monthly-table tbody tr.tr-student.is-row-highlighted td.td-student-sticky .col-name,
+.attendance-monthly-table td.td-student-sticky.is-student-highlighted .col-name {
+  color: #0f766e !important;
+  font-weight: 700 !important;
+}
+
+.attendance-monthly-table tbody tr.tr-student.is-row-highlighted td.td-student-sticky .col-num {
+  background: #0d9488 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+/* 3. Resaltado de toda la columna correspondiente a la fecha */
+.attendance-monthly-table td.td-cell.is-col-highlighted:not(.is-no-class):not(.is-focused) {
+  background-color: #f0fdfa !important; /* turquesa pastel suave */
+}
+
+/* Intersección de fila y columna resaltadas */
+.attendance-monthly-table tbody tr.tr-student.is-row-highlighted td.td-cell.is-col-highlighted:not(.is-no-class):not(.is-focused) {
+  background-color: #e6fffa !important;
+}
+
+/* 4. Resaltado del encabezado de la fecha (fila superior fija / sticky) */
+.attendance-monthly-table thead th.th-day.is-header-highlighted:not(.is-no-class) {
+  background-color: #ccfbf1 !important; /* turquesa pastel medio */
+  border-bottom: 2px solid #0d9488 !important;
+  box-shadow: inset 0 -2px 0 0 #0d9488, 0 2px 6px rgba(13, 148, 136, 0.18) !important;
+}
+
+.attendance-monthly-table thead th.th-day.is-header-highlighted .day-dow {
+  color: #0d9488 !important;
+  font-weight: 800 !important;
+}
+
+.attendance-monthly-table thead th.th-day.is-header-highlighted .day-num {
+  color: #0f766e !important;
+  font-weight: 900 !important;
+}
+
+/* 5. Borde más intenso a la celda activa */
+.attendance-monthly-table td.td-cell.is-focused {
+  outline: 2.5px solid #0d9488 !important;
+  outline-offset: -2.5px;
+  background-color: #99f6e4 !important; /* turquesa pastel activo */
+  box-shadow: inset 0 0 0 1px #0f766e, 0 0 8px rgba(13, 148, 136, 0.35) !important;
+  z-index: 6 !important;
+  position: relative;
+}
+
+/* Preservar intactos los días sin clases, cintas de suspensión y advertencias */
+.attendance-monthly-table td.td-cell.is-no-class,
+.attendance-monthly-table td.td-cell.is-no-class.is-col-highlighted,
+.attendance-monthly-table tbody tr.tr-student.is-row-highlighted td.td-cell.is-no-class {
+  background-color: #fef2f2 !important;
+  cursor: not-allowed;
+}
+
+.attendance-monthly-table th.th-day.is-no-class.is-header-highlighted {
+  background-color: #fee2e2 !important;
+  border-bottom: 2px solid #dc2626 !important;
+  box-shadow: inset 0 -2px 0 0 #dc2626 !important;
+}
+
+.attendance-monthly-table td.td-cell.is-no-class.is-focused {
+  outline: 2.5px solid #dc2626 !important;
+  outline-offset: -2.5px;
+  background-color: #fee2e2 !important;
+}
+
+/* Celda con cambio sucio / pendiente */
+.attendance-monthly-table td.td-cell.is-dirty {
+  background-color: #fefce8 !important;
+}
+
+.attendance-monthly-table td.td-cell.is-dirty::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  background-color: #d97706;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Celda en vuelo de guardado (in-flight) */
+.attendance-monthly-table td.td-cell.is-in-flight {
+  opacity: 0.65;
+  cursor: wait !important;
+  background-color: #f8fafc !important;
+}
+
+/* Celda con conflicto de versión o concurrencia */
+.attendance-monthly-table td.td-cell.is-conflict {
+  background-color: #fee2e2 !important;
+  border: 2px solid #ef4444 !important;
+}
+
+/* Celda con persistencia incierta / requiere reconciliación */
+.attendance-monthly-table td.td-cell.is-uncertain {
+  background-color: #fffbeb !important;
+  border: 2px dashed #f59e0b !important;
+}
+
+/* Celda con rechazo definitivo por validación o día sin clases */
+.attendance-monthly-table td.td-cell.is-rejected {
+  background-color: #fdf2f8 !important;
+  border: 2px dotted #ec4899 !important;
+}
+
+.is-conflict-badge {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  border: 1px solid #ef4444 !important;
+  cursor: pointer !important;
+  font-weight: 700 !important;
+  padding: 2px 4px !important;
+}
+
+.is-rejected-badge {
+  background: #fdf2f8 !important;
+  color: #be185d !important;
+  border: 1px solid #ec4899 !important;
+  font-weight: 700 !important;
+  padding: 2px 4px !important;
+}
+
+/* Celda con eliminación pendiente */
+.attendance-monthly-table td.td-cell.is-deleted {
+  background-color: #fff1f2 !important;
+}
+
+.attendance-monthly-table td.td-cell.is-deleted .monthly-empty {
+  color: #e11d48;
+  font-weight: 800;
+  text-decoration: line-through;
+}
+
+/* Mejora 5: Selector contextual táctil móvil / tableta */
+.attendance-monthly-touch-pad {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border-top: 2px solid #0f766e;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.12);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  z-index: 1000;
+}
+
+.attendance-monthly-touch-pad.hidden-control {
+  display: none !important;
+}
+
+.attendance-monthly-touch-pad .touch-info {
+  font-size: 12px;
+  line-height: 1.2;
+  color: #334155;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attendance-monthly-touch-pad .touch-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.attendance-monthly-touch-pad .touch-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attendance-monthly-touch-pad .touch-btn.status-a {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.attendance-monthly-touch-pad .touch-btn.status-f {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.attendance-monthly-touch-pad .touch-btn.status-r {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde047;
+}
+
+.attendance-monthly-touch-pad .touch-btn.status-j {
+  background: #e0f2fe;
+  color: #075985;
+  border-color: #7dd3fc;
+}
+
+.attendance-monthly-touch-pad .touch-btn.btn-delete {
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #cbd5e1;
+  font-size: 13px;
+  width: auto;
+  padding: 0 10px;
+}
+
+/* En dispositivos con mouse o puntero fino (escritorio): ocultar completamente el panel táctil */
+@media (hover: hover) and (pointer: fine) {
+  #attendanceMonthlyTouchPad,
+  .attendance-monthly-touch-pad {
+    display: none !important;
+  }
+}
+
+/* En dispositivos táctiles (coarse): agregar espaciado inferior para no tapar las últimas filas */
+@media (pointer: coarse) {
+  .attendance-monthly-table-wrap {
+    padding-bottom: 72px;
+  }
+}
+
+/* ==========================================================================
+   Mejora 6: MODO AMPLIADO DE CAPTURA MENSUAL (PANTALLA COMPLETA ESTILO HOJA DE CÁLCULO)
+   ========================================================================== */
+body.attendance-expanded-mode {
+  overflow: hidden !important;
+}
+
+body.attendance-expanded-mode #sidebar,
+body.attendance-expanded-mode #sidebarBackdrop,
+body.attendance-expanded-mode .topbar {
+  display: none !important;
+}
+
+body.attendance-expanded-mode .main {
+  margin: 0 !important;
+  padding: 0 !important;
+  max-width: 100vw !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+}
+
+body.attendance-expanded-mode #attendance {
+  margin: 0 !important;
+  padding: 0 !important;
+  max-width: 100vw !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+body.attendance-expanded-mode #attendance .attendance-panel {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+body.attendance-expanded-mode #attendanceMonthlyView {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+body.attendance-expanded-mode .attendance-monthly-top-bar {
+  padding: 6px 14px !important;
+  flex-shrink: 0 !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+}
+
+body.attendance-expanded-mode .attendance-monthly-table-wrap {
+  flex: 1 1 auto !important;
+  max-height: none !important;
+  height: calc(100vh - 84px) !important;
+  overflow: auto !important;
+}
+
+body.attendance-expanded-mode .attendance-monthly-footer {
+  padding: 4px 14px !important;
+  font-size: 11px !important;
+  flex-shrink: 0 !important;
+}
+
+/* ==========================================================================
+   MODALES DE DÍA SIN CLASES (REGISTRO, DETALLE, EDICIÓN Y GESTIÓN)
+   ========================================================================== */
+.attendance-no-class-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.attendance-no-class-modal-backdrop.hidden-control {
+  display: none !important;
+}
+
+.attendance-no-class-modal-card {
+  background: #ffffff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.05);
+  border: 1px solid #cbd5e1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.attendance-no-class-modal-card .modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.attendance-no-class-modal-card .modal-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #0f766e;
+  margin: 0 0 2px 0;
+  text-transform: uppercase;
+}
+
+.attendance-no-class-modal-card .modal-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: #073b61;
+  margin: 0;
+}
+
+.attendance-no-class-modal-card .modal-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.attendance-no-class-modal-card .modal-close-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.attendance-no-class-modal-card .modal-body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-sizing: border-box;
+}
+
+.attendance-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.attendance-modal-field label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.attendance-modal-field select,
+.attendance-modal-field input,
+.attendance-modal-field textarea {
+  padding: 8px 12px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #0f172a;
+  outline: none;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.attendance-modal-field select:focus,
+.attendance-modal-field input:focus,
+.attendance-modal-field textarea:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+}
+
+.attendance-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
