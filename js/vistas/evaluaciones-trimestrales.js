@@ -2557,8 +2557,10 @@
         if (!isT3Complete) pending.push('Trimestre 3');
         return {
           isComplete: false,
+          status: 'Pendiente',
+          statusText: 'Pendiente',
           average: null,
-          displayAverage: '—',
+          displayAverage: 'Pendiente',
           pendingTrimesters: pending
         };
       }
@@ -2566,6 +2568,8 @@
       const avg = (t1.average + t2.average + t3.average) / 3;
       return {
         isComplete: true,
+        status: 'Definitivo',
+        statusText: 'Definitivo',
         average: avg,
         displayAverage: this.formatGrade(avg),
         pendingTrimesters: []
@@ -2592,8 +2596,10 @@
       if (!isT1 || !isT2 || !isT3) {
         return {
           isComplete: false,
+          status: 'Pendiente',
+          statusText: 'Pendiente',
           average: null,
-          displayAverage: '—',
+          displayAverage: 'Pendiente',
           trimesterGrades: {
             1: isT1 ? this.formatGrade(t1Grade) : '—',
             2: isT2 ? this.formatGrade(t2Grade) : '—',
@@ -2605,6 +2611,8 @@
       const avg = (Number(t1Grade) + Number(t2Grade) + Number(t3Grade)) / 3;
       return {
         isComplete: true,
+        status: 'Definitivo',
+        statusText: 'Definitivo',
         average: avg,
         displayAverage: this.formatGrade(avg),
         trimesterGrades: {
@@ -3940,16 +3948,48 @@
     },
 
     normalizeDraftRatings(ratings) {
-      if (!ratings || typeof ratings !== 'object') return { cleanRatings: {}, hasUnknown: false, requiresReview: false };
+      if (!ratings || typeof ratings !== 'object') return { cleanRatings: {}, legacyRatings: {}, hasUnknown: false, requiresReview: false };
       const cleanRatings = {};
       const legacyRatings = {};
       let hasUnknown = false;
       const validIds = new Set(INDICADORES_DESEMPENO.map(i => i.id));
 
+      // Mapeo canónico explícito entre identificadores de etapas previas y los 23 oficiales aprobados
+      const CANONICAL_MAPPING = {
+        ind_01_lectura_comprension: 'acad_lectura',
+        ind_02_escritura_ortografia: 'acad_escritura',
+        ind_03_habilidades_matematicas: 'acad_matematicas',
+        ind_04_comprension_contenidos: 'acad_contenidos',
+        ind_05_cumplimiento_tareas: 'hab_tareas',
+        ind_06_finalizacion_actividades: 'hab_actividades',
+        ind_07_entrega_trabajos_completos: 'hab_completos',
+        ind_08_materiales_escolares_completos: 'hab_materiales',
+        ind_09_limpieza_presentacion_trabajos: 'hab_limpieza',
+        ind_10_seguimiento_indicaciones: 'hab_indicaciones',
+        ind_11_organizacion_autonomia: 'hab_autonomia',
+        ind_12_atencion_concentracion: 'hab_concentracion',
+        ind_13_participacion_activa: 'hab_participacion',
+        ind_14_respeto_companeros: 'cond_companeros',
+        ind_15_respeto_docente: 'cond_docente',
+        ind_16_cumplimiento_acuerdos: 'cond_acuerdos',
+        ind_17_autorregulacion_emocional_conductual: 'cond_autorregulacion',
+        ind_18_resolucion_pacifica_conflictos: 'cond_conflictos',
+        ind_19_trabajo_colaborativo: 'cond_colaborativo',
+        ind_20_actitud_disposicion_aprender: 'cond_actitud',
+        ind_21_cuidado_mobiliario_escolar: 'cond_mobiliario',
+        ind_22_asistencia_regular: 'asis_regular',
+        ind_23_puntualidad: 'asis_puntualidad'
+      };
+
       for (const [k, v] of Object.entries(ratings)) {
+        if (!NIVELES_DESEMPENO[v]) continue;
+
         if (validIds.has(k)) {
-          if (NIVELES_DESEMPENO[v]) cleanRatings[k] = v;
+          cleanRatings[k] = v;
+        } else if (CANONICAL_MAPPING[k] && validIds.has(CANONICAL_MAPPING[k])) {
+          cleanRatings[CANONICAL_MAPPING[k]] = v;
         } else {
+          // Conceptos no reconocidos, modificados o retirados se conservan como datos legados
           hasUnknown = true;
           legacyRatings[k] = v;
         }
@@ -4033,7 +4073,18 @@
       const bank = this.getBancoMensajes();
       const idx = bank.findIndex(m => m.id === id);
       if (idx !== -1) {
-        bank[idx] = { ...bank[idx], ...updates };
+        // Si se modifica el texto de una recomendación previamente aprobada, requerir nueva revisión docente
+        const textChanged = updates.text !== undefined && updates.text.trim() !== (bank[idx].text || '').trim();
+        const newApproved = textChanged ? false : (updates.approved !== undefined ? Boolean(updates.approved) : bank[idx].approved);
+        const newStatus = textChanged ? 'propuesta' : (updates.status || (newApproved ? 'aprobada' : 'propuesta'));
+
+        bank[idx] = {
+          ...bank[idx],
+          ...updates,
+          approved: newApproved,
+          status: newStatus,
+          updatedAt: new Date().toISOString()
+        };
         saveBancoMensajesStore(bank);
         return true;
       }
@@ -4155,6 +4206,7 @@
       PENDIENTE_SYNC: 'pendiente_sync',
       SINCRONIZANDO: 'sincronizando',
       GUARDADO_SERVIDOR: 'guardado_servidor',
+      SIMULACION_LOCAL: 'simulacion_local',
       ERROR_SYNC: 'error_sync',
       CONFLICTO_VERSION: 'conflicto_version'
     },
@@ -4185,6 +4237,7 @@
           pendiente_sync: 'Pendiente de sincronizar',
           sincronizando: 'Sincronizando con Google Sheets...',
           guardado_servidor: '✓ Guardado en Google Sheets',
+          simulacion_local: '[SIMULACIÓN] Guardado de prueba (No persistido en Google Sheets)',
           error_sync: '⚠️ Error de sincronización',
           conflicto_version: '⚠️ Conflicto de versiones'
         };
@@ -4251,6 +4304,8 @@
       });
 
       return {
+        batchId: 'BATCH_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9),
+        consolidationState: 'en_preparacion',
         ciclo: cfg.cicloEscolar || '2026-2027',
         grupo: cfg.grupo || '4.° A',
         trimestre: t,
@@ -4285,7 +4340,8 @@
 
       try {
         let serverRes = null;
-        if (typeof window.server === 'function' && !forceSimulation && typeof API_URL === 'string' && API_URL.length > 10) {
+        const hasSession = (typeof sessionToken === 'string' && sessionToken.length >= 8) || (typeof window.sessionToken === 'string' && window.sessionToken.length >= 8);
+        if (typeof window.server === 'function' && !forceSimulation && hasSession && typeof API_URL === 'string' && API_URL.length > 10) {
           serverRes = await window.server('syncTrimesterEvaluationBatch', payload);
         } else {
           // Entorno controlado / Simulación de persistencia remota (offline / pruebas locales)
@@ -4293,18 +4349,21 @@
           serverRes = {
             ok: true,
             data: {
+              batchId: payload.batchId,
               configSaved: true,
               calificacionesCount: payload.calificaciones.length,
               desempenoCount: payload.desempeno.length,
               mensajesCount: payload.mensajes.length,
               timestamp: new Date().toISOString(),
               version: (payload.version || 1) + 1,
-              simulated: true
+              simulated: true,
+              consolidationState: 'consolidado_simulado'
             }
           };
         }
 
         if (serverRes && (serverRes.ok || serverRes.data)) {
+          const isSimulated = Boolean(serverRes.data?.simulated);
           this.lastSyncTimestamp = new Date().toISOString();
           evalState.syncVersion = (payload.version || 1) + 1;
           evalState.hasUnsavedChanges = false;
@@ -4316,17 +4375,22 @@
             localStorage.setItem(STORAGE_KEYS.syncMetadata, JSON.stringify({
               lastSyncTimestamp: this.lastSyncTimestamp,
               syncVersion: evalState.syncVersion,
-              trimester
+              trimester,
+              isSimulated
             }));
           } catch (e) {}
 
-          this.setSyncStatus(this.STATUS.GUARDADO_SERVIDOR, '✓ Guardado en Google Sheets');
+          if (isSimulated) {
+            this.setSyncStatus(this.STATUS.SIMULACION_LOCAL, '[SIMULACIÓN] Guardado de prueba (No persistido en Google Sheets)');
+          } else {
+            this.setSyncStatus(this.STATUS.GUARDADO_SERVIDOR, '✓ Guardado en Google Sheets');
+          }
           this.retryCount = 0;
           if (typeof toast === 'function') {
-            const countMsg = `${payload.calificaciones.length} calificaciones, ${payload.desempeno.length} valoraciones integrales y ${payload.mensajes.length} mensajes sincronizados.`;
-            toast(`Sincronización remota completada con éxito (${countMsg}).`);
+            const countMsg = `${payload.calificaciones.length} calificaciones, ${payload.desempeno.length} valoraciones integrales y ${payload.mensajes.length} mensajes ${isSimulated ? 'simulados' : 'sincronizados'}.`;
+            toast(`${isSimulated ? '[SIMULACIÓN LOCAL] ' : ''}Operación completada (${countMsg}).`);
           }
-          return { success: true, data: serverRes.data };
+          return { success: true, data: serverRes.data, isSimulated };
         } else {
           throw new Error(serverRes?.error || 'Respuesta inválida del servidor.');
         }

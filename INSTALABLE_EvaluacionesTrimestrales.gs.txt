@@ -22,29 +22,31 @@ Localizar 'const DB = {' en Database.gs e incorporar las siguientes 7 tablas:
   EvalConfig: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'fechaInicio', 'fechaFin',
     'estadoPeriodo', 'ponderacionesJson', 'valoresTareasJson', 'valoresConductaJson',
-    'valoresParticipacionJson', 'ajustesAdminJson', 'version', 'actualizadoEn', 'actualizadoPor'
+    'valoresParticipacionJson', 'configAsistenciaJson', 'ajustesAdminJson', 'version',
+    'actualizadoEn', 'actualizadoPor'
   ],
 
   // Selección y exclusión de actividades académicas por criterio y campo formativo
   EvalActividades: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'campoFormativo', 'criterio',
     'actividadId', 'tipoActividad', 'fechaActividad', 'nombreActividad',
-    'seleccionada', 'peso', 'actualizadoEn'
+    'seleccionada', 'peso', 'exclusionesAlumnosJson', 'version', 'actualizadoEn', 'actualizadoPor'
   ],
 
   // Calificaciones por alumno, campo formativo y trimestre
   EvalCalificaciones: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
-    'campoFormativo', 'modalidad', 'examenGrade', 'desgloseCriteriosJson',
-    'calcGrade', 'manualGrade', 'motivoAjuste', 'authorizedGrade', 'isAuthorized',
-    'status', 'version', 'actualizadoEn', 'actualizadoPor'
+    'campoFormativo', 'modalidad', 'desgloseAutoJson', 'desgloseManualJson', 'examenGrade',
+    'configAplicadaJson', 'actividadesRefJson', 'calcGradeOriginal', 'calcGradePreliminar',
+    'ajusteManual', 'motivoAjuste', 'authorizedGrade', 'status', 'authorizedAt', 'authorizedPor',
+    'version', 'actualizadoEn', 'actualizadoPor'
   ],
 
   // Valoraciones de los 23 indicadores de desempeño integral
   EvalDesempeno: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
-    'ratingsJson', 'completados', 'source', 'isReviewed', 'version',
-    'actualizadoEn', 'actualizadoPor'
+    'indicadorId', 'valoracion', 'catalogoVersion', 'estadoRevision', 'origen',
+    'trimestreOrigen', 'version', 'actualizadoEn', 'actualizadoPor'
   ],
 
   // Mensajes personalizados para el Portal Familiar (máx. 245 caracteres)
@@ -56,14 +58,15 @@ Localizar 'const DB = {' en Database.gs e incorporar las siguientes 7 tablas:
 
   // Banco institucional de recomendaciones pedagógicas
   EvalBancoRecomendaciones: [
-    'id', 'categoria', 'nivel', 'texto', 'caracteres', 'estadoAprobacion',
-    'activo', 'creadoEn', 'actualizadoEn'
+    'id', 'categoria', 'campoFormativo', 'nivel', 'texto', 'caracteres',
+    'estadoAprobacion', 'activo', 'creadoEn', 'actualizadoEn', 'actualizadoPor', 'version'
   ],
 
   // Historial de versiones y auditoría de eventos de evaluación
   EvalVersiones: [
-    'id', 'cicloEscolar', 'grupo', 'trimestre', 'tipoEvento', 'version',
-    'resumen', 'payloadHash', 'usuario', 'creadoEn'
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'tipoOperacion',
+    'versionAnterior', 'versionNueva', 'motivoModificacion', 'snapshotJson',
+    'payloadHash', 'creadoEn', 'usuario', 'estadoConsolidacion'
   ]
 */
 
@@ -87,23 +90,25 @@ function migrateEvaluacionesTrimestralesSchema_(ss) {
     EvalConfig: [
       'id', 'cicloEscolar', 'grupo', 'trimestre', 'fechaInicio', 'fechaFin',
       'estadoPeriodo', 'ponderacionesJson', 'valoresTareasJson', 'valoresConductaJson',
-      'valoresParticipacionJson', 'ajustesAdminJson', 'version', 'actualizadoEn', 'actualizadoPor'
+      'valoresParticipacionJson', 'configAsistenciaJson', 'ajustesAdminJson', 'version',
+      'actualizadoEn', 'actualizadoPor'
     ],
     EvalActividades: [
       'id', 'cicloEscolar', 'grupo', 'trimestre', 'campoFormativo', 'criterio',
       'actividadId', 'tipoActividad', 'fechaActividad', 'nombreActividad',
-      'seleccionada', 'peso', 'actualizadoEn'
+      'seleccionada', 'peso', 'exclusionesAlumnosJson', 'version', 'actualizadoEn', 'actualizadoPor'
     ],
     EvalCalificaciones: [
       'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
-      'campoFormativo', 'modalidad', 'examenGrade', 'desgloseCriteriosJson',
-      'calcGrade', 'manualGrade', 'motivoAjuste', 'authorizedGrade', 'isAuthorized',
-      'status', 'version', 'actualizadoEn', 'actualizadoPor'
+      'campoFormativo', 'modalidad', 'desgloseAutoJson', 'desgloseManualJson', 'examenGrade',
+      'configAplicadaJson', 'actividadesRefJson', 'calcGradeOriginal', 'calcGradePreliminar',
+      'ajusteManual', 'motivoAjuste', 'authorizedGrade', 'status', 'authorizedAt', 'authorizedPor',
+      'version', 'actualizadoEn', 'actualizadoPor'
     ],
     EvalDesempeno: [
       'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
-      'ratingsJson', 'completados', 'source', 'isReviewed', 'version',
-      'actualizadoEn', 'actualizadoPor'
+      'indicadorId', 'valoracion', 'catalogoVersion', 'estadoRevision', 'origen',
+      'trimestreOrigen', 'version', 'actualizadoEn', 'actualizadoPor'
     ],
     EvalMensajes: [
       'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
@@ -111,12 +116,13 @@ function migrateEvaluacionesTrimestralesSchema_(ss) {
       'actualizadoEn', 'actualizadoPor'
     ],
     EvalBancoRecomendaciones: [
-      'id', 'categoria', 'nivel', 'texto', 'caracteres', 'estadoAprobacion',
-      'activo', 'creadoEn', 'actualizadoEn'
+      'id', 'categoria', 'campoFormativo', 'nivel', 'texto', 'caracteres',
+      'estadoAprobacion', 'activo', 'creadoEn', 'actualizadoEn', 'actualizadoPor', 'version'
     ],
     EvalVersiones: [
-      'id', 'cicloEscolar', 'grupo', 'trimestre', 'tipoEvento', 'version',
-      'resumen', 'payloadHash', 'usuario', 'creadoEn'
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'tipoOperacion',
+      'versionAnterior', 'versionNueva', 'motivoModificacion', 'snapshotJson',
+      'payloadHash', 'creadoEn', 'usuario', 'estadoConsolidacion'
     ]
   };
 
@@ -198,14 +204,27 @@ var EVAL_CAMPOS_FORMATIVOS = {
 
 /**
  * Valida la identidad y credenciales docentes antes de procesar operaciones de evaluación.
+ * 
+ * INTEGRACIÓN CON MECANISMO DE AUTENTICACIÓN EXISTENTE:
+ * El frontend transmite el sessionToken del docente generado durante el inicio de sesión.
+ * En el backend auténtico de Apps Script, esta función delega en las funciones del proyecto:
+ * 1. isTeacherSessionValid_(token) o checkSession_(token) si existen en el entorno GAS.
+ * 2. Comprueba que el usuario tenga rol de docente autorizado sobre el grupo escolar solicitado.
+ * 
+ * LIMITACIÓN EXPRESA INFORMADA:
+ * Debido a que el entorno de ejecución privado de Google Apps Script y su almacenamiento de
+ * sesiones residen en la nube de Google y no están versionados en este repositorio local,
+ * NO es posible ejecutar una prueba de autenticación en vivo con tokens reales desde el entorno
+ * local. Por tanto, el backend NO debe considerarse listo para producción hasta que se verifique
+ * dicha función en la consola de Google Apps Script.
  */
-function validateTeacherAuth_(sessionToken) {
+function validateTeacherAuth_(sessionToken, targetGroup) {
   if (typeof isTeacherSessionValid_ === 'function') {
-    if (!isTeacherSessionValid_(sessionToken)) {
-      throw new Error('Sesión docente inválida o expirada. Inicie sesión nuevamente.');
+    if (!isTeacherSessionValid_(sessionToken, targetGroup)) {
+      throw new Error('Sesión docente inválida, expirada o no autorizada para el grupo solicitado.');
     }
   } else if (!sessionToken || String(sessionToken).length < 8) {
-    throw new Error('No autorizado. Token de sesión no proporcionado.');
+    throw new Error('No autorizado. Token de sesión docente ausente o inválido.');
   }
 }
 
@@ -283,10 +302,22 @@ function getTrimesterEvaluationBundle_(ciclo, grupo, trimestre, sessionToken) {
 }
 
 /**
- * Sincronización atómica por lotes (Batch) con protección de concurrencia LockService.
+ * Sincronización por lotes (Batch) con exclusión mutua LockService y consolidación de dos fases.
+ * 
+ * MECANISMO REAL DE PROTECCIÓN CONTRA ESCRITURAS PARCIALES:
+ * LockService proporciona exclusión mutua para evitar condiciones de carrera, pero en Google Apps Script
+ * NO revierte automáticamente filas escritas si ocurre un error a mitad de camino.
+ * Para garantizar atomicidad lógica:
+ * 1. Cada lote transmite un operationId / batchId único.
+ * 2. Si el lote se procesa completamente, se registra en EvalVersiones la consolidación definitiva
+ *    con 'estadoConsolidacion: CONSOLIDADO'.
+ * 3. Si ocurre una interrupción de red o fallo parcial a mitad del proceso, los lectores institucionales
+ *    y del Portal Familiar ignoran los registros con operaciones incompletas y continúan sirviendo
+ *    la última versión CONSOLIDADA válida.
+ * 4. El cliente conserva su borrador local intacto y permite reintentar de manera idempotente con el mismo batchId.
  */
 function syncTrimesterEvaluationBatch_(payload, sessionToken) {
-  validateTeacherAuth_(sessionToken);
+  validateTeacherAuth_(sessionToken, payload?.grupo);
 
   if (!payload || !payload.ciclo || !payload.grupo || !payload.trimestre) {
     throw new Error('Payload incompleto: ciclo, grupo y trimestre son obligatorios.');
@@ -295,10 +326,11 @@ function syncTrimesterEvaluationBatch_(payload, sessionToken) {
   var ciclo = String(payload.ciclo);
   var grupo = String(payload.grupo);
   var t = parseInt(payload.trimestre, 10);
+  var batchId = payload.batchId || ('BATCH_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8));
   var now = new Date().toISOString();
   var user = (typeof getSessionUser_ === 'function' ? getSessionUser_(sessionToken) : 'docente');
 
-  // Adquirir bloqueo exclusivo para garantizar atomicidad e idempotencia
+  // Adquirir bloqueo exclusivo para garantizar que dos peticiones simultáneas no colisionen
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(20000); // 20 segundos de espera máxima

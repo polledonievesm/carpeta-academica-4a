@@ -397,10 +397,11 @@ async function runCDPTest() {
       if (!btn) return null;
       btn.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
       const rect = btn.getBoundingClientRect();
-      const cx = Math.round(rect.x + rect.width / 2);
-      const cy = Math.round(rect.y + rect.height / 2);
+      // Tomar un punto seguro garantizado dentro del botón
+      const cx = Math.floor(rect.left + 20);
+      const cy = Math.floor(rect.top + rect.height / 2);
       const topEl = document.elementFromPoint(cx, cy);
-      return { x: cx, y: cy, width: rect.width, height: rect.height, topEl: topEl ? topEl.outerHTML.slice(0, 100) : null };
+      return { x: cx, y: cy, width: rect.width, height: rect.height, topEl: topEl ? topEl.outerHTML.slice(0, 100) : null, rect };
     })()`,
     returnByValue: true
   });
@@ -409,7 +410,7 @@ async function runCDPTest() {
   console.log('[CDP SMOKE TEST] Coordenadas táctiles:', box);
 
   if (box && box.width > 0 && box.height > 0) {
-    console.log(`[CDP SMOKE TEST] Despachando eventos táctiles nativos del motor de Chromium en (${box.x}, ${box.y})...`);
+    console.log(`[CDP SMOKE TEST] Despachando eventos táctiles nativos mediante Input.dispatchTouchEvent en (${box.x}, ${box.y})...`);
     await sendCommand('Input.dispatchTouchEvent', {
       type: 'touchStart',
       touchPoints: [{ id: 0, x: box.x, y: box.y }]
@@ -417,33 +418,29 @@ async function runCDPTest() {
     await new Promise(r => setTimeout(r, 80));
     await sendCommand('Input.dispatchTouchEvent', {
       type: 'touchEnd',
-      touchPoints: []
+      touchPoints: [{ id: 0, x: box.x, y: box.y }]
     });
-    await sendCommand('Runtime.evaluate', {
-      expression: `(function() {
-        const btn = document.querySelector('.eval-tab-btn[data-tab="captura-grupal"]');
-        if (btn) btn.click();
-      })()`
-    });
-    await new Promise(r => setTimeout(r, 300));
-
     await new Promise(r => setTimeout(r, 500));
   }
 
-  // Verificar activación por evento táctil en móvil 390px
+  // Verificar activación por evento táctil nativo en móvil 390px
   const mobileEval = await sendCommand('Runtime.evaluate', {
     expression: `(function() {
       const tabGrupal = document.getElementById('evalTabCapturaGrupal');
       const isTabActive = tabGrupal && !tabGrupal.classList.contains('hidden-tab');
 
-      // Verificar tamaño de targets táctiles visibles (>= 40px)
-      const allBtns = Array.from(document.querySelectorAll('.eval-tab-btn, .eval-subview-btn, .eval-subtab-btn, .eval-grupal-toolbar .btn, .eval-ind-nav-btn'));
+      // Verificar tamaño de targets táctiles interactivos visibles (mínimo estricto 44 x 44 px)
+      const allBtns = Array.from(document.querySelectorAll('.eval-tab-btn, .eval-subview-selector .btn, .eval-subtab-btn, .eval-grupal-toolbar .btn, .eval-ind-nav-btn, .eval-criteria-toggle-btn, .eval-trimester-btn, .eval-sync-btn'));
       const visibleBtns = allBtns.filter(b => b.offsetParent !== null);
-      const smallTargets = visibleBtns.filter(b => b.getBoundingClientRect().height < 38);
+      const smallTargets = visibleBtns.filter(b => {
+        const rect = b.getBoundingClientRect();
+        return rect.height < 43.5 || rect.width < 43.5;
+      });
 
       return {
         tabSwitchedViaNativeTouch: Boolean(isTabActive),
         allTouchTargetsAccessible: smallTargets.length === 0,
+        smallTargetsCount: smallTargets.length,
         testedButtonsCount: visibleBtns.length
       };
     })()`,

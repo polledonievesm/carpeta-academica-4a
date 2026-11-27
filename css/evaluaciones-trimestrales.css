@@ -892,18 +892,30 @@
   }
 }
 
-/* Controles táctiles accesibles */
+/* Controles táctiles accesibles - Mínimo estricto de 44x44px */
 .eval-criteria-toggle-btn,
 .eval-trimester-btn,
 .eval-tab-btn,
 .eval-config-actions-bar .btn,
 .eval-activities-filter-panel .btn,
 .eval-activities-toolbar .btn,
-.eval-activities-container .btn {
+.eval-activities-container .btn,
+.eval-subview-selector .btn,
+.eval-grupal-toolbar .btn,
+.eval-ind-nav-btn,
+.eval-subtab-btn,
+.eval-level-btn,
+.eval-quick-val-btn,
+.eval-sync-btn,
+#view-evaluaciones-trimestrales .btn,
+#view-evaluaciones-trimestrales select,
+#view-evaluaciones-trimestrales .eval-cell-input {
   min-height: 44px;
+  min-width: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
 }
 
 /* ==========================================================================
@@ -2200,6 +2212,24 @@
 }
 .eval-sync-conflicto_version .eval-sync-dot {
   background: #9333ea;
+}
+
+.eval-sync-simulacion_local {
+  background: #fefce8;
+  color: #854d0e;
+  border: 1px dashed #eab308;
+}
+.eval-sync-simulacion_local .eval-sync-dot {
+  background: #ca8a04;
+}
+
+.eval-sync-sin_guardar {
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+.eval-sync-sin_guardar .eval-sync-dot {
+  background: #94a3b8;
 }
 
 @keyframes evalSyncPulse {
