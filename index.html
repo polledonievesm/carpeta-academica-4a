@@ -1399,6 +1399,10 @@
             <svg class="eval-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             Selección de actividades
           </button>
+          <button class="eval-tab-btn" data-action="eval-switch-tab" data-tab="calculo-preliminar" role="tab" aria-selected="false">
+            <svg class="eval-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M8 2v4"/><path d="M16 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>
+            Cálculo preliminar
+          </button>
           <button class="eval-tab-btn" data-action="eval-switch-tab" data-tab="captura-grupal" role="tab" aria-selected="false">
             <svg class="eval-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Captura grupal
@@ -1581,6 +1585,13 @@
                   <option value="excluded">Solo excluidas</option>
                 </select>
 
+                <div class="eval-date-range-filter" style="display: inline-flex; align-items: center; gap: 4px;">
+                  <span style="font-size: 11px; color: var(--muted);">Fechas:</span>
+                  <input type="date" id="evalActivityDateStart" class="input compact-input" style="width: 125px; font-size: 11px;" title="Fecha inicial del filtro">
+                  <span style="font-size: 11px; color: var(--muted);">-</span>
+                  <input type="date" id="evalActivityDateEnd" class="input compact-input" style="width: 125px; font-size: 11px;" title="Fecha final del filtro">
+                </div>
+
                 <div class="button-row" style="gap: 6px; margin-left: auto;">
                   <button class="btn small" data-action="eval-select-all-visible" title="Seleccionar todas las actividades visibles según los filtros">Seleccionar visibles</button>
                   <button class="btn small" data-action="eval-deselect-all-visible" title="Deseleccionar todas las actividades visibles">Deseleccionar visibles</button>
@@ -1665,6 +1676,153 @@
                 <button class="btn primary" id="evalBtnSaveActivities" data-action="eval-save-activities-selection">Confirmar selección de actividades</button>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Vista del Tab: Cálculo preliminar (Etapa 4) -->
+        <div id="evalTabCalculoPreliminar" class="eval-tab-content hidden-tab">
+          <div class="eval-calc-container">
+            <!-- 1. Barra de Selección de Alumno y Configuración de Cálculo -->
+            <article class="panel eval-calc-toolbar-panel">
+              <div class="eval-calc-toolbar">
+                <div class="eval-calc-field-group">
+                  <label for="evalCalcStudentSelect">Alumno:</label>
+                  <select id="evalCalcStudentSelect" class="input">
+                    <!-- Opciones dinámicas de alumnos con número oficial de lista -->
+                  </select>
+                </div>
+
+                <div class="eval-calc-field-group">
+                  <label for="evalCalcSubjectSelect">Campo formativo:</label>
+                  <select id="evalCalcSubjectSelect" class="input">
+                    <option value="Lenguajes">Lenguajes</option>
+                    <option value="Saberes y Pensamiento Científico">Saberes y Pensamiento Científico</option>
+                    <option value="Ética, Naturaleza y Sociedades">Ética, Naturaleza y Sociedades</option>
+                    <option value="De lo Humano y lo Comunitario">De lo Humano y lo Comunitario</option>
+                  </select>
+                </div>
+
+                <div class="eval-calc-field-group">
+                  <label for="evalCalcModeSelect">Modalidad de captura:</label>
+                  <select id="evalCalcModeSelect" class="input">
+                    <option value="mixta">Mixta (asistida con ajustes docentes)</option>
+                    <option value="asistida">Asistida (cálculo automático con registros)</option>
+                    <option value="manual">Manual (calificación directa por campo)</option>
+                  </select>
+                </div>
+
+                <div class="button-row" style="margin-left: auto;">
+                  <button class="btn" data-action="eval-recalculate" title="Recalcular calificaciones utilizando registros y configuraciones vigentes">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                    Recalcular
+                  </button>
+                </div>
+              </div>
+            </article>
+
+            <!-- 2. Tarjetas de Resumen del Alumno y Calificación Preliminar -->
+            <div class="eval-calc-summary-grid">
+              <div class="eval-calc-score-card">
+                <span class="eval-stat-label" id="evalCalcSubjectTitle">Lenguajes</span>
+                <div class="eval-calc-score-row">
+                  <span class="eval-calc-score-big" id="evalCalcFinalGrade">0.00</span>
+                  <span class="eval-calc-score-scale">/ 10</span>
+                </div>
+                <div class="eval-calc-status-badge-wrap">
+                  <span id="evalCalcStatusBadge" class="eval-status-pill status-completed">Calculado</span>
+                  <span id="evalCalcAdjustedBadge" class="eval-status-pill status-review" style="display: none;">Con ajuste manual</span>
+                </div>
+                <span class="muted" style="font-size: 11px; margin-top: 4px;" id="evalCalcOriginalNote"></span>
+              </div>
+
+              <div class="eval-calc-info-card">
+                <div class="eval-calc-student-meta">
+                  <h3 id="evalCalcStudentName" style="margin: 0; font-size: 16px; color: var(--navy);">Nombre del Alumno</h3>
+                  <span id="evalCalcStudentDetails" class="muted" style="font-size: 12px;">Lista # — · CURP: —</span>
+                </div>
+                <!-- 4 Campos Formativos Rápidos -->
+                <div class="eval-four-fields-summary" id="evalFourFieldsSummary">
+                  <!-- Badges dinámicos de los 4 campos -->
+                </div>
+                <div class="eval-calc-trimester-avg-box">
+                  <span style="font-size: 12px; font-weight: 700; color: var(--navy);">Promedio general del trimestre:</span>
+                  <b id="evalCalcTrimesterAvg" style="font-size: 16px; color: var(--teal);">—</b>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Alerta de Configuración o Pendientes -->
+            <div id="evalCalcNoticeBox" class="eval-calc-notice-banner" style="display: none;"></div>
+
+            <!-- 4. Desglose Detallado por Criterios de Evaluación -->
+            <article class="panel eval-criteria-breakdown-panel">
+              <div class="section-head">
+                <div>
+                  <h3 style="margin: 0; font-size: 16px;">Desglose de criterios de evaluación</h3>
+                  <span class="muted" style="font-size: 12px;">Ponderaciones y aportaciones hacia la calificación final (Escala 0 a 10)</span>
+                </div>
+                <span id="evalCalcActiveSumBadge" class="badge">100% activo</span>
+              </div>
+
+              <div class="table-wrap" style="margin-top: 12px;">
+                <table class="eval-tracking-table eval-breakdown-table">
+                  <thead>
+                    <tr>
+                      <th>Criterio</th>
+                      <th style="text-align: center;">Ponderación</th>
+                      <th style="text-align: center;">Valor base (0-100)</th>
+                      <th style="text-align: center;">Aportación (/10)</th>
+                      <th>Estado del criterio</th>
+                      <th>Origen / Detalle</th>
+                    </tr>
+                  </thead>
+                  <tbody id="evalBreakdownTableBody">
+                    <!-- Filas dinámicas de los 7 criterios -->
+                  </tbody>
+                </table>
+              </div>
+            </article>
+
+            <!-- 5. Panel de Ajuste Manual y Calificación Definitiva Docente -->
+            <article class="panel eval-manual-adjust-panel">
+              <div class="section-head">
+                <div>
+                  <h3 style="margin: 0; font-size: 15px;">Ajuste docente y calificación autorizada</h3>
+                  <span class="muted" style="font-size: 12px;">Permite modificar la calificación manteniendo el cálculo automático original en el historial</span>
+                </div>
+              </div>
+
+              <div class="eval-adjust-inputs-row">
+                <div class="eval-adjust-field">
+                  <label for="evalManualGradeInput">Calificación autorizada:</label>
+                  <input type="number" id="evalManualGradeInput" class="input" min="0" max="10" step="0.1" placeholder="Ej. 8.5">
+                </div>
+
+                <div class="eval-adjust-field" style="flex: 2;">
+                  <label for="evalManualReasonInput">Motivo del ajuste / Observaciones docentes:</label>
+                  <input type="text" id="evalManualReasonInput" class="input" placeholder="Justificación pedagógica del ajuste...">
+                </div>
+
+                <div class="eval-adjust-actions">
+                  <button class="btn primary" data-action="eval-save-manual-adjustment">Aplicar ajuste</button>
+                  <button class="btn" data-action="eval-reset-manual-adjustment">Restablecer automático</button>
+                </div>
+              </div>
+            </article>
+
+            <!-- 6. Promedio Anual (Preparado para los 3 trimestres) -->
+            <article class="panel eval-annual-summary-panel">
+              <div class="section-head">
+                <div>
+                  <h3 style="margin: 0; font-size: 15px;">Trayectoria trimestral y promedio anual</h3>
+                  <span class="muted" style="font-size: 12px;">Requiere los tres periodos trimestrales completados para emitir promedio anual definitivo</span>
+                </div>
+              </div>
+
+              <div class="eval-annual-cards-row" id="evalAnnualCardsRow">
+                <!-- Tarjetas T1, T2, T3 y Anual -->
+              </div>
+            </article>
           </div>
         </div>
 
