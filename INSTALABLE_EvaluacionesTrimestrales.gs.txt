@@ -39,21 +39,21 @@ Localizar 'const DB = {' en Database.gs e incorporar las siguientes 7 tablas:
     'campoFormativo', 'modalidad', 'desgloseAutoJson', 'desgloseManualJson', 'examenGrade',
     'configAplicadaJson', 'actividadesRefJson', 'calcGradeOriginal', 'calcGradePreliminar',
     'ajusteManual', 'motivoAjuste', 'authorizedGrade', 'status', 'authorizedAt', 'authorizedPor',
-    'version', 'actualizadoEn', 'actualizadoPor'
+    'batchId', 'estadoConsolidacion', 'version', 'actualizadoEn', 'actualizadoPor'
   ],
 
   // Valoraciones de los 23 indicadores de desempeño integral
   EvalDesempeno: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
     'indicadorId', 'valoracion', 'catalogoVersion', 'estadoRevision', 'origen',
-    'trimestreOrigen', 'version', 'actualizadoEn', 'actualizadoPor'
+    'trimestreOrigen', 'batchId', 'estadoConsolidacion', 'version', 'actualizadoEn', 'actualizadoPor'
   ],
 
   // Mensajes personalizados para el Portal Familiar (máx. 245 caracteres)
   EvalMensajes: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
-    'mensaje', 'caracteres', 'templateId', 'estadoRevision', 'version',
-    'actualizadoEn', 'actualizadoPor'
+    'mensaje', 'caracteres', 'templateId', 'estadoRevision', 'batchId', 'estadoConsolidacion',
+    'version', 'actualizadoEn', 'actualizadoPor'
   ],
 
   // Banco institucional de recomendaciones pedagógicas
@@ -65,7 +65,7 @@ Localizar 'const DB = {' en Database.gs e incorporar las siguientes 7 tablas:
   // Historial de versiones y auditoría de eventos de evaluación
   EvalVersiones: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'tipoOperacion',
-    'versionAnterior', 'versionNueva', 'motivoModificacion', 'snapshotJson',
+    'batchId', 'versionAnterior', 'versionNueva', 'motivoModificacion', 'snapshotJson',
     'payloadHash', 'creadoEn', 'usuario', 'estadoConsolidacion'
   ]
 */
@@ -103,17 +103,17 @@ function migrateEvaluacionesTrimestralesSchema_(ss) {
       'campoFormativo', 'modalidad', 'desgloseAutoJson', 'desgloseManualJson', 'examenGrade',
       'configAplicadaJson', 'actividadesRefJson', 'calcGradeOriginal', 'calcGradePreliminar',
       'ajusteManual', 'motivoAjuste', 'authorizedGrade', 'status', 'authorizedAt', 'authorizedPor',
-      'version', 'actualizadoEn', 'actualizadoPor'
+      'batchId', 'estadoConsolidacion', 'version', 'actualizadoEn', 'actualizadoPor'
     ],
     EvalDesempeno: [
       'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
       'indicadorId', 'valoracion', 'catalogoVersion', 'estadoRevision', 'origen',
-      'trimestreOrigen', 'version', 'actualizadoEn', 'actualizadoPor'
+      'trimestreOrigen', 'batchId', 'estadoConsolidacion', 'version', 'actualizadoEn', 'actualizadoPor'
     ],
     EvalMensajes: [
       'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
-      'mensaje', 'caracteres', 'templateId', 'estadoRevision', 'version',
-      'actualizadoEn', 'actualizadoPor'
+      'mensaje', 'caracteres', 'templateId', 'estadoRevision', 'batchId', 'estadoConsolidacion',
+      'version', 'actualizadoEn', 'actualizadoPor'
     ],
     EvalBancoRecomendaciones: [
       'id', 'categoria', 'campoFormativo', 'nivel', 'texto', 'caracteres',
@@ -121,7 +121,7 @@ function migrateEvaluacionesTrimestralesSchema_(ss) {
     ],
     EvalVersiones: [
       'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'tipoOperacion',
-      'versionAnterior', 'versionNueva', 'motivoModificacion', 'snapshotJson',
+      'batchId', 'versionAnterior', 'versionNueva', 'motivoModificacion', 'snapshotJson',
       'payloadHash', 'creadoEn', 'usuario', 'estadoConsolidacion'
     ]
   };
@@ -212,20 +212,34 @@ var EVAL_CAMPOS_FORMATIVOS = {
  * 2. Comprueba que el usuario tenga rol de docente autorizado sobre el grupo escolar solicitado.
  * 
  * LIMITACIÓN EXPRESA INFORMADA:
- * Debido a que el entorno de ejecución privado de Google Apps Script y su almacenamiento de
- * sesiones residen en la nube de Google y no están versionados en este repositorio local,
- * NO es posible ejecutar una prueba de autenticación en vivo con tokens reales desde el entorno
- * local. Por tanto, el backend NO debe considerarse listo para producción hasta que se verifique
- * dicha función en la consola de Google Apps Script.
+ * SEGURIDAD POR DEFECTO (ZERO TRUST):
+ * No se asume que exista ninguna función de autenticación predeterminada.
+ * Si el proyecto original de Apps Script no tiene vinculada su función real de validación
+ * de sesiones y pertenencia de grupo, TODAS las solicitudes son RECHAZADAS POR DEFECTO.
  */
 function validateTeacherAuth_(sessionToken, targetGroup) {
+  var authFn = null;
   if (typeof isTeacherSessionValid_ === 'function') {
-    if (!isTeacherSessionValid_(sessionToken, targetGroup)) {
-      throw new Error('Sesión docente inválida, expirada o no autorizada para el grupo solicitado.');
-    }
-  } else if (!sessionToken || String(sessionToken).length < 8) {
-    throw new Error('No autorizado. Token de sesión docente ausente o inválido.');
+    authFn = isTeacherSessionValid_;
+  } else if (typeof checkTeacherSession_ === 'function') {
+    authFn = checkTeacherSession_;
+  } else if (typeof validateSession_ === 'function') {
+    authFn = validateSession_;
+  } else if (typeof requireTeacherAuth_ === 'function') {
+    authFn = requireTeacherAuth_;
   }
+
+  // RECHAZO POR DEFECTO si el validador real no está disponible
+  if (!authFn) {
+    throw new Error('SECURITY_REJECT_DEFAULT: Mecanismo de autenticación no vinculado. El docente debe proporcionar el archivo con la función de validación de sesión de Apps Script.');
+  }
+
+  var authResult = authFn(sessionToken, targetGroup);
+  if (!authResult) {
+    throw new Error('AUTH_ERROR: Sesión docente inválida, expirada o no autorizada para el grupo ' + (targetGroup || '') + '.');
+  }
+
+  return authResult;
 }
 
 /**
@@ -272,20 +286,35 @@ function getTrimesterEvaluationBundle_(ciclo, grupo, trimestre, sessionToken) {
 
   var califs = [];
   try {
+    var allVersiones = typeof readRows_ === 'function' ? readRows_('EvalVersiones') : [];
+    var consolidated = allVersiones.filter(function(v) {
+      return v.cicloEscolar === ciclo && v.grupo === grupo && parseInt(v.trimestre, 10) === t && v.estadoConsolidacion === 'consolidado';
+    });
+    var activeBatchId = consolidated.length > 0 ? consolidated[consolidated.length - 1].batchId : null;
+
     var allCalifs = typeof readRows_ === 'function' ? readRows_('EvalCalificaciones') : [];
-    califs = allCalifs.filter(function (r) { return r.cicloEscolar === ciclo && r.grupo === grupo && parseInt(r.trimestre, 10) === t; });
+    califs = allCalifs.filter(function (r) {
+      return r.cicloEscolar === ciclo && r.grupo === grupo && parseInt(r.trimestre, 10) === t &&
+             (!activeBatchId || r.batchId === activeBatchId || r.estadoConsolidacion === 'consolidado');
+    });
   } catch (e) {}
 
   var desemp = [];
   try {
     var allDesemp = typeof readRows_ === 'function' ? readRows_('EvalDesempeno') : [];
-    desemp = allDesemp.filter(function (r) { return r.cicloEscolar === ciclo && r.grupo === grupo && parseInt(r.trimestre, 10) === t; });
+    desemp = allDesemp.filter(function (r) {
+      return r.cicloEscolar === ciclo && r.grupo === grupo && parseInt(r.trimestre, 10) === t &&
+             (!activeBatchId || r.batchId === activeBatchId || r.estadoConsolidacion === 'consolidado');
+    });
   } catch (e) {}
 
   var msgs = [];
   try {
     var allMsgs = typeof readRows_ === 'function' ? readRows_('EvalMensajes') : [];
-    msgs = allMsgs.filter(function (r) { return r.cicloEscolar === ciclo && r.grupo === grupo && parseInt(r.trimestre, 10) === t; });
+    msgs = allMsgs.filter(function (r) {
+      return r.cicloEscolar === ciclo && r.grupo === grupo && parseInt(r.trimestre, 10) === t &&
+             (!activeBatchId || r.batchId === activeBatchId || r.estadoConsolidacion === 'consolidado');
+    });
   } catch (e) {}
 
   return {
@@ -339,6 +368,24 @@ function syncTrimesterEvaluationBatch_(payload, sessionToken) {
   }
 
   try {
+    // 0. Comprobación estricta de idempotencia
+    var existingVersiones = typeof readRows_ === 'function' ? readRows_('EvalVersiones') : [];
+    var alreadyConsolidated = existingVersiones.find(function(v) {
+      return v.batchId === batchId && v.estadoConsolidacion === 'consolidado';
+    });
+    if (alreadyConsolidated) {
+      return { ok: true, data: { batchId: batchId, alreadyConsolidated: true, timestamp: alreadyConsolidated.creadoEn } };
+    }
+
+    // 0.1 Comprobación de conflicto de versiones
+    var latestConsolidatedVer = existingVersiones
+      .filter(function(v) { return v.cicloEscolar === ciclo && v.grupo === grupo && parseInt(v.trimestre, 10) === t && v.estadoConsolidacion === 'consolidado'; })
+      .reduce(function(max, v) { return Math.max(max, parseInt(v.version, 10) || 0); }, 0);
+
+    if (payload.version && parseInt(payload.version, 10) < latestConsolidatedVer) {
+      throw new Error('CONFLICTO_VERSION: El servidor posee una versión consolidada más reciente (v' + latestConsolidatedVer + '). Recargue antes de sincronizar.');
+    }
+
     var result = {
       configSaved: false,
       calificacionesCount: 0,
@@ -399,6 +446,8 @@ function syncTrimesterEvaluationBatch_(payload, sessionToken) {
           authorizedGrade: validateGradeValue_(c.authorizedGrade),
           isAuthorized: Boolean(c.isAuthorized),
           status: c.status || 'PENDIENTE',
+          batchId: batchId,
+          estadoConsolidacion: 'en_preparacion',
           version: payload.version || 1,
           actualizadoEn: now,
           actualizadoPor: user
@@ -440,6 +489,8 @@ function syncTrimesterEvaluationBatch_(payload, sessionToken) {
           completados: completedCount,
           source: d.source || 'manual',
           isReviewed: d.isReviewed !== false,
+          batchId: batchId,
+          estadoConsolidacion: 'en_preparacion',
           version: payload.version || 1,
           actualizadoEn: now,
           actualizadoPor: user
@@ -468,6 +519,8 @@ function syncTrimesterEvaluationBatch_(payload, sessionToken) {
           caracteres: cleanMsg.length,
           templateId: m.templateId || '',
           estadoRevision: m.estadoRevision || 'pendiente',
+          batchId: batchId,
+          estadoConsolidacion: 'en_preparacion',
           version: payload.version || 1,
           actualizadoEn: now,
           actualizadoPor: user
@@ -479,23 +532,31 @@ function syncTrimesterEvaluationBatch_(payload, sessionToken) {
       });
     }
 
-    // 5. Registrar versión en historial de auditoría
+    // 5. Registrar y CONSOLIDAR versión en historial de auditoría
     var versId = 'VER_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
     var versionRec = {
       id: versId,
       cicloEscolar: ciclo,
       grupo: grupo,
       trimestre: t,
-      tipoEvento: payload.tipoEvento || 'sincronizacion_borrador',
-      version: payload.version || 1,
-      resumen: 'Sincronización remota: ' + result.calificacionesCount + ' materias, ' + 
-               result.desempenoCount + ' registros de desempeño, ' + result.mensajesCount + ' mensajes.',
+      alumnoId: 'GRUPO_COMPLETO',
+      tipoOperacion: payload.tipoEvento || 'sincronizacion_borrador',
+      batchId: batchId,
+      versionAnterior: latestConsolidatedVer,
+      versionNueva: payload.version || (latestConsolidatedVer + 1),
+      motivoModificacion: 'Sincronización de lote',
+      snapshotJson: JSON.stringify({
+        calificacionesCount: result.calificacionesCount,
+        desempenoCount: result.desempenoCount,
+        mensajesCount: result.mensajesCount
+      }),
       payloadHash: payload.hash || '',
+      creadoEn: now,
       usuario: user,
-      creadoEn: now
+      estadoConsolidacion: 'consolidado'
     };
     if (typeof appendRow_ === 'function') {
-      try { appendRow_('EvalVersiones', versionRec); } catch (e) {}
+      appendRow_('EvalVersiones', versionRec);
     }
 
     return { ok: true, data: result };
@@ -503,3 +564,41 @@ function syncTrimesterEvaluationBatch_(payload, sessionToken) {
     lock.releaseLock();
   }
 }
+
+// ----------------------------------------------------------------------------
+// PARTE 5: INTEGRACIÓN CON EL DESPACHADOR CENTRAL EN Api.gs
+// ----------------------------------------------------------------------------
+/*
+Instrucciones para el docente en Api.gs:
+Localizar la función despachadora central (usualmente el bloque switch en doPost(e) o router de acciones)
+e incorporar únicamente las siguientes dos ramas de acción:
+
+  case 'getTrimesterEvaluationBundle':
+    return getTrimesterEvaluationBundle_(args[0], args[1], args[2], sessionToken);
+
+  case 'syncTrimesterEvaluationBatch':
+    return syncTrimesterEvaluationBatch_(args[0], sessionToken);
+
+IMPORTANTE: No modificar ninguna otra rama existente en Api.gs.
+*/
+
+// ----------------------------------------------------------------------------
+// PARTE 6: PROCEDIMIENTO CONTROLADO DE DESPLIEGUE Y REVERSIÓN (ROLLBACK)
+// ----------------------------------------------------------------------------
+/*
+PROCEDIMIENTO DE DESPLIEGUE CONTROLADO:
+1. Respaldo: Crear una copia del Google Spreadsheet actual (Archivo > Crear una copia).
+2. Database.gs: Copiar únicamente las 7 claves del objeto DB (Parte 1).
+3. EvaluacionesTrimestrales.gs: Crear este nuevo archivo en el editor de Apps Script y pegar las Partes 2, 3 y 4.
+4. Api.gs: Agregar las 2 ramas de acción al router de peticiones (Parte 5).
+5. Migración: En el editor de Apps Script, seleccionar y ejecutar la función 'migrateEvaluacionesTrimestralesSchema_()'.
+6. Verificación: Confirmar que se crearon las 7 hojas vacías y que las hojas existentes permanecen intactas.
+7. Nueva Versión: Realizar una nueva versión de implementación (Implementar > Administrar implementaciones > Nueva versión).
+
+PROCEDIMIENTO DE REVERSIÓN INMEDIATA (ROLLBACK):
+Si se presenta alguna incompatibilidad o anomalía:
+1. Reversión en Apps Script: En 'Administrar implementaciones', volver a apuntar la URL Web App a la versión de despliegue anterior.
+2. Reversión en Api.gs: Retirar o comentar las dos ramas añadidas en el switch de Api.gs.
+3. Reversión en Google Sheets: Eliminar las 7 hojas creadas (EvalConfig, EvalActividades, EvalCalificaciones, EvalDesempeno, EvalMensajes, EvalBancoRecomendaciones, EvalVersiones).
+Ninguna hoja preexistente (Alumnos, Clases, Evaluaciones, Asistencia, etc.) sufrirá impacto alguno.
+*/
