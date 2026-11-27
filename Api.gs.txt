@@ -1,49 +1,48 @@
 /**
  * ============================================================================
  * ARCHIVO: api.gs
- * PROPÓSITO: Servicios centrales de lógica académica, reportes y operaciones API
- * FECHA DE MODIFICACIÓN: 27/11/2026
- * AUTOR DE LA MODIFICACIÓN: Asistente Técnico (Carpeta Académica 4.º A)
- * ============================================================================
- * DESCRIPCIÓN DE SECCIONES:
- * 1. Inicialización y Bootstrap: getBootstrapData_, getBootstrapDataLite_, ensureInstalled_.
- * 2. Gestión de Alumnos y Proyectos: listStudents_, saveStudent_, deleteStudent_, listProjects_, etc.
- * 3. Actividades y Evaluaciones: getClassRecord_, saveClassRecord_, deleteClassRecords_.
- * 4. Reportes Académicos: getStudentAcademicReport_, countFollowUp_.
- * 5. Estilos de Aprendizaje: configurarEstilosVAK_, syncLearningStyles_.
- * 6. Número Oficial de Lista: parseOfficialRosterNumber_, validateOfficialRosterNumber_.
- * 7. Módulo Evaluaciones Trimestrales (ETAPA 7A): Funciones enlace hacia EvaluacionesTrimestrales.gs.
- *
- * FUNCIONES QUE CONTIENE:
- * getBootstrapData_, getBootstrapDataLite_, ensureInstalled_, listStudents_,
- * enrichLegacyStudent_, knownStudentNameParts_, saveStudent_, deleteStudent_,
- * deleteStudentsBatch_, deleteLegacyStudentRows_, deleteLegacyStudentRowsBatch_,
- * listProjects_, saveProject_, deleteProject_, getProjectWorkspace_, getClassRecord_,
- * getTodayIsoCancun_, hasValue_, buildEffectiveEvaluation_, esFechaRealValida_,
- * calcularFechaLimiteOficial_, normalizeHourValue_, saveClassRecord_, configurarEstilosVAK_,
- * normalizePersonName_, findStudentForVakName_, syncLearningStyles_, replaceEvaluationRows_,
- * getStudentAcademicReport_, countFollowUp_, fullName_, createTutorUsername_,
- * createTemporaryPassword_, slug_, hash_, clearDailyObjectsByIdsBatch_, deleteClassRecords_,
- * getDeletionStatus_, parseOfficialRosterNumber_, validateOfficialRosterNumber_,
- * getTrimesterEvaluationBundle_, syncTrimesterEvaluationBatch_.
- *
+ * MÓDULO: Lógica de Aplicación, Servicios de Alumnos, Proyectos y Reportes
+ * PROPÓSITO GENERAL:
+ *   Concentra la lógica de negocio del aula escolar: carga de datos de arranque
+ *   (bootstrap), gestión de expedientes, proyectos didácticos, pase de lista,
+ *   reportes académicos y puentes de conexión hacia módulos especializados.
+ * 
+ * FECHA DE CREACIÓN: Fecha de creación no registrada (Código base del proyecto).
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * 
+ * ÍNDICE DE SECCIONES:
+ *   1. Bootstrap e Inicialización: getBootstrapData_, getBootstrapDataLite_, ensureInstalled_.
+ *   2. Gestión de Alumnos y Proyectos: listStudents_, saveStudent_, deleteStudent_, listProjects_, etc.
+ *   3. Registro de Clases y Evaluaciones: getClassRecord_, saveClassRecord_, deleteClassRecords_.
+ *   4. Estilos de Aprendizaje VAK: configurarEstilosVAK_, syncLearningStyles_.
+ *   5. Número Oficial de Lista: parseOfficialRosterNumber_, validateOfficialRosterNumber_.
+ *   6. Módulo Evaluaciones Trimestrales (ETAPA 7A): Puentes de enlace getTrimesterEvaluationBundle_ y syncTrimesterEvaluationBatch_.
+ * 
+ * FUNCIONES PRINCIPALES:
+ *   getBootstrapData_, getBootstrapDataLite_, ensureInstalled_, listStudents_,
+ *   enrichLegacyStudent_, knownStudentNameParts_, saveStudent_, deleteStudent_,
+ *   deleteStudentsBatch_, deleteLegacyStudentRows_, deleteLegacyStudentRowsBatch_,
+ *   listProjects_, saveProject_, deleteProject_, getProjectWorkspace_, getClassRecord_,
+ *   getTodayIsoCancun_, hasValue_, buildEffectiveEvaluation_, esFechaRealValida_,
+ *   calcularFechaLimiteOficial_, normalizeHourValue_, saveClassRecord_, configurarEstilosVAK_,
+ *   normalizePersonName_, findStudentForVakName_, syncLearningStyles_, replaceEvaluationRows_,
+ *   getStudentAcademicReport_, countFollowUp_, fullName_, createTutorUsername_,
+ *   createTemporaryPassword_, slug_, hash_, clearDailyObjectsByIdsBatch_, deleteClassRecords_,
+ *   getDeletionStatus_, parseOfficialRosterNumber_, validateOfficialRosterNumber_,
+ *   getTrimesterEvaluationBundle_, syncTrimesterEvaluationBatch_.
+ * 
  * DEPENDENCIAS:
- * Database.gs (DB, readRows_, upsertObjectsBatch_), EvaluacionesTrimestrales.gs.
- *
- * CAMBIOS REALIZADOS (27/11/2026):
- * - Se incorporaron las funciones de puente oficial para el módulo Evaluaciones Trimestrales:
- *   getTrimesterEvaluationBundle_ y syncTrimesterEvaluationBatch_.
- * - Se preservó 100% íntegro el código y funciones preexistentes de api.gs sin ninguna eliminación.
- *
- * MOTIVO DE CADA MODIFICACIÓN:
- * - Brindar un punto de acceso desacoplado en la API para las consultas y sincronizaciones
- *   por lotes de Evaluaciones Trimestrales, delegando la lógica al módulo especializado.
+ *   Database.gs (DB, readRows_, upsertObjectsBatch_), EvaluacionesTrimestrales.gs.
+ * 
+ * HISTORIAL ACUMULATIVO DE MODIFICACIONES:
+ *   - Fecha de creación no registrada: Implementación de servicios académicos y bootstrap.
+ *   - 27/11/2026 (Modificación funcional y documental - Etapa 7A.3):
+ *     * Se incorporó el estándar obligatorio de documentación y trazabilidad (JSDoc y encabezados).
+ *     * Se agregaron las funciones puente 'getTrimesterEvaluationBundle_' y 'syncTrimesterEvaluationBatch_'
+ *       al final del archivo, delegando exclusivamente en 'EvaluacionesTrimestrales.gs'.
+ *     * Se mantuvo el 100% del código original sin suprimir ninguna función.
  * ============================================================================
  */
-
-//api.gs
-
-
 function getBootstrapData_() {
   ensureInstalled_();
   const students = listStudents_();
@@ -1689,16 +1688,39 @@ function validateOfficialRosterNumber_(numeroListaVal, studentId, studentRows) {
 }
 
 // ============================================================================
-// SECCIÓN 7: MÓDULO EVALUACIONES TRIMESTRALES (ETAPA 7A) — ENLACE DE API
+// SECCIÓN 6: PUENTES DE ENLACE — EVALUACIONES TRIMESTRALES (ETAPA 7A)
 // ============================================================================
 
 /**
- * Enlace oficial de API para recuperar el paquete de evaluación trimestral consolidado.
- * Delega en la implementación especializada de EvaluacionesTrimestrales.gs.
+ * TÍTULO: Puente API para consulta de evaluaciones trimestrales consolidadas
+ * NOMBRE TÉCNICO: getTrimesterEvaluationBundle_
+ * FECHA DE CREACIÓN: 27/11/2026
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
  * 
- * @param {Object} payload Parámetros de consulta (cicloEscolar, grupo, trimestre).
- * @param {string} [sessionToken] Token de autenticación del usuario.
- * @return {Object} Paquete con { config, actividades, calificaciones, desempeno, mensajes, version }.
+ * QUÉ HACE:
+ *   Recibe una petición de consulta de evaluaciones trimestrales y delega de manera
+ *   desacoplada en la función 'getTrimesterEvaluationBundle' de EvaluacionesTrimestrales.gs.
+ * 
+ * PARA QUÉ SIRVE:
+ *   Permite que los despachadores de API llamen a la funcionalidad de evaluaciones
+ *   sin generar acoplamiento rígido en el archivo principal.
+ * 
+ * POR QUÉ SE CREÓ:
+ *   Para respetar el principio de aislamiento modular y no alterar el núcleo de api.gs.
+ * 
+ * PARÁMETROS:
+ *   @param {Object} payload Objeto con { cicloEscolar: string, grupo: string, trimestre: number }.
+ *   @param {string} [sessionToken] Token de autenticación del usuario solicitante.
+ * 
+ * RESULTADO:
+ *   @return {Object} Paquete con estructura { ok: boolean, data: Object } conteniendo
+ *                    calificaciones, desempeños, mensajes y metadatos de versión consolidada.
+ * 
+ * DEPENDENCIAS:
+ *   EvaluacionesTrimestrales.gs (getTrimesterEvaluationBundle).
+ * 
+ * HISTORIAL DE MODIFICACIONES:
+ *   - 27/11/2026 (Modificación funcional inicial - Etapa 7A.3): Creación de la función puente.
  */
 function getTrimesterEvaluationBundle_(payload, sessionToken) {
   if (typeof getTrimesterEvaluationBundle === 'function') {
@@ -1708,12 +1730,33 @@ function getTrimesterEvaluationBundle_(payload, sessionToken) {
 }
 
 /**
- * Enlace oficial de API para sincronizar por lotes la evaluación trimestral.
- * Delega en la implementación especializada de EvaluacionesTrimestrales.gs.
+ * TÍTULO: Puente API para sincronización de evaluaciones trimestrales por lotes
+ * NOMBRE TÉCNICO: syncTrimesterEvaluationBatch_
+ * FECHA DE CREACIÓN: 27/11/2026
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
  * 
- * @param {Object} payload Datos del lote a sincronizar con batchId y hash.
- * @param {string} [sessionToken] Token de autenticación del usuario.
- * @return {Object} Resultado de la sincronización con estado de consolidación.
+ * QUÉ HACE:
+ *   Recibe un lote de evaluaciones trimestrales para guardar y delega de manera
+ *   desacoplada en 'syncTrimesterEvaluationBatch' de EvaluacionesTrimestrales.gs.
+ * 
+ * PARA QUÉ SIRVE:
+ *   Provee el punto de entrada para sincronizar calificaciones, desempeños y mensajes.
+ * 
+ * POR QUÉ SE CREÓ:
+ *   Para canalizar las peticiones de guardado hacia el motor de persistencia Two-Phase.
+ * 
+ * PARÁMETROS:
+ *   @param {Object} payload Datos del lote a sincronizar con batchId, calificaciones, etc.
+ *   @param {string} [sessionToken] Token de autenticación del usuario solicitante.
+ * 
+ * RESULTADO:
+ *   @return {Object} Respuesta con { ok: boolean, data: Object } indicando la versión sellada.
+ * 
+ * DEPENDENCIAS:
+ *   EvaluacionesTrimestrales.gs (syncTrimesterEvaluationBatch).
+ * 
+ * HISTORIAL DE MODIFICACIONES:
+ *   - 27/11/2026 (Modificación funcional inicial - Etapa 7A.3): Creación de la función puente.
  */
 function syncTrimesterEvaluationBatch_(payload, sessionToken) {
   if (typeof syncTrimesterEvaluationBatch === 'function') {

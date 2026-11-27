@@ -1,39 +1,41 @@
 /**
  * ============================================================================
  * ARCHIVO: Database.gs
- * PROPÓSITO: Definición de esquemas de tablas (DB), utilidades de acceso y persistencia
- * FECHA DE MODIFICACIÓN: 27/11/2026
- * AUTOR DE LA MODIFICACIÓN: Asistente Técnico (Carpeta Académica 4.º A)
- * ============================================================================
- * DESCRIPCIÓN DE SECCIONES:
- * 1. const DB: Diccionario central con las columnas oficiales de cada tabla.
- * 2. setupSystem_: Función de inicialización de hojas y catálogos semilla del sistema.
- * 3. Utilidades CRUD: readRows_, upsertObject_, upsertObjectsBatch_, appendObjects_, etc.
- * 4. Migraciones históricas: Estructura de Alumnos y campos curriculares.
- *
- * FUNCIONES QUE CONTIENE:
- * setupSystem_, seedEvaluationPeriods_, migrateLegacyStudents_, seedConfig_,
- * seedSubjects_, seedRubrics_, ensureSheet_, readRows_, appendObjects_,
- * upsertObject_, upsertObjectsBatch_, replaceObjects_, getConfig_, setConfig_,
- * serializeCell_, newId_, now_, normalizeText_, getSpreadsheet_, etc.
- *
+ * MÓDULO: Núcleo de Base de Datos y Persistencia Relacional
+ * PROPÓSITO GENERAL:
+ *   Define los esquemas oficiales de las tablas del sistema en Google Sheets,
+ *   provee utilidades CRUD atómicas y gestiona la inicialización de catálogos semilla.
+ * 
+ * FECHA DE CREACIÓN: Fecha de creación no registrada (Código base del proyecto).
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * 
+ * ÍNDICE DE SECCIONES:
+ *   1. const DB: Esquemas relacionales preexistentes (27 tablas originales).
+ *   2. const DB_EVALUACIONES: Esquemas relacionales del módulo Evaluaciones Trimestrales (7 tablas).
+ *   3. Funciones de Inicialización y Semillas: setupSystem_, seedConfig_, seedSubjects_, seedRubrics_, etc.
+ *   4. Utilidades CRUD y Persistencia: readRows_, upsertObject_, upsertObjectsBatch_, appendObjects_, etc.
+ *   5. Funciones de Normalización y Utilidades Generales: newId_, now_, normalizeText_, serializeCell_, etc.
+ *   6. Migraciones Estructurales Históricas: migrateLegacyStudents_, etc.
+ * 
+ * FUNCIONES PRINCIPALES:
+ *   setupSystem_, seedEvaluationPeriods_, migrateLegacyStudents_, seedConfig_,
+ *   seedSubjects_, seedRubrics_, ensureSheet_, readRows_, appendObjects_,
+ *   upsertObject_, upsertObjectsBatch_, replaceObjects_, getConfig_, setConfig_,
+ *   serializeCell_, newId_, now_, normalizeText_, getSpreadsheet_.
+ * 
  * DEPENDENCIAS:
- * Google Apps Script (SpreadsheetApp, CacheService, Utilities, LockService).
- *
- * CAMBIOS REALIZADOS (27/11/2026):
- * - Se incorporaron las 7 definiciones de tablas del módulo Evaluaciones Trimestrales
- *   dentro del diccionario global DB: EvalConfig, EvalActividades, EvalCalificaciones,
- *   EvalDesempeno, EvalMensajes, EvalBancoRecomendaciones y EvalVersiones.
- *
- * MOTIVO DE CADA MODIFICACIÓN:
- * - Permitir que las utilidades centrales (ensureSheet_, upsertObjectsBatch_, readRows_)
- *   reconozcan las columnas oficiales de las tablas de evaluación trimestral sin alterar
- *   ninguna de las 26 tablas preexistentes del sistema.
+ *   Google Apps Script SpreadsheetApp, CacheService, Utilities, LockService.
+ * 
+ * HISTORIAL ACUMULATIVO DE MODIFICACIONES:
+ *   - Fecha de creación no registrada: Implementación base del esquema relacional y funciones CRUD.
+ *   - 27/11/2026 (Modificación funcional y documental - Etapa 7A.3):
+ *     * Se incorporó el estándar obligatorio de documentación y trazabilidad (JSDoc y encabezados).
+ *     * Se separaron las 7 definiciones de tablas de Evaluaciones Trimestrales en 'const DB_EVALUACIONES'
+ *       para blindar 'setupSystem_' y 'ensureInstalled_', evitando la creación automática no autorizada de hojas.
+ *     * Se adaptaron 'upsertObjectsBatch_', 'upsertObject_', 'readRows_' y 'appendObjects_' para resolver
+ *       encabezados consultando 'DB[sheetName] || DB_EVALUACIONES[sheetName]'.
  * ============================================================================
  */
-
-
-//nombre del archivo es Database.gs
 const DB = {
   Configuracion: ['clave', 'valor'],
   Materias: ['id', 'nombre', 'orden', 'activo'],
@@ -78,19 +80,34 @@ const DB = {
   ObservacionesRegistro: ['id', 'alumnoId', 'semanaInicio', 'fecha', 'categoria', 'tipo', 'observacionId', 'texto', 'evidencia', 'ocurrenciasJson', 'estadoReporte', 'autorizada', 'creadoEn', 'actualizadoEn'],
   RecomendacionesFamilia: ['id', 'categoria', 'nivel', 'texto', 'activo', 'creadoEn', 'actualizadoEn'],
   ReportesSemanales: ['id', 'alumnoId', 'semanaInicio', 'version', 'estado', 'datosJson', 'creadoEn', 'actualizadoEn', 'publicadoEn'],
-  SolicitudesOperacion: ['id', 'accion', 'entidadId', 'estado', 'respuestaJson', 'creadoEn', 'actualizadoEn'],
-  // --- MÓDULO: EVALUACIONES TRIMESTRALES (ETAPA 7A) ---
+  SolicitudesOperacion: ['id', 'accion', 'entidadId', 'estado', 'respuestaJson', 'creadoEn', 'actualizadoEn']
+};
+
+
+// ============================================================================
+// SECCIÓN 2: ESQUEMAS RELACIONALES — EVALUACIONES TRIMESTRALES (ETAPA 7A)
+// ============================================================================
+/**
+ * Esquema de tablas del módulo de Evaluaciones Trimestrales.
+ * Se definen de forma separada del objeto 'DB' principal para garantizar que
+ * las rutinas generales 'setupSystem_' y 'ensureInstalled_' NO creen estas hojas
+ * automáticamente en el libro escolar sin la autorización explícita del docente.
+ */
+const DB_EVALUACIONES = {
+  // Hoja 1: Configuración de fechas, ponderaciones y estado de cada trimestre
   EvalConfig: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'fechaInicio', 'fechaFin',
     'estadoPeriodo', 'ponderacionesJson', 'valoresTareasJson', 'valoresConductaJson',
     'valoresParticipacionJson', 'configAsistenciaJson', 'ajustesAdminJson', 'version',
     'actualizadoEn', 'actualizadoPor'
   ],
+  // Hoja 2: Actividades y tareas seleccionadas o excluidas por criterio y campo formativo
   EvalActividades: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'campoFormativo', 'criterio',
     'actividadId', 'tipoActividad', 'fechaActividad', 'nombreActividad',
     'seleccionada', 'peso', 'exclusionesAlumnosJson', 'version', 'actualizadoEn', 'actualizadoPor'
   ],
+  // Hoja 3: Calificaciones por alumno, campo formativo, modalidad y desgloses
   EvalCalificaciones: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
     'campoFormativo', 'modalidad', 'desgloseAutoJson', 'desgloseManualJson', 'examenGrade',
@@ -98,20 +115,24 @@ const DB = {
     'ajusteManual', 'motivoAjuste', 'authorizedGrade', 'status', 'authorizedAt', 'authorizedPor',
     'batchId', 'estadoConsolidacion', 'version', 'actualizadoEn', 'actualizadoPor'
   ],
+  // Hoja 4: Valoraciones de los 23 indicadores de desempeño integral (escala E/B/R/A)
   EvalDesempeno: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
     'indicadorId', 'valoracion', 'catalogoVersion', 'estadoRevision', 'origen',
     'trimestreOrigen', 'batchId', 'estadoConsolidacion', 'version', 'actualizadoEn', 'actualizadoPor'
   ],
+  // Hoja 5: Mensajes personalizados dirigidos a las familias (máximo 245 caracteres)
   EvalMensajes: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
     'mensaje', 'caracteres', 'templateId', 'estadoRevision', 'batchId', 'estadoConsolidacion',
     'version', 'actualizadoEn', 'actualizadoPor'
   ],
+  // Hoja 6: Banco institucional de recomendaciones pedagógicas
   EvalBancoRecomendaciones: [
     'id', 'categoria', 'campoFormativo', 'nivel', 'texto', 'caracteres',
     'estadoAprobacion', 'activo', 'creadoEn', 'actualizadoEn', 'actualizadoPor', 'version'
   ],
+  // Hoja 7: Historial inmutable y auditoría de versiones consolidadas
   EvalVersiones: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'tipoOperacion',
     'batchId', 'versionAnterior', 'versionNueva', 'motivoModificacion', 'snapshotJson',
@@ -293,14 +314,14 @@ function readRows_(sheetName) {
 function appendObjects_(sheetName, objects) {
   if (!objects.length) return;
   const sheet = getSpreadsheet_().getSheetByName(sheetName);
-  const headers = DB[sheetName];
+  const headers = DB[sheetName] || (typeof DB_EVALUACIONES !== 'undefined' ? DB_EVALUACIONES[sheetName] : null);
   const rows = objects.map(obj => headers.map(h => obj[h] === undefined ? '' : obj[h]));
   sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, headers.length).setValues(rows);
 }
 
 function upsertObject_(sheetName, object, idField) {
   const sheet = getSpreadsheet_().getSheetByName(sheetName);
-  const headers = DB[sheetName];
+  const headers = DB[sheetName] || (typeof DB_EVALUACIONES !== 'undefined' ? DB_EVALUACIONES[sheetName] : null);
   const idColumn = headers.indexOf(idField) + 1;
   const ids = sheet.getLastRow() > 1
     ? sheet.getRange(2, idColumn, sheet.getLastRow() - 1, 1).getDisplayValues().flat()

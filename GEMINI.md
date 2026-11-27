@@ -30,3 +30,43 @@ Antes de responder al usuario que un cambio está listo:
 ## 5. REGLAS DE GIT Y SINCRONIZACIÓN LOCAL
 - Mantener siempre sincronizados `C:\Users\Polledo\Documents\GitHub\carpeta-academica-4a` y `C:\Users\Polledo\Downloads\carpeta-academica-4a-main`.
 - JAMÁS ejecutar `git push` a repositorios remotos. Los commits locales son seguros y respetan el control del usuario.
+
+## 6. ESTÁNDAR OBLIGATORIO DE DOCUMENTACIÓN Y TRAZABILIDAD DEL CÓDIGO
+Esta regla es de cumplimiento obligatorio y permanente para todos los módulos actuales y futuros de Carpeta Académica (Google Apps Script, JavaScript Vanilla, HTML y CSS):
+
+### 6.1. Encabezado Obligatorio de Archivo
+Todo archivo debe comenzar con un bloque de documentación que detalle:
+- Nombre exacto del archivo.
+- Nombre del módulo al que pertenece.
+- Propósito general del archivo en la arquitectura del sistema.
+- Fecha de creación (si es conocida; en caso contrario: «Fecha de creación no registrada»).
+- Fecha de última modificación (fecha real de la intervención).
+- Índice de secciones numeradas.
+- Funciones principales que contiene.
+- Dependencias internas y externas.
+- Historial acumulativo de modificaciones.
+
+### 6.2. Identificación Visual de Secciones
+- Separar visualmente cada bloque lógico mediante comentarios destacados con títulos descriptivos en español.
+- Numerar las secciones de forma secuencial.
+- En `Database.gs`, documentar cada definición de tabla/hoja indicando su nombre oficial y propósito en el modelo de datos.
+
+### 6.3. Documentación Individual de Funciones
+Cada función nueva o modificada debe incluir inmediatamente antes de su declaración un bloque JSDoc estructurado con:
+- Título descriptivo en español.
+- Nombre técnico de la función.
+- Fecha de creación (o «Fecha de creación no registrada»).
+- Fecha de última modificación (fecha real).
+- Qué hace (descripción concisa de la operación).
+- Para qué sirve (utilidad en el flujo escolar).
+- Por qué se creó (necesidad del diseño modular).
+- Parámetros que recibe (tipos y significado).
+- Resultado que devuelve (estructura, tipo y casos de error).
+- Dependencias relevantes (servicios, tablas u otras funciones).
+- Historial de modificaciones acumulativo (fecha, cambio, motivo, problema que resuelve y etapa relacionada).
+
+### 6.4. Historial Acumulativo de Modificaciones
+- Cada modificación funcional o documental debe registrarse en el historial de la función y del archivo.
+- No eliminar el historial previo.
+- Diferenciar expresamente entre una «Modificación funcional» y una «Modificación exclusivamente documental».
+- No modificar nombres técnicos, firmas, parámetros ni valores de retorno únicamente por motivos organizativos.
