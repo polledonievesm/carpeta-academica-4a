@@ -1395,6 +1395,10 @@
             <svg class="eval-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
             Panel de seguimiento
           </button>
+          <button class="eval-tab-btn" data-action="eval-switch-tab" data-tab="seleccion-actividades" role="tab" aria-selected="false">
+            <svg class="eval-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Selección de actividades
+          </button>
           <button class="eval-tab-btn" data-action="eval-switch-tab" data-tab="captura-grupal" role="tab" aria-selected="false">
             <svg class="eval-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Captura grupal
@@ -1499,6 +1503,169 @@
               </table>
             </div>
           </article>
+        </div>
+
+        <!-- Vista del Tab: Selección de actividades (Etapa 3) -->
+        <div id="evalTabSeleccionActividades" class="eval-tab-content hidden-tab">
+          <div class="eval-activities-container">
+            <!-- 1. Tarjetas de Resumen de Actividades -->
+            <div class="eval-stats-grid eval-activities-stats">
+              <div class="eval-stat-card">
+                <span class="eval-stat-label">Actividades disponibles</span>
+                <b id="evalStatActTotal" class="eval-stat-num">0</b>
+                <span id="evalStatActPeriodoLabel" class="eval-stat-sub">En el periodo escolar</span>
+              </div>
+              <div class="eval-stat-card">
+                <span class="eval-stat-label">Seleccionadas</span>
+                <b id="evalStatActSelected" class="eval-stat-num text-teal">0</b>
+                <span id="evalStatActSelectedPct" class="eval-stat-sub">0% del catálogo</span>
+              </div>
+              <div class="eval-stat-card">
+                <span class="eval-stat-label">Excluidas</span>
+                <b id="evalStatActExcluded" class="eval-stat-num text-muted">0</b>
+                <span class="eval-stat-sub">Conservadas en su origen</span>
+              </div>
+              <div class="eval-stat-card">
+                <span class="eval-stat-label">Pendientes de resolución</span>
+                <b id="evalStatActPending" class="eval-stat-num text-yellow">0</b>
+                <span class="eval-stat-sub">Entregas no resueltas</span>
+              </div>
+              <div class="eval-stat-card" style="grid-column: span 2;">
+                <span class="eval-stat-label">Selección por campo formativo</span>
+                <div class="eval-fields-summary-badges" id="evalFieldsSummaryBadges">
+                  <!-- Badges dinámicos de L, S, E, H -->
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Barra de Herramientas, Filtros y Ponderaciones -->
+            <article class="panel eval-activities-filter-panel">
+              <div class="section-head eval-table-head" style="margin-bottom: 12px;">
+                <div>
+                  <h2>Catálogo y ponderación de actividades</h2>
+                  <p class="muted">Filtra y selecciona las tareas y actividades que computarán en la evaluación trimestral.</p>
+                </div>
+                <div class="eval-weight-mode-controls">
+                  <span class="eval-weight-mode-label">Ponderación:</span>
+                  <div class="button-row" style="gap: 6px;">
+                    <button class="btn small primary" id="evalWeightModeUniformBtn" data-action="eval-set-weight-mode" data-mode="uniform" title="Todas las actividades seleccionadas tienen el mismo peso relativo">Valor uniforme</button>
+                    <button class="btn small" id="evalWeightModeCustomBtn" data-action="eval-set-weight-mode" data-mode="custom" title="Permite asignar diferente peso relativo a actividades clave">Valor personalizado</button>
+                    <button class="btn small" data-action="eval-reset-activity-weights" title="Restablecer todas las ponderaciones a 1.0">Restablecer</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Filtros de búsqueda -->
+              <div class="eval-activities-toolbar">
+                <input id="evalActivitySearch" class="input compact-input" placeholder="Buscar por nombre, tema o PDA...">
+                
+                <select id="evalActivityFieldFilter" class="input compact-input">
+                  <option value="">Todos los campos formativos</option>
+                  <option value="Lenguajes">Lenguajes</option>
+                  <option value="Saberes y Pensamiento Científico">Saberes y Pensamiento Científico</option>
+                  <option value="Ética, Naturaleza y Sociedades">Ética, Naturaleza y Sociedades</option>
+                  <option value="De lo Humano y lo Comunitario">De lo Humano y lo Comunitario</option>
+                </select>
+
+                <select id="evalActivityTypeFilter" class="input compact-input">
+                  <option value="">Todos los tipos</option>
+                  <option value="TAREA">Tareas</option>
+                  <option value="ACTIVIDAD">Actividades en clase</option>
+                  <option value="PROYECTO">Proyectos</option>
+                  <option value="INSTRUMENTO">Instrumentos</option>
+                </select>
+
+                <select id="evalActivityStatusFilter" class="input compact-input">
+                  <option value="all">Todas las actividades</option>
+                  <option value="selected">Solo seleccionadas</option>
+                  <option value="excluded">Solo excluidas</option>
+                </select>
+
+                <div class="button-row" style="gap: 6px; margin-left: auto;">
+                  <button class="btn small" data-action="eval-select-all-visible" title="Seleccionar todas las actividades visibles según los filtros">Seleccionar visibles</button>
+                  <button class="btn small" data-action="eval-deselect-all-visible" title="Deseleccionar todas las actividades visibles">Deseleccionar visibles</button>
+                </div>
+              </div>
+            </article>
+
+            <!-- 3. Tabla de Selección de Actividades -->
+            <article class="panel eval-activities-table-panel">
+              <div class="table-wrap">
+                <table class="eval-tracking-table eval-activities-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 38px; text-align: center;">
+                        <input type="checkbox" id="evalSelectAllVisibleCheckbox" data-action="eval-toggle-all-visible" title="Seleccionar / deseleccionar visibles">
+                      </th>
+                      <th style="width: 95px;">Fecha</th>
+                      <th>Actividad</th>
+                      <th>Campo formativo</th>
+                      <th>Tipo</th>
+                      <th>Cobertura alumnos</th>
+                      <th>Pendientes</th>
+                      <th style="width: 105px; text-align: center;">Ponderación</th>
+                      <th style="width: 110px; text-align: right;">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody id="evalActivitiesTableBody">
+                    <!-- Filas dinámicas generadas por renderActivitiesTable() -->
+                  </tbody>
+                </table>
+              </div>
+            </article>
+
+            <!-- 4. Paneles de Revisión de Conducta, Participación y Asistencia -->
+            <div class="eval-secondary-records-grid">
+              <!-- Panel de Conducta -->
+              <article class="panel eval-secondary-record-card">
+                <div class="section-head" style="margin-bottom: 8px;">
+                  <h3>⭐ Registros de conducta</h3>
+                  <span id="evalConductCountBadge" class="badge">0 registros</span>
+                </div>
+                <p class="muted" style="margin-bottom: 12px; font-size: 12px;">Registros del periodo calculados sobre los valores aprobados (Excelente 100%, Adecuada 80%, Requiere apoyo 60%). Las ausencias no se consideran mala conducta.</p>
+                <div class="eval-record-summary-row" id="evalConductSummary">
+                  <!-- Resumen dinámico -->
+                </div>
+              </article>
+
+              <!-- Panel de Participación -->
+              <article class="panel eval-secondary-record-card">
+                <div class="section-head" style="margin-bottom: 8px;">
+                  <h3>🙋 Registros de participación</h3>
+                  <span id="evalPartCountBadge" class="badge">0 registros</span>
+                </div>
+                <p class="muted" style="margin-bottom: 12px; font-size: 12px;">Registros del periodo (Alta 100%, Media 75%, Nula 0%). Se diferencia estrictamente la participación nula de la ausencia o falta de registro.</p>
+                <div class="eval-record-summary-row" id="evalPartSummary">
+                  <!-- Resumen dinámico -->
+                </div>
+              </article>
+
+              <!-- Panel de Asistencia y Puntualidad -->
+              <article class="panel eval-secondary-record-card">
+                <div class="section-head" style="margin-bottom: 8px;">
+                  <h3>🕒 Asistencia y puntualidad</h3>
+                  <span id="evalAttendanceWeightNotice" class="badge">0% en criterios</span>
+                </div>
+                <p class="muted" style="margin-bottom: 12px; font-size: 12px;">Integración de solo lectura desde Pase de lista. Solo se computa si los criterios de Asistencia o Puntualidad tienen un porcentaje superior al 0%.</p>
+                <div class="eval-record-summary-row" id="evalAttendanceSummary">
+                  <!-- Resumen dinámico -->
+                </div>
+              </article>
+            </div>
+
+            <!-- 5. Barra de Acciones de Guardado de Selección -->
+            <div class="eval-config-actions-bar">
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <span id="evalActUnsavedNotice" class="eval-unsaved-badge" style="display: none;">● Selección modificada sin guardar</span>
+                <span id="evalActPersistStatus" class="muted" style="font-size: 13px;">✓ Selección guardada para este trimestre</span>
+              </div>
+              <div class="button-row">
+                <button class="btn" data-action="eval-restore-saved-activities" title="Descartar cambios y recargar la última selección confirmada">Descartar cambios</button>
+                <button class="btn" data-action="eval-save-activities-draft" title="Guardar borrador local en este dispositivo">Guardar borrador</button>
+                <button class="btn primary" id="evalBtnSaveActivities" data-action="eval-save-activities-selection">Confirmar selección de actividades</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Placeholders de sub-pestañas para etapas posteriores -->

@@ -896,6 +896,177 @@
 .eval-criteria-toggle-btn,
 .eval-trimester-btn,
 .eval-tab-btn,
-.eval-config-actions-bar .btn {
+.eval-config-actions-bar .btn,
+.eval-activities-filter-panel .btn,
+.eval-activities-toolbar .btn,
+.eval-activities-container .btn {
   min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   ETAPA 3: SELECCIÓN DE ACTIVIDADES Y RECUPERACIÓN DE REGISTROS
+   ========================================================================== */
+
+.eval-activities-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.eval-fields-summary-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.eval-field-summary-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #f1f5f8;
+  color: var(--navy);
+  border: 1px solid var(--line);
+}
+
+.eval-field-summary-pill b {
+  color: var(--teal);
+  margin-left: 3px;
+}
+
+.eval-activities-filter-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.eval-weight-mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.eval-weight-mode-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.eval-activities-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.eval-activities-table-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.eval-activities-table th {
+  font-size: 11px;
+  padding: 10px 12px;
+}
+
+.eval-activities-table td {
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.eval-activity-title {
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 2px;
+}
+
+.eval-activity-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.eval-activity-weight-input {
+  width: 65px;
+  text-align: center;
+  font-weight: 800;
+  padding: 6px 4px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.eval-activity-weight-input:disabled {
+  background: #f4f8fb;
+  color: var(--muted);
+}
+
+.eval-secondary-records-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.eval-secondary-record-card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.eval-secondary-record-card h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.eval-record-summary-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.eval-record-stat-box {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  flex: 1;
+  min-width: 80px;
+  text-align: center;
+}
+
+.eval-record-stat-box span {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.eval-record-stat-box b {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--navy);
+  margin-top: 2px;
+}
+
+@media (max-width: 1024px) {
+  .eval-secondary-records-grid {
+    grid-template-columns: 1fr;
+  }
 }

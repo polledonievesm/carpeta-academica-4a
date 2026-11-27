@@ -2,6 +2,7 @@
    MÓDULO DE VISTA: EVALUACIONES TRIMESTRALES
    ETAPA 1: Estructura, navegación modular y panel de seguimiento
    ETAPA 2: Almacenamiento, configuración de periodos, criterios y valores
+   ETAPA 3: Recuperación y selección de registros académicos (actividades, conducta, participación, asistencia)
    ========================================================================== */
 
 (function () {
@@ -11,7 +12,9 @@
   const STORAGE_KEYS = {
     config: 'carpeta_eval_config_v2',
     draft: 'carpeta_eval_draft_v2',
-    evals: 'carpeta_eval_records_v2'
+    evals: 'carpeta_eval_records_v2',
+    activitySelection: 'carpeta_eval_act_selection_v3',
+    activityDraft: 'carpeta_eval_act_draft_v3'
   };
 
   // Catálogo de criterios de evaluación institucionales con su propuesta inicial
@@ -65,16 +68,29 @@
     };
   }
 
+  // Actividades académicas de pruebas (desactivadas) (utilizadas si aún no hay conexión con Sheets)
+  const CANONICAL_ACTIVITIES_4A = [];
+
   // Estado local en memoria de la vista
   const evalState = {
     trimester: 1, // Trimestre actualmente seleccionado en la vista
-    activeTab: 'seguimiento', // 'seguimiento' | 'captura-grupal' | 'captura-individual' | 'criterios'
-    configTrimesterTab: 1, // Trimestre cuyos porcentajes se editan en la pestaña Criterios
+    activeTab: 'seguimiento', // 'seguimiento' | 'seleccion-actividades' | 'captura-grupal' | 'captura-individual' | 'criterios'
+    configTrimesterTab: 1, // Trimestre de trabajo en Criterios
     searchQuery: '',
     statusFilter: '',
     config: loadConfig(),
     hasUnsavedChanges: false,
-    evaluations: loadEvaluationsStore()
+    evaluations: loadEvaluationsStore(),
+
+    // Estado específico de la Etapa 3 (Selección de actividades)
+    activityFilters: {
+      search: '',
+      field: '',
+      type: '',
+      status: 'all' // 'all' | 'selected' | 'excluded'
+    },
+    activitySelections: loadActivitySelections(),
+    hasUnsavedActivityChanges: false
   };
 
   /**
@@ -131,7 +147,6 @@
       const raw = localStorage.getItem(STORAGE_KEYS.config);
       if (raw) {
         const parsed = JSON.parse(raw);
-        // Mezclar con valores por defecto para asegurar integridad de claves
         return Object.assign(createDefaultConfig(), parsed);
       }
     } catch (err) {
@@ -151,9 +166,136 @@
     return {};
   }
 
+  /**
+   * Carga la selección de actividades guardada por trimestre
+   */
+  function loadActivitySelections() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.activitySelection);
+      if (raw) return JSON.parse(raw) || {};
+    } catch (e) {}
+    return {};
+  }
+
+  /**
+   * Obtiene la clave de identificación única para la selección del trimestre actual
+   */
+  function getTrimesterKey(trimester = evalState.trimester) {
+    const ciclo = evalState.config?.cicloEscolar || '2026-2027';
+    const grupo = evalState.config?.grupo || '4.° A';
+    return `${ciclo}_${grupo}_T${trimester}`;
+  }
+
+  /**
+   * Obtiene la estructura de selección para el trimestre actual
+   */
+  function getCurrentActivitySelection(trimester = evalState.trimester) {
+    const key = getTrimesterKey(trimester);
+    if (!evalState.activitySelections[key]) {
+      // Inicializar seleccionando todas las actividades del trimestre con peso 1.0 por defecto
+      const actsInPeriod = getRawActivities().classes.filter(a => isActivityInPeriod(a, trimester));
+      evalState.activitySelections[key] = {
+        weightMode: 'uniform', // 'uniform' | 'custom'
+        selectedIds: actsInPeriod.map(a => String(a.id)),
+        customWeights: {},
+        updatedAt: new Date().toISOString()
+      };
+    }
+    return evalState.activitySelections[key];
+  }
+
   // Registrar título de vista en el diccionario global si existe
   if (typeof VIEW_TITLES !== 'undefined') {
     VIEW_TITLES['evaluaciones-trimestrales'] = 'Evaluaciones Trimestrales';
+  }
+
+  /**
+   * Recupera todas las actividades y clases existentes evitando duplicados
+   * @returns {{ classes: Array, evaluations: Array }}
+   */
+  function getRawActivities() {
+    const gs = (typeof getGlobalState === 'function')
+      ? getGlobalState()
+      : (typeof state !== 'undefined' ? state : {});
+
+    let classes = gs.classes || gs.activities || window.dailyState?.activities || [];
+    let evaluations = gs.evaluations || [];
+
+    // Si aún no hay clases en memoria desde Sheets, usar catálogo canónico de 4.° A
+    if (!Array.isArray(classes) || classes.length === 0) {
+      classes = CANONICAL_ACTIVITIES_4A;
+    }
+
+    // Desduplicar estrictamente por id único
+    const seen = new Set();
+    const uniqueClasses = [];
+    classes.forEach(c => {
+      const sId = String(c.id);
+      if (!seen.has(sId)) {
+        seen.add(sId);
+        uniqueClasses.push(c);
+      }
+    });
+
+    return { classes: uniqueClasses, evaluations: evaluations || [] };
+  }
+
+  /**
+   * Comprueba si una actividad pertenece al rango de fechas del trimestre indicado
+   */
+  function isActivityInPeriod(act, trimester = evalState.trimester) {
+    const p = evalState.config?.periodos?.[trimester];
+    if (!p || !p.inicio || !p.fin || !act.fecha) return true;
+    return act.fecha >= p.inicio && act.fecha <= p.fin;
+  }
+
+  /**
+   * Resuelve el número de lista oficial del alumno evitando índices artificiales
+   * @param {Object} student 
+   * @returns {number|string}
+   */
+  function resolveOfficialListNumber(student) {
+    if (!student) return '—';
+    if (typeof window.getStudentOfficialNumber === 'function') {
+      const official = window.getStudentOfficialNumber(student);
+      if (official !== null && official !== undefined && official > 0) return official;
+    }
+    const raw = student.numeroLista ?? student.numero;
+    if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
+      const parsed = parseInt(String(raw).trim(), 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    if (typeof state !== 'undefined' && state.directory && Array.isArray(state.directory.rows)) {
+      const row = state.directory.rows.find(r => String(r.student?.id) === String(student.id));
+      if (row?.student?.numeroLista) {
+        const parsed = parseInt(String(row.student.numeroLista).trim(), 10);
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+    }
+    return '—';
+  }
+
+  /**
+   * Obtiene y ordena a los alumnos activos por su número oficial de lista
+   */
+  function getStudentsList() {
+    const raw = (typeof state !== 'undefined' && Array.isArray(state.students)) ? state.students : [];
+    const active = raw.filter(s => s.baja !== true && s.activo !== false);
+
+    return active.slice().sort((a, b) => {
+      const numA = resolveOfficialListNumber(a);
+      const numB = resolveOfficialListNumber(b);
+
+      if (typeof numA === 'number' && typeof numB === 'number') {
+        return numA - numB;
+      }
+      if (typeof numA === 'number') return -1;
+      if (typeof numB === 'number') return 1;
+
+      const nameA = String(typeof fullName === 'function' ? fullName(a) : (a.nombreCompleto || a.nombres || '')).trim();
+      const nameB = String(typeof fullName === 'function' ? fullName(b) : (b.nombreCompleto || b.nombres || '')).trim();
+      return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+    });
   }
 
   /**
@@ -163,24 +305,21 @@
     const view = document.getElementById('evaluaciones-trimestrales');
     if (!view) return;
 
-    // Asegurar título en la barra superior si la vista está activa
     const title = document.getElementById('currentViewTitle');
     if (title && view.classList.contains('active')) {
       title.textContent = 'Evaluaciones Trimestrales';
     }
 
-    // Configurar listeners si aún no se han asignado
     bindEventsOnce();
 
-    // Actualizar trimestre detectado si está en modo automático
     const currentActual = determineCurrentTrimester();
     if (!evalState.trimester) {
       evalState.trimester = currentActual;
     }
 
-    // Renderizar componentes
     renderTrimesterSelector();
     renderTrackingPanel();
+    renderActivitiesTab();
     renderConfigTab();
   }
 
@@ -191,55 +330,78 @@
   function bindEventsOnce() {
     if (_eventsBound) return;
 
+    // Búsqueda y filtro de seguimiento de alumnos
     const searchInput = document.getElementById('evalStudentSearch');
     const statusSelect = document.getElementById('evalStatusFilter');
 
-    if (searchInput) {
-      searchInput.addEventListener('input', e => {
-        evalState.searchQuery = (e.target.value || '').trim().toLowerCase();
-        renderTrackingTable();
-      });
-    }
+    searchInput?.addEventListener('input', e => {
+      evalState.searchQuery = (e.target.value || '').trim().toLowerCase();
+      renderTrackingTable();
+    });
 
-    if (statusSelect) {
-      statusSelect.addEventListener('change', e => {
-        evalState.statusFilter = e.target.value || '';
-        renderTrackingTable();
-      });
-    }
+    statusSelect?.addEventListener('change', e => {
+      evalState.statusFilter = e.target.value || '';
+      renderTrackingTable();
+    });
 
-    // Escuchadores de la pestaña Criterios y Periodos
+    // Filtros de Selección de Actividades
+    const actSearch = document.getElementById('evalActivitySearch');
+    const actField = document.getElementById('evalActivityFieldFilter');
+    const actType = document.getElementById('evalActivityTypeFilter');
+    const actStatus = document.getElementById('evalActivityStatusFilter');
+
+    actSearch?.addEventListener('input', e => {
+      evalState.activityFilters.search = (e.target.value || '').trim().toLowerCase();
+      renderActivitiesTable();
+    });
+
+    actField?.addEventListener('change', e => {
+      evalState.activityFilters.field = e.target.value || '';
+      renderActivitiesTable();
+    });
+
+    actType?.addEventListener('change', e => {
+      evalState.activityFilters.type = e.target.value || '';
+      renderActivitiesTable();
+    });
+
+    actStatus?.addEventListener('change', e => {
+      evalState.activityFilters.status = e.target.value || 'all';
+      renderActivitiesTable();
+    });
+
+    // Checkbox seleccionar todos los visibles en tabla de actividades
+    const selectAllVisibleCb = document.getElementById('evalSelectAllVisibleCheckbox');
+    selectAllVisibleCb?.addEventListener('change', e => {
+      toggleAllVisibleActivities(e.target.checked);
+    });
+
+    // Criterios y Periodos
     const criteriaTrimesterSelect = document.getElementById('evalCriteriaTrimesterSelect');
-    if (criteriaTrimesterSelect) {
-      criteriaTrimesterSelect.addEventListener('change', e => {
-        evalState.configTrimesterTab = Number(e.target.value) || 1;
-        renderCriteriaInputs();
-        updateCriteriaSumDisplay();
-      });
-    }
+    criteriaTrimesterSelect?.addEventListener('change', e => {
+      evalState.configTrimesterTab = Number(e.target.value) || 1;
+      renderCriteriaInputs();
+      updateCriteriaSumDisplay();
+    });
 
     const periodModeSelect = document.getElementById('evalPeriodModeSelect');
     const manualChoiceSelect = document.getElementById('evalManualTrimesterChoice');
-    if (periodModeSelect) {
-      periodModeSelect.addEventListener('change', e => {
-        const isManual = e.target.value === 'manual';
-        const overrideRow = document.getElementById('evalManualOverrideRow');
-        if (overrideRow) overrideRow.style.display = isManual ? 'flex' : 'none';
-        evalState.config.modoPeriodo = isManual ? 'manual' : 'auto';
-        markUnsavedChanges();
-        validatePeriods();
-      });
-    }
+    periodModeSelect?.addEventListener('change', e => {
+      const isManual = e.target.value === 'manual';
+      const overrideRow = document.getElementById('evalManualOverrideRow');
+      if (overrideRow) overrideRow.style.display = isManual ? 'flex' : 'none';
+      evalState.config.modoPeriodo = isManual ? 'manual' : 'auto';
+      markUnsavedChanges();
+      validatePeriods();
+    });
 
-    if (manualChoiceSelect) {
-      manualChoiceSelect.addEventListener('change', e => {
-        evalState.config.ajusteManualTrimester = Number(e.target.value) || 1;
-        markUnsavedChanges();
-        renderTrimesterSelector();
-      });
-    }
+    manualChoiceSelect?.addEventListener('change', e => {
+      evalState.config.ajusteManualTrimester = Number(e.target.value) || 1;
+      markUnsavedChanges();
+      renderTrimesterSelector();
+    });
 
-    // Escuchar cambios en campos de fechas y estados de periodos
+    // Escuchar fechas de periodos
     [1, 2, 3].forEach(t => {
       const startInput = document.getElementById(`evalDateStart${t}`);
       const endInput = document.getElementById(`evalDateEnd${t}`);
@@ -264,14 +426,14 @@
       });
     });
 
-    // Escuchar cambios en ciclo escolar
+    // Ciclo escolar
     const cicloInput = document.getElementById('evalCfgCiclo');
     cicloInput?.addEventListener('input', () => {
       evalState.config.cicloEscolar = cicloInput.value.trim();
       markUnsavedChanges();
     });
 
-    // Escuchar cambios en valores de tareas, conducta y participación
+    // Valores de tareas, conducta y participación
     const bindValInput = (id, objPath, key) => {
       const el = document.getElementById(id);
       el?.addEventListener('input', () => {
@@ -296,26 +458,31 @@
     bindValInput('evalValPartMedia', 'valoresParticipacion', 'media');
     bindValInput('evalValPartNula', 'valoresParticipacion', 'nula');
 
-    // Advertencia de navegación con cambios sin guardar
+    // Advertencia de navegación
     window.addEventListener('beforeunload', e => {
-      if (evalState.hasUnsavedChanges) {
+      if (evalState.hasUnsavedChanges || evalState.hasUnsavedActivityChanges) {
         e.preventDefault();
-        e.returnValue = 'Tienes cambios de configuración sin guardar en Evaluaciones Trimestrales.';
+        e.returnValue = 'Tienes cambios sin guardar en Evaluaciones Trimestrales.';
       }
     });
 
     _eventsBound = true;
   }
 
-  /**
-   * Marca que hay cambios pendientes de guardar
-   */
   function markUnsavedChanges() {
     evalState.hasUnsavedChanges = true;
     const badge = document.getElementById('evalUnsavedNotice');
     if (badge) badge.style.display = 'inline-flex';
     const status = document.getElementById('evalPersistStatus');
     if (status) status.textContent = 'Borrador modificado localmente';
+  }
+
+  function markUnsavedActivityChanges() {
+    evalState.hasUnsavedActivityChanges = true;
+    const badge = document.getElementById('evalActUnsavedNotice');
+    if (badge) badge.style.display = 'inline-flex';
+    const status = document.getElementById('evalActPersistStatus');
+    if (status) status.textContent = 'Selección modificada sin guardar';
   }
 
   /**
@@ -329,9 +496,10 @@
     evalState.trimester = num;
     renderTrimesterSelector();
     renderTrackingPanel();
+    renderActivitiesTab();
 
     if (typeof toast === 'function') {
-      toast(`Mostrando registros de ${evalState.config.periodos[num].nombre}.`);
+      toast(`Mostrando registros del ${evalState.config.periodos[num].nombre}.`);
     }
   }
 
@@ -340,26 +508,27 @@
    * @param {string} tabId 
    */
   function switchEvalTab(tabId) {
-    const validTabs = ['seguimiento', 'captura-grupal', 'captura-individual', 'criterios'];
+    const validTabs = ['seguimiento', 'seleccion-actividades', 'captura-grupal', 'captura-individual', 'criterios'];
     const targetTab = validTabs.includes(tabId) ? tabId : 'seguimiento';
 
-    // Si tiene cambios sin guardar y se cambia de tab, guardar borrador automático
     if (evalState.hasUnsavedChanges && evalState.activeTab === 'criterios' && targetTab !== 'criterios') {
       saveConfigDraftSilently();
+    }
+    if (evalState.hasUnsavedActivityChanges && evalState.activeTab === 'seleccion-actividades' && targetTab !== 'seleccion-actividades') {
+      saveActivityDraftSilently();
     }
 
     evalState.activeTab = targetTab;
 
-    // Actualizar botones de pestañas
     document.querySelectorAll('.eval-tab-btn').forEach(btn => {
       const isCurrent = btn.dataset.tab === targetTab;
       btn.classList.toggle('active', isCurrent);
       btn.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
     });
 
-    // Actualizar paneles de contenido
     const tabContents = {
       'seguimiento': document.getElementById('evalTabSeguimiento'),
+      'seleccion-actividades': document.getElementById('evalTabSeleccionActividades'),
       'captura-grupal': document.getElementById('evalTabCapturaGrupal'),
       'captura-individual': document.getElementById('evalTabCapturaIndividual'),
       'criterios': document.getElementById('evalTabCriterios')
@@ -372,16 +541,15 @@
       el.classList.toggle('hidden-tab', !isVisible);
     });
 
-    if (targetTab === 'criterios') {
+    if (targetTab === 'seleccion-actividades') {
+      renderActivitiesTab();
+    } else if (targetTab === 'criterios') {
       renderConfigTab();
     } else if (targetTab === 'seguimiento') {
       renderTrackingPanel();
     }
   }
 
-  /**
-   * Renderiza el selector de trimestres en la cabecera del módulo
-   */
   function renderTrimesterSelector() {
     const cfg = evalState.config;
     const currentActual = determineCurrentTrimester(cfg);
@@ -418,7 +586,6 @@
         : 'Trimestre escolar actual';
     }
 
-    // Actualizar los 3 botones de trimestre en la cabecera
     [1, 2, 3].forEach(t => {
       const btn = document.querySelector(`.eval-trimester-btn[data-trimester="${t}"]`);
       if (!btn) return;
@@ -440,69 +607,11 @@
     });
   }
 
-  /**
-   * Resuelve el número de lista oficial del alumno evitando índices artificiales
-   * @param {Object} student 
-   * @returns {number|string}
-   */
-  function resolveOfficialListNumber(student) {
-    if (!student) return '—';
-    // 1. Usar función institucional existente si está disponible
-    if (typeof window.getStudentOfficialNumber === 'function') {
-      const official = window.getStudentOfficialNumber(student);
-      if (official !== null && official !== undefined && official > 0) return official;
-    }
-    // 2. Propiedad canónica en el alumno
-    const raw = student.numeroLista ?? student.numero;
-    if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
-      const parsed = parseInt(String(raw).trim(), 10);
-      if (!isNaN(parsed) && parsed > 0) return parsed;
-    }
-    // 3. Consulta en directorio si existe
-    if (typeof state !== 'undefined' && state.directory && Array.isArray(state.directory.rows)) {
-      const row = state.directory.rows.find(r => String(r.student?.id) === String(student.id));
-      if (row?.student?.numeroLista) {
-        const parsed = parseInt(String(row.student.numeroLista).trim(), 10);
-        if (!isNaN(parsed) && parsed > 0) return parsed;
-      }
-    }
-    return '—';
-  }
-
-  /**
-   * Obtiene y ordena a los alumnos activos por su número oficial de lista
-   */
-  function getStudentsList() {
-    const raw = (typeof state !== 'undefined' && Array.isArray(state.students)) ? state.students : [];
-    const active = raw.filter(s => s.baja !== true && s.activo !== false);
-
-    return active.slice().sort((a, b) => {
-      const numA = resolveOfficialListNumber(a);
-      const numB = resolveOfficialListNumber(b);
-
-      if (typeof numA === 'number' && typeof numB === 'number') {
-        return numA - numB;
-      }
-      if (typeof numA === 'number') return -1;
-      if (typeof numB === 'number') return 1;
-
-      const nameA = String(typeof fullName === 'function' ? fullName(a) : (a.nombreCompleto || a.nombres || '')).trim();
-      const nameB = String(typeof fullName === 'function' ? fullName(b) : (b.nombreCompleto || b.nombres || '')).trim();
-      return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
-    });
-  }
-
-  /**
-   * Renderiza el panel de seguimiento grupal
-   */
   function renderTrackingPanel() {
     updateTrackingStats();
     renderTrackingTable();
   }
 
-  /**
-   * Calcula y actualiza las tarjetas de KPIs
-   */
   function updateTrackingStats() {
     const students = getStudentsList();
     const total = students.length;
@@ -518,7 +627,6 @@
     const grupo = evalState.config.grupo;
 
     students.forEach(s => {
-      // Clave única oficial: ciclo_grupo_T{trimestre}_{alumnoId}
       const evalKey = `${ciclo}_${grupo}_T${t}_${s.id}`;
       const ev = evalState.evaluations[evalKey];
       if (ev) {
@@ -556,14 +664,9 @@
 
     setTxt('evalProgressText', `${pct}%`);
     const progressFill = document.getElementById('evalProgressBarFill');
-    if (progressFill) {
-      progressFill.style.width = `${pct}%`;
-    }
+    if (progressFill) progressFill.style.width = `${pct}%`;
   }
 
-  /**
-   * Renderiza las filas de la tabla de seguimiento grupal
-   */
   function renderTrackingTable() {
     const tbody = document.getElementById('evalStudentsTableBody');
     if (!tbody) return;
@@ -675,16 +778,486 @@
   }
 
   // ==========================================================================
-  // LÓGICA DE LA PESTAÑA CRITERIOS Y PERIODOS (ETAPA 2)
+  // ETAPA 3: GESTIÓN Y SELECCIÓN DE ACTIVIDADES
   // ==========================================================================
 
   /**
-   * Renderiza el formulario completo de Criterios y Periodos
+   * Renderiza el apartado completo de Selección de actividades
    */
+  function renderActivitiesTab() {
+    renderActivityStats();
+    renderActivitiesTable();
+    renderSecondaryRecords();
+  }
+
+  /**
+   * Obtiene la lista filtrada de actividades para la tabla
+   */
+  function getFilteredActivities() {
+    const raw = getRawActivities();
+    const t = evalState.trimester;
+    const sel = getCurrentActivitySelection(t);
+    const f = evalState.activityFilters;
+
+    return raw.classes.filter(a => {
+      // 1. Filtrar por pertenencia al periodo del trimestre actual
+      if (!isActivityInPeriod(a, t)) return false;
+
+      // 2. Filtro de búsqueda por texto
+      if (f.search) {
+        const textToSearch = [
+          a.actividad, a.materia, a.material, a.pdaTema, a.proyecto, a.tipoActividad
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!textToSearch.includes(f.search)) return false;
+      }
+
+      // 3. Filtro por campo formativo
+      if (f.field && a.materia !== f.field) return false;
+
+      // 4. Filtro por tipo de actividad
+      if (f.type && a.tipoActividad !== f.type) return false;
+
+      // 5. Filtro por estado de selección (all / selected / excluded)
+      const isSelected = sel.selectedIds.includes(String(a.id));
+      if (f.status === 'selected' && !isSelected) return false;
+      if (f.status === 'excluded' && isSelected) return false;
+
+      return true;
+    });
+  }
+
+  /**
+   * Actualiza las tarjetas superiores de resumen de actividades
+   */
+  function renderActivityStats() {
+    const raw = getRawActivities();
+    const t = evalState.trimester;
+    const sel = getCurrentActivitySelection(t);
+    const activitiesInPeriod = raw.classes.filter(a => isActivityInPeriod(a, t));
+
+    const totalInPeriod = activitiesInPeriod.length;
+    const selectedCount = activitiesInPeriod.filter(a => sel.selectedIds.includes(String(a.id))).length;
+    const excludedCount = totalInPeriod - selectedCount;
+
+    // Calcular actividades con entregas pendientes de resolución
+    const evals = raw.evaluations;
+    let pendingCount = 0;
+    activitiesInPeriod.forEach(a => {
+      const relatedEvals = evals.filter(ev => String(ev.claseId) === String(a.id));
+      const hasPending = relatedEvals.some(ev => ev.trabajo === 'Pendiente' || ev.estadoEntrega === 'Pendiente');
+      if (hasPending) pendingCount++;
+    });
+
+    const pct = totalInPeriod > 0 ? Math.round((selectedCount / totalInPeriod) * 100) : 0;
+
+    const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+    setTxt('evalStatActTotal', totalInPeriod);
+    setTxt('evalStatActSelected', selectedCount);
+    setTxt('evalStatActSelectedPct', `${pct}% del catálogo`);
+    setTxt('evalStatActExcluded', excludedCount);
+    setTxt('evalStatActPending', pendingCount);
+
+    const periodoLabel = document.getElementById('evalStatActPeriodoLabel');
+    if (periodoLabel) {
+      const p = evalState.config?.periodos?.[t];
+      periodoLabel.textContent = p ? `${p.nombre}` : 'En el periodo escolar';
+    }
+
+    // Contadores de actividades seleccionadas por campo formativo
+    const fieldsContainer = document.getElementById('evalFieldsSummaryBadges');
+    if (fieldsContainer) {
+      const fieldsMap = {
+        'Lenguajes': 0,
+        'Saberes y Pensamiento Científico': 0,
+        'Ética, Naturaleza y Sociedades': 0,
+        'De lo Humano y lo Comunitario': 0
+      };
+
+      activitiesInPeriod.forEach(a => {
+        if (sel.selectedIds.includes(String(a.id))) {
+          if (fieldsMap[a.materia] !== undefined) fieldsMap[a.materia]++;
+          else fieldsMap['Lenguajes']++;
+        }
+      });
+
+      fieldsContainer.innerHTML = Object.entries(fieldsMap).map(([fieldName, count]) => {
+        const shortName = fieldName.split(' ')[0];
+        return `
+          <span class="eval-field-summary-pill" title="${fieldName}: ${count} seleccionadas">
+            ${shortName}: <b>${count}</b>
+          </span>
+        `;
+      }).join('');
+    }
+
+    // Actualizar botones de modo de ponderación
+    const isUniform = (sel.weightMode || 'uniform') === 'uniform';
+    document.getElementById('evalWeightModeUniformBtn')?.classList.toggle('primary', isUniform);
+    document.getElementById('evalWeightModeCustomBtn')?.classList.toggle('primary', !isUniform);
+  }
+
+  /**
+   * Renderiza la tabla de selección de actividades
+   */
+  function renderActivitiesTable() {
+    const tbody = document.getElementById('evalActivitiesTableBody');
+    if (!tbody) return;
+
+    const filtered = getFilteredActivities();
+    const t = evalState.trimester;
+    const sel = getCurrentActivitySelection(t);
+    const raw = getRawActivities();
+    const students = getStudentsList();
+    const totalStudents = students.length;
+    const isUniform = (sel.weightMode || 'uniform') === 'uniform';
+
+    if (!filtered.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="9" style="text-align: center; padding: 36px; color: var(--muted);">
+            No se encontraron actividades que coincidan con los filtros en este periodo.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(act => {
+      const actId = String(act.id);
+      const isSelected = sel.selectedIds.includes(actId);
+      const weightVal = sel.customWeights?.[actId] !== undefined ? sel.customWeights[actId] : 1.0;
+
+      // Calcular cobertura de alumnos y registros pendientes en esta actividad
+      const evals = raw.evaluations.filter(ev => String(ev.claseId) === actId);
+      const deliveredCount = evals.filter(ev => ev.trabajo && ev.trabajo !== 'Pendiente' && ev.trabajo !== 'Sin registro').length;
+      const pendingCount = evals.filter(ev => ev.trabajo === 'Pendiente' || ev.estadoEntrega === 'Pendiente').length;
+      const absentCount = evals.filter(ev => ev.trabajo === 'Falta' || ev.ausente === true).length;
+      const unrecordedCount = Math.max(0, totalStudents - deliveredCount - absentCount - pendingCount);
+
+      return `
+        <tr data-activity-id="${actId}" class="${isSelected ? 'activity-selected' : 'activity-excluded'}">
+          <td style="text-align: center;">
+            <input type="checkbox" class="eval-act-checkbox" 
+                   data-action="eval-toggle-activity" data-id="${actId}" 
+                   ${isSelected ? 'checked' : ''} 
+                   title="${isSelected ? 'Deseleccionar actividad' : 'Seleccionar actividad'}">
+          </td>
+          <td style="font-size: 12px; color: var(--muted); white-space: nowrap;">
+            ${act.fecha || '—'}
+          </td>
+          <td>
+            <div class="eval-activity-title">${typeof escapeHtml === 'function' ? escapeHtml(act.actividad || act.nombre || 'Actividad') : (act.actividad || 'Actividad')}</div>
+            <div class="eval-activity-meta">${act.pdaTema ? 'PDA: ' + escapeHtml(act.pdaTema) : (act.material ? 'Material: ' + escapeHtml(act.material) : 'ID: ' + actId)}</div>
+          </td>
+          <td>
+            <span class="badge" style="font-size: 11px; background: #eef8f8; color: var(--teal);">
+              ${act.materia || 'Lenguajes'}
+            </span>
+          </td>
+          <td>
+            <span class="badge" style="font-size: 11px; background: #f4f8fb; color: var(--navy); border: 1px solid var(--line);">
+              ${act.tipoActividad || 'ACTIVIDAD'}
+            </span>
+          </td>
+          <td style="font-size: 12px;">
+            <span title="Entregadas / Con registro" style="color: #1b7c4b; font-weight: 700;">✓ ${deliveredCount}</span>
+            <span class="muted" title="Sin registros previos"> · ${unrecordedCount} sin reg.</span>
+          </td>
+          <td>
+            ${pendingCount > 0 
+              ? `<span class="badge" style="background: #fff8e6; color: #a46d00; font-size: 11px;">⚠️ ${pendingCount} pendiente(s)</span>`
+              : `<span class="muted" style="font-size: 12px;">✓ Resueltas</span>`
+            }
+          </td>
+          <td style="text-align: center;">
+            <input type="number" step="0.1" min="0.1" max="10" 
+                   class="input eval-activity-weight-input" 
+                   data-act-weight-id="${actId}" 
+                   value="${weightVal}" 
+                   ${isUniform ? 'disabled title="Modo uniforme activo (peso 1.0)"' : 'title="Ponderación individual"'}>
+          </td>
+          <td style="text-align: right;">
+            <span class="eval-status-pill ${isSelected ? 'status-completed' : 'status-pending'}" style="font-size: 11px; padding: 2px 7px;">
+              ${isSelected ? 'Seleccionada' : 'Excluida'}
+            </span>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Escuchar cambios en los inputs de ponderación individual
+    tbody.querySelectorAll('[data-act-weight-id]').forEach(input => {
+      input.addEventListener('change', e => {
+        const id = e.target.dataset.actWeightId;
+        const val = Math.max(0.1, Math.min(10, Number(e.target.value) || 1.0));
+        sel.customWeights[id] = val;
+        markUnsavedActivityChanges();
+      });
+    });
+
+    // Actualizar estado del checkbox principal de selección visible
+    const selectAllCb = document.getElementById('evalSelectAllVisibleCheckbox');
+    if (selectAllCb) {
+      const allChecked = filtered.length > 0 && filtered.every(a => sel.selectedIds.includes(String(a.id)));
+      selectAllCb.checked = allChecked;
+    }
+  }
+
+  /**
+   * Renderiza el resumen de los registros de Conducta, Participación y Asistencia del periodo
+   */
+  function renderSecondaryRecords() {
+    const raw = getRawActivities();
+    const t = evalState.trimester;
+    const activitiesInPeriod = raw.classes.filter(a => isActivityInPeriod(a, t));
+    const actIdsInPeriod = new Set(activitiesInPeriod.map(a => String(a.id)));
+    const evalsInPeriod = raw.evaluations.filter(ev => actIdsInPeriod.has(String(ev.claseId)));
+
+    // 1. Conducta
+    let conductExcelente = 0;
+    let conductAdecuada = 0;
+    let conductApoyo = 0;
+
+    evalsInPeriod.forEach(ev => {
+      const c = String(ev.conducta || '').toLowerCase();
+      if (c.includes('excelente')) conductExcelente++;
+      else if (c.includes('adecuada') || c.includes('buena')) conductAdecuada++;
+      else if (c.includes('apoyo') || c.includes('regular')) conductApoyo++;
+    });
+
+    const totalConduct = conductExcelente + conductAdecuada + conductApoyo;
+    const conductBadge = document.getElementById('evalConductCountBadge');
+    if (conductBadge) conductBadge.textContent = `${totalConduct} registros`;
+
+    const conductContainer = document.getElementById('evalConductSummary');
+    if (conductContainer) {
+      conductContainer.innerHTML = `
+        <div class="eval-record-stat-box"><span style="color:#1b7c4b;">Excelente</span><b>${conductExcelente}</b></div>
+        <div class="eval-record-stat-box"><span style="color:#0d649d;">Adecuada</span><b>${conductAdecuada}</b></div>
+        <div class="eval-record-stat-box"><span style="color:#a46d00;">Req. Apoyo</span><b>${conductApoyo}</b></div>
+      `;
+    }
+
+    // 2. Participación
+    let partAlta = 0;
+    let partMedia = 0;
+    let partNula = 0;
+
+    evalsInPeriod.forEach(ev => {
+      const p = String(ev.participacion || '').toLowerCase();
+      if (p.includes('alta')) partAlta++;
+      else if (p.includes('media')) partMedia++;
+      else if (p.includes('nula')) partNula++;
+    });
+
+    const totalPart = partAlta + partMedia + partNula;
+    const partBadge = document.getElementById('evalPartCountBadge');
+    if (partBadge) partBadge.textContent = `${totalPart} registros`;
+
+    const partContainer = document.getElementById('evalPartSummary');
+    if (partContainer) {
+      partContainer.innerHTML = `
+        <div class="eval-record-stat-box"><span style="color:#1b7c4b;">Alta</span><b>${partAlta}</b></div>
+        <div class="eval-record-stat-box"><span style="color:#0d649d;">Media</span><b>${partMedia}</b></div>
+        <div class="eval-record-stat-box"><span style="color:#a32929;">Nula</span><b>${partNula}</b></div>
+      `;
+    }
+
+    // 3. Asistencia y puntualidad
+    const cfg = evalState.config;
+    const pctAsistencia = cfg?.porcentajes?.[t]?.asistencia || 0;
+    const pctPuntualidad = cfg?.porcentajes?.[t]?.puntualidad || 0;
+    const isAttendanceActive = pctAsistencia > 0 || pctPuntualidad > 0;
+
+    const attNotice = document.getElementById('evalAttendanceWeightNotice');
+    if (attNotice) {
+      attNotice.textContent = isAttendanceActive 
+        ? `Asistencia: ${pctAsistencia}% · Puntualidad: ${pctPuntualidad}%`
+        : '0% asignado (Inactivo)';
+      attNotice.style.background = isAttendanceActive ? '#eaf8f0' : '#f4f8fb';
+      attNotice.style.color = isAttendanceActive ? '#1b7c4b' : 'var(--muted)';
+    }
+
+    const attContainer = document.getElementById('evalAttendanceSummary');
+    if (attContainer) {
+      attContainer.innerHTML = isAttendanceActive
+        ? `
+          <div class="eval-record-stat-box"><span>Criterio activo</span><b>${pctAsistencia + pctPuntualidad}%</b></div>
+          <div class="eval-record-stat-box"><span>Modo</span><b style="font-size:12px; margin-top:6px;">Pase de lista</b></div>
+        `
+        : `
+          <div class="eval-record-stat-box" style="flex: 2; text-align: left; padding: 10px 14px;">
+            <span style="font-size: 11px; text-transform: none; color: var(--muted);">
+              Asistencia y puntualidad no están activas en los porcentajes de este trimestre. No influirán en la calificación académica.
+            </span>
+          </div>
+        `;
+    }
+  }
+
+  /**
+   * Alterna la selección de una actividad individual
+   */
+  function toggleActivitySelection(actId) {
+    const t = evalState.trimester;
+    const sel = getCurrentActivitySelection(t);
+    const sId = String(actId);
+
+    const idx = sel.selectedIds.indexOf(sId);
+    if (idx >= 0) {
+      sel.selectedIds.splice(idx, 1);
+    } else {
+      sel.selectedIds.push(sId);
+    }
+
+    markUnsavedActivityChanges();
+    renderActivityStats();
+    renderActivitiesTable();
+  }
+
+  /**
+   * Selecciona o deselecciona todas las actividades actualmente visibles por filtro
+   */
+  function toggleAllVisibleActivities(selectAll) {
+    const filtered = getFilteredActivities();
+    const t = evalState.trimester;
+    const sel = getCurrentActivitySelection(t);
+
+    filtered.forEach(act => {
+      const sId = String(act.id);
+      const idx = sel.selectedIds.indexOf(sId);
+      if (selectAll && idx < 0) {
+        sel.selectedIds.push(sId);
+      } else if (!selectAll && idx >= 0) {
+        sel.selectedIds.splice(idx, 1);
+      }
+    });
+
+    markUnsavedActivityChanges();
+    renderActivityStats();
+    renderActivitiesTable();
+  }
+
+  /**
+   * Establece el modo de ponderación (uniforme vs personalizado)
+   */
+  function setActivityWeightMode(mode) {
+    const t = evalState.trimester;
+    const sel = getCurrentActivitySelection(t);
+    sel.weightMode = mode === 'custom' ? 'custom' : 'uniform';
+
+    markUnsavedActivityChanges();
+    renderActivityStats();
+    renderActivitiesTable();
+
+    if (typeof toast === 'function') {
+      toast(sel.weightMode === 'custom' ? 'Modo de ponderación personalizada activado.' : 'Modo de valor uniforme activado.');
+    }
+  }
+
+  /**
+   * Restablece todas las ponderaciones de actividades a 1.0
+   */
+  function resetActivityWeights() {
+    const t = evalState.trimester;
+    const sel = getCurrentActivitySelection(t);
+    sel.customWeights = {};
+    sel.weightMode = 'uniform';
+
+    markUnsavedActivityChanges();
+    renderActivityStats();
+    renderActivitiesTable();
+
+    if (typeof toast === 'function') {
+      toast('Ponderaciones de actividades restablecidas a valor uniforme.');
+    }
+  }
+
+  /**
+   * Guarda silenciosamente el borrador de actividades
+   */
+  function saveActivityDraftSilently() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.activityDraft, JSON.stringify(evalState.activitySelections));
+    } catch (e) {}
+  }
+
+  /**
+   * Guarda explícitamente el borrador de selección de actividades
+   */
+  function saveActivityDraft() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.activityDraft, JSON.stringify(evalState.activitySelections));
+      const status = document.getElementById('evalActPersistStatus');
+      if (status) status.textContent = '✓ Borrador de selección guardado en este dispositivo';
+      if (typeof toast === 'function') {
+        toast('Borrador de selección guardado localmente.');
+      }
+    } catch (e) {
+      if (typeof toast === 'function') toast('Error al guardar el borrador.', true);
+    }
+  }
+
+  /**
+   * Guarda y confirma la selección de actividades para el trimestre
+   */
+  function saveActivitySelection() {
+    try {
+      const t = evalState.trimester;
+      const key = getTrimesterKey(t);
+      const sel = getCurrentActivitySelection(t);
+      sel.updatedAt = new Date().toISOString();
+
+      localStorage.setItem(STORAGE_KEYS.activitySelection, JSON.stringify(evalState.activitySelections));
+      localStorage.removeItem(STORAGE_KEYS.activityDraft);
+
+      evalState.hasUnsavedActivityChanges = false;
+
+      const badge = document.getElementById('evalActUnsavedNotice');
+      if (badge) badge.style.display = 'none';
+
+      const status = document.getElementById('evalActPersistStatus');
+      if (status) status.textContent = `✓ Selección confirmada para el Trimestre ${t}`;
+
+      renderActivityStats();
+      renderActivitiesTable();
+
+      if (typeof toast === 'function') {
+        toast(`✓ Selección de actividades confirmada para el Trimestre ${t}.`);
+      }
+      return true;
+    } catch (err) {
+      console.error('Error al guardar selección de actividades:', err);
+      if (typeof toast === 'function') toast('No se pudo guardar la selección.', true);
+      return false;
+    }
+  }
+
+  /**
+   * Restablece la selección de actividades guardada previamente
+   */
+  function restoreSavedActivities() {
+    evalState.activitySelections = loadActivitySelections();
+    evalState.hasUnsavedActivityChanges = false;
+
+    const badge = document.getElementById('evalActUnsavedNotice');
+    if (badge) badge.style.display = 'none';
+
+    renderActivityStats();
+    renderActivitiesTable();
+
+    if (typeof toast === 'function') {
+      toast('Se descartaron los cambios y se restauró la última selección confirmada.');
+    }
+  }
+
+  // ==========================================================================
+  // LÓGICA DE LA PESTAÑA CRITERIOS Y PERIODOS (ETAPA 2)
+  // ==========================================================================
+
   function renderConfigTab() {
     const cfg = evalState.config;
 
-    // Apartado 1: Ciclo escolar y zona horaria
     const cicloInput = document.getElementById('evalCfgCiclo');
     if (cicloInput) cicloInput.value = cfg.cicloEscolar || '2026-2027';
 
@@ -693,7 +1266,6 @@
       tzDisplay.textContent = `Quintana Roo (${cfg.zonaHoraria || 'America/Cancun'}) · ${getTodayCancunDate()}`;
     }
 
-    // Apartado 2: Periodos trimestrales
     const periodModeSelect = document.getElementById('evalPeriodModeSelect');
     if (periodModeSelect) periodModeSelect.value = cfg.modoPeriodo || 'auto';
 
@@ -730,7 +1302,6 @@
 
     validatePeriods();
 
-    // Apartado 3: Criterios y porcentajes
     const criteriaTrimesterSelect = document.getElementById('evalCriteriaTrimesterSelect');
     if (criteriaTrimesterSelect) {
       criteriaTrimesterSelect.value = String(evalState.configTrimesterTab || 1);
@@ -738,27 +1309,21 @@
     renderCriteriaInputs();
     updateCriteriaSumDisplay();
 
-    // Apartado 4: Valores de tareas
     const setVal = (id, v) => { const el = document.getElementById(id); if (el && v !== null && v !== undefined) el.value = v; };
     setVal('evalValTaskEntregada', cfg.valoresTareas?.entregada ?? 100);
     setVal('evalValTaskIncompleta', cfg.valoresTareas?.incompleta ?? 50);
     setVal('evalValTaskTarde', cfg.valoresTareas?.tarde ?? 80);
     setVal('evalValTaskNoEntregada', cfg.valoresTareas?.noEntregada ?? 0);
 
-    // Apartado 5: Valores de conducta
     setVal('evalValConductaExcelente', cfg.valoresConducta?.excelente ?? 100);
     setVal('evalValConductaAdecuada', cfg.valoresConducta?.adecuada ?? 80);
     setVal('evalValConductaApoyo', cfg.valoresConducta?.requiereApoyo ?? 60);
 
-    // Apartado 6: Valores de participación
     setVal('evalValPartAlta', cfg.valoresParticipacion?.alta ?? 100);
     setVal('evalValPartMedia', cfg.valoresParticipacion?.media ?? 75);
     setVal('evalValPartNula', cfg.valoresParticipacion?.nula ?? 0);
   }
 
-  /**
-   * Renderiza la lista de los 7 criterios para el trimestre seleccionado
-   */
   function renderCriteriaInputs() {
     const container = document.getElementById('evalCriteriaListContainer');
     if (!container) return;
@@ -794,7 +1359,6 @@
       `;
     }).join('');
 
-    // Escuchar cambios en los inputs numéricos de porcentajes
     container.querySelectorAll('[data-crit-input]').forEach(input => {
       input.addEventListener('input', e => {
         const critId = e.target.dataset.critInput;
@@ -804,7 +1368,6 @@
 
         evalState.config.porcentajes[t][critId] = numVal;
 
-        // Actualizar visual del row y checkbox
         const row = container.querySelector(`.eval-criteria-row[data-crit-id="${critId}"]`);
         const toggleBtn = container.querySelector(`.eval-criteria-toggle-btn[data-crit="${critId}"]`);
         const isAct = numVal > 0;
@@ -820,10 +1383,6 @@
     });
   }
 
-  /**
-   * Alterna un criterio entre activado (porcentaje sugerido o previo) y desactivado (0%)
-   * @param {string} critId 
-   */
   function toggleCriteria(critId) {
     const t = evalState.configTrimesterTab || 1;
     const current = Number(evalState.config.porcentajes[t][critId] || 0);
@@ -840,10 +1399,6 @@
     updateCriteriaSumDisplay();
   }
 
-  /**
-   * Calcula la suma de porcentajes en tiempo real y actualiza indicadores de validación
-   * @returns {number} Suma de porcentajes
-   */
   function updateCriteriaSumDisplay() {
     const t = evalState.configTrimesterTab || 1;
     const pcts = evalState.config.porcentajes[t] || {};
@@ -874,7 +1429,6 @@
     }
 
     if (saveBtn) {
-      // No permitir activar/guardar si la suma != 100%
       saveBtn.disabled = !isValid;
       saveBtn.title = isValid ? 'Guardar y aplicar esta configuración' : 'La suma de porcentajes debe ser exactamente 100%';
     }
@@ -882,9 +1436,6 @@
     return sum;
   }
 
-  /**
-   * Valida fechas escolares: orden cronológico y ausencia de superposición
-   */
   function validatePeriods() {
     const p1 = evalState.config.periodos[1];
     const p2 = evalState.config.periodos[2];
@@ -893,7 +1444,6 @@
     const alertBox = document.getElementById('evalDateValidationAlert');
     if (!alertBox) return true;
 
-    // Validar inicio <= fin
     if (!p1.inicio || !p1.fin || !p2.inicio || !p2.fin || !p3.inicio || !p3.fin) {
       alertBox.className = 'eval-validation-alert danger';
       alertBox.textContent = '⚠️ Todas las fechas de inicio y finalización de los trimestres son obligatorias.';
@@ -918,7 +1468,6 @@
       return false;
     }
 
-    // Validar orden cronológico sin superposiciones
     if (p1.fin >= p2.inicio) {
       alertBox.className = 'eval-validation-alert danger';
       alertBox.textContent = `⚠️ Superposición detectada: El 1.er Trimestre finaliza el ${p1.fin} y el 2.º Trimestre inicia el ${p2.inicio}.`;
@@ -936,44 +1485,29 @@
     return true;
   }
 
-  /**
-   * Guarda un borrador local silencioso sin alertas intrusivas
-   */
   function saveConfigDraftSilently() {
     try {
       localStorage.setItem(STORAGE_KEYS.draft, JSON.stringify(evalState.config));
-    } catch (e) {
-      console.warn('Error al guardar borrador silencioso:', e);
-    }
+    } catch (e) {}
   }
 
-  /**
-   * Guarda explícitamente el borrador de configuración
-   */
   function saveConfigDraft() {
     try {
       localStorage.setItem(STORAGE_KEYS.draft, JSON.stringify(evalState.config));
       const status = document.getElementById('evalPersistStatus');
       if (status) status.textContent = '✓ Borrador guardado localmente en este dispositivo';
-      if (typeof toast === 'function') {
-        toast('Borrador de configuración guardado en el dispositivo.');
-      }
+      if (typeof toast === 'function') toast('Borrador de configuración guardado en el dispositivo.');
     } catch (e) {
       if (typeof toast === 'function') toast('Error al guardar el borrador.', true);
     }
   }
 
-  /**
-   * Valida, guarda y aplica la configuración en el almacenamiento principal
-   */
   function saveConfig() {
-    // 1. Validar fechas
     if (!validatePeriods()) {
       if (typeof toast === 'function') toast('Corrige las fechas antes de guardar.', true);
       return false;
     }
 
-    // 2. Validar que los 3 trimestres sumen 100%
     for (let t = 1; t <= 3; t++) {
       const pcts = evalState.config.porcentajes[t] || {};
       const sum = Object.values(pcts).reduce((a, b) => a + (Number(b) || 0), 0);
@@ -990,7 +1524,6 @@
       }
     }
 
-    // 3. Persistir en almacenamiento
     try {
       evalState.config.updatedAt = new Date().toISOString();
       evalState.config.version = (evalState.config.version || 1) + 1;
@@ -1008,6 +1541,7 @@
 
       renderTrimesterSelector();
       renderTrackingPanel();
+      renderSecondaryRecords();
 
       if (typeof toast === 'function') {
         toast('✓ Configuración de periodos y criterios guardada correctamente.');
@@ -1015,16 +1549,11 @@
       return true;
     } catch (err) {
       console.error('Error al guardar configuración:', err);
-      if (typeof toast === 'function') {
-        toast('No se pudo guardar la configuración.', true);
-      }
+      if (typeof toast === 'function') toast('No se pudo guardar la configuración.', true);
       return false;
     }
   }
 
-  /**
-   * Restablece los cambios sin guardar recargando la configuración previa
-   */
   function restoreSavedConfig() {
     evalState.config = loadConfig();
     evalState.hasUnsavedChanges = false;
@@ -1040,9 +1569,6 @@
     }
   }
 
-  /**
-   * Restablece la propuesta editable por defecto para los porcentajes del trimestre activo
-   */
   function restoreDefaultCriteria() {
     const t = evalState.configTrimesterTab || 1;
     const def = createDefaultConfig().porcentajes[t];
@@ -1056,9 +1582,6 @@
     }
   }
 
-  /**
-   * Copia los porcentajes del trimestre actual a los otros dos trimestres
-   */
   function copyCriteriaToAll() {
     const sourceT = evalState.configTrimesterTab || 1;
     const sourcePcts = evalState.config.porcentajes[sourceT] || {};
@@ -1089,8 +1612,9 @@
       if (tab) switchEvalTab(tab);
     },
     'eval-refresh': () => {
-      if (typeof toast === 'function') toast('Actualizando panel de seguimiento...');
+      if (typeof toast === 'function') toast('Actualizando datos académicos...');
       renderTrackingPanel();
+      renderActivitiesTab();
     },
     'eval-save-draft': () => {
       saveConfigDraft();
@@ -1117,7 +1641,32 @@
     'eval-restore-default-criteria': () => restoreDefaultCriteria(),
     'eval-restore-saved-config': () => restoreSavedConfig(),
     'eval-save-config-draft': () => saveConfigDraft(),
-    'eval-save-config': () => saveConfig()
+    'eval-save-config': () => saveConfig(),
+
+    // Acciones de Selección de Actividades (Etapa 3)
+    'eval-toggle-activity': inputOrBtn => {
+      const actId = inputOrBtn?.dataset?.id;
+      if (actId) toggleActivitySelection(actId);
+    },
+    'eval-toggle-all-visible': input => {
+      toggleAllVisibleActivities(Boolean(input?.checked));
+    },
+    'eval-select-all-visible': () => {
+      toggleAllVisibleActivities(true);
+      if (typeof toast === 'function') toast('Actividades visibles seleccionadas.');
+    },
+    'eval-deselect-all-visible': () => {
+      toggleAllVisibleActivities(false);
+      if (typeof toast === 'function') toast('Actividades visibles excluidas.');
+    },
+    'eval-set-weight-mode': btn => {
+      const mode = btn?.dataset?.mode;
+      if (mode) setActivityWeightMode(mode);
+    },
+    'eval-reset-activity-weights': () => resetActivityWeights(),
+    'eval-save-activities-draft': () => saveActivityDraft(),
+    'eval-save-activities-selection': () => saveActivitySelection(),
+    'eval-restore-saved-activities': () => restoreSavedActivities()
   });
 
   // Exportar funciones globales de la vista
@@ -1130,6 +1679,12 @@
   window.getEvalState = () => evalState;
   window.determineCurrentTrimester = determineCurrentTrimester;
   window.resolveOfficialListNumber = resolveOfficialListNumber;
+  window.getEvalRawActivities = getRawActivities;
+  window.getCurrentActivitySelection = getCurrentActivitySelection;
+  window.saveEvalActivitySelection = saveActivitySelection;
+  window.toggleActivitySelection = toggleActivitySelection;
+  window.toggleAllVisibleActivities = toggleAllVisibleActivities;
+  window.setActivityWeightMode = setActivityWeightMode;
 
   // Soporte nativo para eventos táctiles en dispositivos móviles y tabletas
   document.addEventListener('touchend', e => {
