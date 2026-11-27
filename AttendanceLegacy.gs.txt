@@ -1,0 +1,1637 @@
+/**
+ * ============================================================================
+ * ARCHIVO: AttendanceLegacy.gs
+ * MÓDULO: Núcleo de Entrada Web, Autenticación Docente y Despachador Central API
+ * PROPÓSITO GENERAL:
+ *   Constituye la puerta de enlace HTTP (Web App) para la Single Page Application (SPA).
+ *   Gestiona el ciclo de vida de sesiones docentes (HMAC-SHA256), la validación
+ *   criptográfica de tokens, el enrutamiento centralizado de solicitudes mediante
+ *   ejecutarAccionApi_ y las operaciones históricas de pase de lista y asistencia.
+ * 
+ * FECHA DE CREACIÓN: Fecha de creación no registrada (Código base del proyecto).
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * 
+ * ÍNDICE DE SECCIONES:
+ *   1. Configuración Base y Catálogo Semilla (const APP, const STUDENTS).
+ *   2. Manejadores HTTP Web App (doPost, doGetAttendanceLegacy_, onOpenAttendanceLegacy_).
+ *   3. Despachador Central de Solicitudes (ejecutarAccionApi_).
+ *   4. Mecanismo de Autenticación y Criptografía (iniciarSesion_, validarSesion_, firmarToken_, hashContrasena_).
+ *   5. Configuración del Sistema y Mantenimiento de Acceso (configurar_, restablecerAcceso_, configurarAccesoHibrido_).
+ *   6. Servicios de Asistencia y Reportes Escolares (saveAttendance_, getIndividualReport_, etc.).
+ *   7. Utilidades de Hoja de Cálculo, Fechas y Normalización.
+ * 
+ * FUNCIONES PRINCIPALES:
+ *   doPost, ejecutarAccionApi_, iniciarSesion_, validarSesion_, firmarToken_,
+ *   configurar_, saveAttendance_, getIndividualReport_, actualizarTodosLosMeses_.
+ * 
+ * DEPENDENCIAS:
+ *   - Google Apps Script: SpreadsheetApp, Utilities, CacheService, HtmlService.
+ *   - Módulos Internos: Api.gs (servicios académicos y puentes),
+ *     EvaluacionesTrimestrales.gs (evaluaciones y persistencia), Database.gs (esquemas).
+ * 
+ * HISTORIAL ACUMULATIVO DE MODIFICACIONES:
+ *   - Fecha no registrada: Creación del núcleo de asistencia y autenticación docente.
+ *   - 27/11/2026 (Modificación funcional y documental - Etapa 7A.3):
+ *       * Integración formal de 'getTrimesterEvaluationBundle' y 'syncTrimesterEvaluationBatch' en ejecutarAccionApi_.
+ *       * Validación estricta Zero-Trust previa mediante validarSesion_(sessionToken) en doPost.
+ *       * Incorporación de encabezado y JSDoc estructurado conforme a la Sección 6 de GEMINI.md.
+ * ============================================================================
+ */
+
+const APP = Object.freeze({
+  TIMEZONE: 'America/Cancun',
+  SCHOOL: 'Escuela Primaria Francisco Hoil Torres T.V.',
+  CCT: '23DPR0136V',
+  GROUP: '4°A',
+  TEACHER: 'Prof. Michel Otaner Polledo Nieves',
+  CYCLE: '2026-2027',
+  CYCLE_START: '2026-08-24',
+  CYCLE_END: '2027-07-15',
+  SHEETS: Object.freeze({
+    CONFIG: 'Configuración',
+    STUDENTS: 'Alumnos',
+    CALENDAR: 'Calendario',
+    RECORDS: 'Registro',
+    NO_CLASS: 'Días sin clase',
+    MONTHLY: 'Resumen mensual',
+    ABSENCES: 'Faltas por mes',
+    CHARTS: 'Gráficas',
+    FAMILY: 'Seguimiento familiar'
+  })
+});
+
+const STUDENTS = Object.freeze([]);
+
+const MONTH_NAMES = Object.freeze([
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+]);
+
+const MONTH_SHORT = Object.freeze([
+  'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+]);
+
+const STATUS = Object.freeze({ A: 'Asistencia', F: 'Falta', R: 'Retardo', J: 'Justificada' });
+const STATUS_COLORS = Object.freeze({ A: '#16A34A', F: '#DC2626', R: '#F97316', J: '#2563EB' });
+const ACCESS_USER_LABEL = 'Usuario de acceso';
+const PASSWORD_HASH_LABEL = 'Contraseña protegida';
+const DEFAULT_USERNAME = 'MPOLLEDO';
+const DEFAULT_PASSWORD = '123456';
+const SESSION_DAYS = 30;
+const MAX_LOGIN_ATTEMPTS = 8;
+const LOGIN_LOCK_SECONDS = 600;
+const AUTH_SALT_PROPERTY = 'ATTENDANCE_AUTH_SALT';
+const AUTH_SECRET_PROPERTY = 'ATTENDANCE_AUTH_SECRET';
+const AUTH_MIGRATION_PROPERTY = 'ATTENDANCE_LOGIN_V1';
+const API_MESSAGE_SOURCE = 'pase-lista-4a-api';
+const PAYMENT_SHEETS_TO_REMOVE = Object.freeze([
+  'Eventos',
+  'Participantes',
+  'Pagos',
+  'Cortes de dinero',
+  'Retiros y reposiciones'
+]);
+
+function onOpenAttendanceLegacy_() {
+  SpreadsheetApp.getUi()
+    .createMenu('Pase de lista')
+    .addItem('Configurar aplicación', 'configurar_')
+    .addItem('Restablecer acceso MPOLLEDO', 'restablecerAcceso_')
+    .addItem('Eliminar pestañas del sistema de pagos', 'eliminarPestanasSistemaPagos_')
+    .addItem('Actualizar hojas y gráficas', 'actualizarTodo_')
+    .addToUi();
+}
+
+function doGetAttendanceLegacy_() {
+  return HtmlService.createHtmlOutput(
+    '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>Conexión activa</title></head><body style="font-family:Arial,sans-serif;padding:32px;color:#102A43">' +
+    '<h1>Conexión activa</h1><p>Este enlace conecta la página de GitHub Pages con Google Sheets.</p>' +
+    '<p>Abre la dirección de GitHub Pages para utilizar el pase de lista.</p></body></html>'
+  ).setTitle('Conexión del pase de lista');
+}
+
+/**
+ * Puente privado para la página alojada en GitHub Pages.
+ * Recibe solicitudes POST en un iframe oculto y devuelve la respuesta con postMessage.
+ */
+/**
+ * TÍTULO: Recepción POST
+ * FECHA DE MODIFICACIÓN: 27/11/2026
+ * PROPÓSITO Y MOTIVO: Transmite el token original al despachador privado después de validarlo; conserva el puente existente.
+ * HISTORIAL: 27/11/2026 — integración focalizada 7A.3.
+ */
+function doPost(event) {
+  const requestId = event && event.parameter ? String(event.parameter.requestId || '') : '';
+  try {
+    const parameters = event && event.parameter ? event.parameter : {};
+    const action = String(parameters.action || '').trim();
+    const args = JSON.parse(parameters.args || '[]');
+    if (!Array.isArray(args)) throw new Error('La solicitud recibida no es válida.');
+    const data = action === 'login'
+      ? iniciarSesion_(args[0], args[1])
+      : isDirectoryPublicAction_(action)
+        ? ejecutarAccionDirectorioPublica_(action, args, parameters.sessionToken)
+        : (validarSesion_(parameters.sessionToken), ejecutarAccionApi_(action, args, parameters.sessionToken));
+    return crearRespuestaPuente_({ source: API_MESSAGE_SOURCE, requestId, ok: true, data });
+  } catch (error) {
+    return crearRespuestaPuente_({
+      source: API_MESSAGE_SOURCE,
+      requestId,
+      ok: false,
+      error: error && error.message ? error.message : 'No fue posible completar la solicitud.'
+    });
+  }
+}
+
+/**
+ * TÍTULO: Despachador privado
+ * FECHA DE MODIFICACIÓN: 27/11/2026
+ * PROPÓSITO Y MOTIVO: Recibe acción, argumentos y token; devuelve resultado del servicio. Conserva las rutas originales.
+ * HISTORIAL: 27/11/2026 — integración focalizada 7A.3.
+ */
+/**
+ * TÍTULO: Despachador central de acciones API autenticadas
+ * NOMBRE TÉCNICO: ejecutarAccionApi_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * 
+ * QUÉ HACE:
+ *   Recibe la acción solicitada por el cliente web y sus argumentos deserializados,
+ *   enrutando la llamada hacia el manejador de negocio correspondiente.
+ * 
+ * PARA QUÉ SIRVE:
+ *   Centraliza el control de acceso y ejecución de todas las operaciones protegidas del sistema.
+ * 
+ * POR QUÉ SE CREÓ:
+ *   Para aislar el protocolo de transporte HTTP del catálogo de servicios de backend.
+ * 
+ * PARÁMETROS:
+ *   @param {string} action Nombre técnico de la acción API solicitada.
+ *   @param {Array} args Lista de argumentos posicionales deserializados.
+ *   @param {string} [sessionToken] Token de autenticación previamente validado en doPost.
+ * 
+ * RESULTADO:
+ *   @return {*} Resultado de la operación invocada.
+ *   @throws {Error} Si la acción no existe o no está permitida en el despachador.
+ * 
+ * DEPENDENCIAS:
+ *   Api.gs, EvaluacionesTrimestrales.gs, Database.gs.
+ * 
+ * HISTORIAL DE MODIFICACIONES:
+ *   - 27/11/2026 (Modificación funcional - Etapa 7A.3): Integración de 'getTrimesterEvaluationBundle'
+ *     y 'syncTrimesterEvaluationBatch' para canalizar el módulo de Evaluaciones Trimestrales.
+ */
+function ejecutarAccionApi_(action, args, sessionToken) {
+  switch (action) {
+    case 'getTrimesterEvaluationBundle': return getTrimesterEvaluationBundle_(args[0], sessionToken);
+    case 'syncTrimesterEvaluationBatch': return syncTrimesterEvaluationBatch_(args[0], sessionToken);
+    case 'getBootstrapData': return getBootstrapData_();
+    case 'getBootstrapDataLite': return getBootstrapDataLite_();
+    case 'saveStudent': return saveStudent_(args[0]);
+    case 'deleteStudent': return deleteStudent_(args[0]);
+    case 'deleteStudentsBatch': return deleteStudentsBatch_(args[0]);
+    case 'saveProject': return saveProject_(args[0]);
+    case 'deleteProject': return deleteProject_(args[0]);
+    case 'getProjectWorkspace': return getProjectWorkspace_(args[0]);
+    case 'getClassRecord': return getClassRecord_(args[0]);
+    case 'saveClassRecord': return saveClassRecord_(args[0]);
+    case 'deleteClassRecords': return deleteClassRecords_(args[0], args[1]);
+    case 'getDeletionStatus': return getDeletionStatus_(args[0]);
+    case 'getStudentAcademicReport': return getStudentAcademicReport_(args[0], args[1], args[2]);
+    case 'getDailyActivities': return getDailyActivities_(args[0]);
+    case 'getDailyAcademicReport': return getDailyAcademicReport_(args[0]);
+    case 'getInitialData': return getInitialData_();
+    case 'getDayData': return getDayData_(args[0]);
+    case 'getMonthAttendanceGrid': return getMonthAttendanceGrid_(args[0]);
+    case 'saveMonthAttendance': return saveMonthAttendance_(args[0]);
+    case 'saveNoClass': return saveNoClass_(args[0]);
+    case 'removeNoClass': return removeNoClass_(args[0]);
+    case 'saveAttendance': return saveAttendance_(args[0]);
+    case 'getIndividualReport': return getIndividualReport_(args[0], args[1]);
+    case 'getWeeklyAttendanceReport': return getWeeklyAttendanceReport_(args[0], args[1]);
+    case 'saveFamilyFollowUp': return saveFamilyFollowUp_(args[0]);
+    case 'addStudents': return addStudents_(args[0]);
+    case 'setStudentsActive': return setStudentsActive_(args[0], args[1]);
+    case 'syncLearningStyles': return syncLearningStyles_();
+    case 'getPaymentsInitialData': return paymentsGetInitialData_();
+    case 'createPaymentEvent': return paymentsCreateEvent_(args[0]);
+    case 'getPaymentEventDetail': return paymentsGetEventDetail_(args[0]);
+    case 'saveStudentPayment': return paymentsSavePayment_(args[0]);
+    case 'savePaymentCut': return paymentsSaveCut_(args[0]);
+    case 'savePaymentMovement': return paymentsSaveMovement_(args[0]);
+    case 'setPaymentEventActive': return paymentsSetEventActive_(args[0], args[1]);
+    case 'syncPaymentStudents': return paymentsSyncStudents_();
+    case 'getDirectoryAdminData': return directoryGetAdminData_();
+    case 'saveDirectoryProfile': return directoryAdminSaveProfile_(args[0]);
+    case 'generateFamilyInvitation': return directoryGenerateInvitation_(args[0]);
+    case 'revokeFamilyInvitation': return directoryRevokeInvitation_(args[0]);
+    case 'generateFamilyReset': return directoryGenerateReset_(args[0]);
+    case 'generateFamilyCredentials': return directoryGenerateCredentials_(args[0]);
+    case 'generateFamilyCredentialsBatch': return directoryGenerateCredentialsBatch_(args[0]);
+    case 'saveFamilyRecoveryAdmin': return directorySaveRecoveryAdmin_(args[0], args[1]);
+    case 'revokeFamilyAccessBatch': return directoryRevokeAccessBatch_(args[0]);
+    case 'setFamilyAccountActive': return directorySetAccountActive_(args[0], args[1]);
+    case 'deleteFamilyAccess': return directoryDeleteFamilyAccess_(args[0]);
+    case 'saveDirectorySiteUrl': return directorySaveSiteUrl_(args[0]);
+    case 'generateGroupInvitation': return directoryGenerateGroupInvitation_();
+    case 'revokeGroupInvitation': return directoryRevokeGroupInvitation_();
+    case 'getGradesInitialData': return gradesInitialData_();
+    case 'getGradeWeights': return gradesWeights_(args[0], args[1]);
+    case 'saveGradeWeights': return gradesSaveWeights_(args[0]);
+    case 'saveManualGrades': return gradesSaveManual_(args[0]);
+    case 'getQuarterlyGradeReport': return gradesBuildReport_(args[0], args[1]);
+    case 'getConsolidatedGradeReport': return gradesConsolidated_(args[0]);
+    case 'getWeeklyFamilyReports': return gradesWeeklyReportsBatch_(args[0]);
+    case 'saveSubject': return subjectsSave_(args[0]);
+    case 'deleteSubject': return subjectsDelete_(args[0]);
+    case 'getEnrollmentAdminData': return enrollmentAdminData_();
+    case 'createEnrollmentPeriod': return enrollmentCreatePeriod_(args[0]);
+    case 'setEnrollmentPeriodStatus': return enrollmentSetPeriodStatus_(args[0], args[1]);
+    case 'getEnrollmentAdminDetail': return enrollmentAdminDetail_(args[0]);
+    case 'getEnrollmentPhotoAdmin': return enrollmentAdminPhoto_(args[0], args[1]);
+    case 'reviewEnrollment': return enrollmentReview_(args[0], args[1], args[2]);
+    case 'approveEnrollment': return enrollmentApprove_(args[0]);
+    case 'getEvaluationInstruments': return instrumentsList_();
+    case 'saveEvaluationInstrument': return saveEvaluationInstrumentV2_(args[0]);
+    case 'duplicateEvaluationInstrument': return instrumentsDuplicate_(args[0]);
+    case 'setEvaluationInstrumentActive': return instrumentsSetActive_(args[0], args[1]);
+    case 'setPaymentDelivery': return paymentsSetDelivery_(args[0]);
+    case 'getObservationBank': return listObservationBankV2_();
+    case 'saveObservationTemplate': return saveObservationTemplateV2_(args[0]);
+    case 'saveObservationOccurrence': return saveObservationOccurrenceV2_(args[0]);
+    case 'getObservationRecords': return listObservationRecordsV2_(args[0]);
+    case 'authorizeObservation': return authorizeObservationV2_(args[0], args[1]);
+    case 'getGroupAttendanceCycleReport': return getGroupAttendanceCycleReportV2_(args[0]);
+    case 'getGroupAttendanceMonthReport': return getGroupAttendanceMonthReportV2_(args[0]);
+    case 'saveWeeklyReportState': return saveWeeklyReportStateV2_(args[0]);
+    case 'findTechnicalDuplicates': return findTechnicalDuplicatesV2_();
+    case 'removeTechnicalDuplicate': return removeTechnicalDuplicateV2_(args[0]);
+    default: throw new Error('La acción solicitada no está permitida.');
+  }
+}
+
+function iniciarSesion_(username, password) {
+  const ss = obtenerLibro_();
+  const sheet = ss.getSheetByName(APP.SHEETS.CONFIG);
+  if (!sheet) throw new Error('Primero instala el sistema desde la hoja de cálculo.');
+  const values = sheet.getRange(1, 1, Math.max(sheet.getLastRow(), 1), 2).getDisplayValues();
+  const config = {};
+  values.forEach(row => config[String(row[0]).trim()] = String(row[1]).trim());
+  const expectedUser = normalizarUsuario_(config[ACCESS_USER_LABEL] || DEFAULT_USERNAME);
+  const expectedHash = config[PASSWORD_HASH_LABEL] || '';
+  if (!expectedHash) throw new Error('El acceso no está configurado. Usa el menú Carpeta Académica de la hoja.');
+  const cache = CacheService.getScriptCache();
+  const attemptKey = 'LOGIN_ATTEMPTS_' + normalizarUsuario_(username || 'VACIO');
+  const attempts = Number(cache.get(attemptKey) || 0);
+  if (attempts >= MAX_LOGIN_ATTEMPTS) {
+    throw new Error('Acceso bloqueado temporalmente por varios intentos incorrectos. Espera 10 minutos.');
+  }
+  if (normalizarUsuario_(username) !== expectedUser || hashContrasena_(password) !== expectedHash) {
+    cache.put(attemptKey, String(attempts + 1), LOGIN_LOCK_SECONDS);
+    throw new Error('El usuario o la contraseña son incorrectos.');
+  }
+  cache.remove(attemptKey);
+
+  const expiresAt = Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000;
+  const payload = Utilities.base64EncodeWebSafe(JSON.stringify({
+    user: expectedUser,
+    expiresAt,
+    nonce: Utilities.getUuid()
+  }), Utilities.Charset.UTF_8).replace(/=+$/g, '');
+  const signature = firmarToken_(payload, expectedHash);
+  return { token: payload + '.' + signature, expiresAt, username: expectedUser };
+}
+
+/**
+ * TÍTULO: Validación de sesión docente
+ * FECHA DE MODIFICACIÓN: 27/11/2026
+ * PROPÓSITO Y MOTIVO: Valida token firmado y devuelve identidad autenticada; los consumidores anteriores pueden ignorar el retorno.
+ * HISTORIAL: 27/11/2026 — integración focalizada 7A.3.
+ */
+function validarSesion_(token) {
+  const parts = String(token || '').split('.');
+  if (parts.length !== 2) throw new Error('Tu sesión no es válida. Inicia sesión nuevamente.');
+  let payload;
+  try {
+    payload = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString('UTF-8'));
+  } catch (error) {
+    throw new Error('Tu sesión no es válida. Inicia sesión nuevamente.');
+  }
+  const ss = obtenerLibro_();
+  const sheet = ss.getSheetByName(APP.SHEETS.CONFIG);
+  if (!sheet) throw new Error('Primero ejecuta la función configurar_.');
+  const values = sheet.getRange(1, 1, Math.max(sheet.getLastRow(), 1), 2).getDisplayValues();
+  const config = {};
+  values.forEach(row => config[String(row[0]).trim()] = String(row[1]).trim());
+  const expectedUser = normalizarUsuario_(config[ACCESS_USER_LABEL] || DEFAULT_USERNAME);
+  const expectedHash = config[PASSWORD_HASH_LABEL] || '';
+  const expectedSignature = firmarToken_(parts[0], expectedHash);
+  if (parts[1] !== expectedSignature || payload.user !== expectedUser || !Number.isFinite(Number(payload.expiresAt)) || Number(payload.expiresAt) <= Date.now()) {
+    throw new Error('Tu sesión venció. Inicia sesión nuevamente.');
+  }
+  return { ok: true, usuario: expectedUser, grupo: config['Grado y grupo'] || config['Grupo'] || APP.GROUP, cicloEscolar: config['Ciclo escolar'] || APP.CYCLE };
+}
+
+function firmarToken_(payload, passwordHash) {
+  const key = obtenerPropiedadSegura_(AUTH_SECRET_PROPERTY) + '|' + passwordHash;
+  return Utilities.base64EncodeWebSafe(
+    Utilities.computeHmacSha256Signature(payload, key)
+  ).replace(/=+$/g, '');
+}
+
+function hashContrasena_(password) {
+  const salt = obtenerPropiedadSegura_(AUTH_SALT_PROPERTY);
+  return Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(password || '') + '|' + salt,
+    Utilities.Charset.UTF_8
+  ).map(byte => ('0' + ((byte + 256) % 256).toString(16)).slice(-2)).join('');
+}
+
+function obtenerPropiedadSegura_(name) {
+  const properties = PropertiesService.getScriptProperties();
+  let value = properties.getProperty(name);
+  if (!value) {
+    value = Utilities.getUuid() + Utilities.getUuid();
+    properties.setProperty(name, value);
+  }
+  return value;
+}
+
+function normalizarUsuario_(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function crearRespuestaPuente_(message) {
+  const safeJson = JSON.stringify(message)
+    .replace(/&/g, '\\u0026')
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+  return HtmlService.createHtmlOutput(
+    '<!doctype html><html><head><meta charset="utf-8"></head><body>' +
+    '<script>window.top.postMessage(' + safeJson + ', "*");<\/script>' +
+    '</body></html>'
+  ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/** Ejecutar una sola vez desde una hoja nueva de Google Sheets. */
+function configurar_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    throw new Error('Abre Apps Script desde Extensiones > Apps Script dentro de una hoja de cálculo nueva.');
+  }
+
+  PropertiesService.getScriptProperties().setProperty('SPREADSHEET_ID', ss.getId());
+  ss.setSpreadsheetTimeZone(APP.TIMEZONE);
+  try { ss.setSpreadsheetLocale('es_MX'); } catch (error) { /* No bloquea la configuración. */ }
+
+  const initialSheet = ss.getActiveSheet();
+  if (!ss.getSheetByName(APP.SHEETS.CONFIG) && ss.getSheets().length === 1 && initialSheet.getLastRow() === 0) {
+    initialSheet.setName(APP.SHEETS.CONFIG);
+  }
+
+  prepararConfiguracion_(ss);
+  prepararAlumnos_(ss);
+  prepararCalendario_(ss);
+  prepararHojaBase_(ss, APP.SHEETS.RECORDS,
+    ['Fecha', 'ID', 'Alumno', 'Estado', 'Observación', 'Registrado el', 'Mes', 'Ciclo escolar']);
+  prepararHojaBase_(ss, APP.SHEETS.NO_CLASS,
+    ['Fecha', 'Motivo', 'Detalle', 'Activo', 'Registrado el']);
+  prepararHojaBase_(ss, APP.SHEETS.FAMILY,
+    ['Fecha de entrevista', 'ID', 'Alumno', 'Nombre del familiar', 'Motivo', 'Acuerdos', 'Observaciones', 'Próxima revisión', 'Registrado el']);
+
+  actualizarTodosLosMeses_(ss, true);
+  reconstruirResumenes_(ss);
+  ss.setActiveSheet(ss.getSheetByName(APP.SHEETS.STUDENTS));
+  return 'Módulo de asistencia configurado sin eliminar hojas existentes.';
+}
+
+function restablecerAcceso_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet() || obtenerLibro_();
+  prepararConfiguracion_(ss, true);
+  return 'Acceso restablecido. Usuario: MPOLLEDO. Contraseña temporal: 123456.';
+}
+
+function configurarAccesoHibrido_() {
+  const ui = SpreadsheetApp.getUi();
+  const userPrompt = ui.prompt(
+    'Acceso de Carpeta Académica',
+    'Escribe el nombre de usuario que utilizarás para entrar desde GitHub Pages:',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (userPrompt.getSelectedButton() !== ui.Button.OK) return;
+  const username = normalizarUsuario_(userPrompt.getResponseText());
+  if (username.length < 4) {
+    ui.alert('El usuario debe tener al menos 4 caracteres.');
+    return;
+  }
+  const passwordPrompt = ui.prompt(
+    'Contraseña privada',
+    'Escribe una contraseña de al menos 10 caracteres. No uses tu contraseña de Google:',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (passwordPrompt.getSelectedButton() !== ui.Button.OK) return;
+  const password = String(passwordPrompt.getResponseText() || '');
+  if (password.length < 10) {
+    ui.alert('La contraseña debe tener al menos 10 caracteres.');
+    return;
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet() || obtenerLibro_();
+  const sheet = ss.getSheetByName(APP.SHEETS.CONFIG);
+  if (!sheet) throw new Error('Primero instala o repara el sistema.');
+  const values = sheet.getRange(1, 1, Math.max(sheet.getLastRow(), 1), 2).getValues();
+  let userRow = 0;
+  let hashRow = 0;
+  values.forEach((row, index) => {
+    const label = String(row[0] || '').trim();
+    if (label === ACCESS_USER_LABEL) userRow = index + 1;
+    if (label === PASSWORD_HASH_LABEL) hashRow = index + 1;
+  });
+  if (!userRow || !hashRow) {
+    prepararConfiguracion_(ss);
+    return configurarAccesoHibrido_();
+  }
+  sheet.getRange(userRow, 2).setValue(username);
+  sheet.getRange(hashRow, 2).setValue(hashContrasena_(password));
+  CacheService.getScriptCache().remove('LOGIN_ATTEMPTS_' + username);
+  ui.alert('Acceso actualizado. Usuario: ' + username + '\n\nLa contraseña quedó protegida y no se mostrará en la hoja.');
+}
+
+function eliminarPestanasSistemaPagos_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet() || obtenerLibro_();
+  const removedSheets = eliminarPestanasPagos_(ss);
+  return removedSheets.length
+    ? 'Pestañas eliminadas: ' + removedSheets.join(', ') + '.'
+    : 'No se encontraron pestañas del sistema de pagos.';
+}
+
+function eliminarPestanasPagos_(ss) {
+  const removedSheets = [];
+  PAYMENT_SHEETS_TO_REMOVE.forEach(name => {
+    const sheet = ss.getSheetByName(name);
+    if (sheet && ss.getSheets().length > 1) {
+      ss.deleteSheet(sheet);
+      removedSheets.push(name);
+    }
+  });
+  return removedSheets;
+}
+
+function actualizarTodo_() {
+  const ss = obtenerLibro_();
+  actualizarTodosLosMeses_(ss);
+  reconstruirResumenes_(ss);
+  return 'Hojas mensuales, resúmenes y gráficas actualizados.';
+}
+
+function getInitialData_() {
+  const ss = obtenerLibro_();
+  const config = leerConfiguracion_(ss);
+  const today = Utilities.formatDate(new Date(), APP.TIMEZONE, 'yyyy-MM-dd');
+  const day = getDayData_(today);
+  return {
+    config,
+    today,
+    day,
+    students: obtenerAlumnos_(ss),
+    allStudents: obtenerTodosAlumnos_(ss),
+    periods: obtenerPeriodosReporte_(),
+    noClassReasons: [
+      'Permiso económico',
+      'Día festivo',
+      'Suspensión por lluvia',
+      'Consejo Técnico Escolar',
+      'Vacaciones de diciembre',
+      'Vacaciones de Semana Santa',
+      'Vacaciones de verano',
+      'Otro motivo'
+    ]
+  };
+}
+
+function addStudents_(names) {
+  if (!Array.isArray(names)) throw new Error('Escribe al menos un nombre.');
+  const uniqueNames = new Map();
+  names.map(normalizarNombre_).filter(Boolean).forEach(name => uniqueNames.set(claveNombre_(name), name));
+  const normalized = Array.from(uniqueNames.values());
+  if (!normalized.length) throw new Error('Escribe al menos un nombre completo.');
+  if (normalized.length > 30) throw new Error('Puedes agregar hasta 30 alumnos a la vez.');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const ss = obtenerLibro_();
+    const sheet = ss.getSheetByName(APP.SHEETS.STUDENTS);
+    const all = obtenerTodosAlumnos_(ss);
+    const byName = new Map(all.map(student => [claveNombre_(student.name), student]));
+    const rows = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 1), 3).getValues()
+      .filter(row => row[0] && row[1]);
+    let nextNumber = all.reduce((max, student) => Math.max(max, Number(String(student.id).replace(/\D/g, '')) || 0), 0) + 1;
+    const added = [];
+    const reactivated = [];
+    const repeated = [];
+
+    normalized.forEach(name => {
+      const nameKey = claveNombre_(name);
+      const existing = byName.get(nameKey);
+      if (existing) {
+        if (!existing.active) {
+          const row = rows.find(item => String(item[0]) === existing.id);
+          row[2] = true;
+          existing.active = true;
+          reactivated.push(existing.name);
+        } else {
+          repeated.push(existing.name);
+        }
+        return;
+      }
+      const id = `A${String(nextNumber++).padStart(3, '0')}`;
+      rows.push([id, name, true]);
+      byName.set(nameKey, { id, name, active: true });
+      added.push(name);
+    });
+
+    if (added.length || reactivated.length) {
+      rows.sort((a, b) => String(a[1]).localeCompare(String(b[1]), 'es'));
+      const oldCount = Math.max(sheet.getLastRow() - 1, 0);
+      if (oldCount) sheet.getRange(2, 1, oldCount, 3).clearContent();
+      sheet.getRange(2, 1, rows.length, 3).setValues(rows);
+      sheet.getRange(2, 3, rows.length, 1).insertCheckboxes();
+      sheet.getRange(2, 3, rows.length, 1).setValues(rows.map(row => [row[2] !== false]));
+      reconstruirEstructuraAlumnos_(ss);
+    }
+    return {
+      ok: true,
+      message: crearMensajeAlumnos_(added, reactivated, repeated),
+      students: obtenerTodosAlumnos_(ss)
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function setStudentsActive_(studentIds, active) {
+  if (!Array.isArray(studentIds) || !studentIds.length) throw new Error('Selecciona al menos un alumno.');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const ss = obtenerLibro_();
+    const sheet = ss.getSheetByName(APP.SHEETS.STUDENTS);
+    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
+    const selected = new Set(studentIds.map(String));
+    let changed = 0;
+    rows.forEach(row => {
+      if (selected.has(String(row[0])) && row[2] !== Boolean(active)) {
+        row[2] = Boolean(active);
+        changed++;
+      }
+    });
+    if (!changed) throw new Error('No había cambios pendientes para los alumnos seleccionados.');
+    if (!active && rows.filter(row => row[0] && row[1] && row[2] !== false).length === 0) {
+      throw new Error('Debe permanecer al menos un alumno activo.');
+    }
+    sheet.getRange(2, 1, rows.length, 3).setValues(rows);
+    reconstruirEstructuraAlumnos_(ss);
+    return {
+      ok: true,
+      message: active
+        ? `${changed} alumno${changed === 1 ? '' : 's'} reactivado${changed === 1 ? '' : 's'}.`
+        : `${changed} alumno${changed === 1 ? '' : 's'} dado${changed === 1 ? '' : 's'} de baja. Su historial se conservó.`,
+      students: obtenerTodosAlumnos_(ss)
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getDayData_(dateIso) {
+  validarFechaIso_(dateIso);
+  const ss = obtenerLibro_();
+  const date = fechaDesdeIso_(dateIso);
+  const reason = obtenerMotivoSinClase_(ss, date);
+  const existing = {};
+  const activeIds = new Set(obtenerAlumnos_(ss).map(student => student.id));
+  obtenerRegistros_(ss).forEach(row => {
+    if (activeIds.has(row.studentId) && isoDesdeFecha_(row.date) === dateIso) {
+      existing[row.studentId] = { status: row.status, note: row.note || '' };
+    }
+  });
+
+  return {
+    date: dateIso,
+    displayDate: formatearFechaLarga_(date),
+    isWeekend: [0, 6].includes(date.getDay()),
+    noClass: Boolean(reason),
+    noClassReason: reason ? reason.reason : '',
+    noClassDetail: reason ? reason.detail : '',
+    existing
+  };
+}
+
+
+function saveNoClass_(payload) {
+  payload = payload || {};
+  validarFechaIso_(payload.date);
+
+  const reason = String(payload.reason || '').trim();
+  if (!reason) {
+    throw new Error('Selecciona el motivo por el que no hubo clases.');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = obtenerLibro_();
+
+    guardarExcepcionDia_(
+      ss,
+      payload.date,
+      reason,
+      String(payload.detail || '').trim(),
+      true
+    );
+
+    const date = fechaDesdeIso_(payload.date);
+
+    let summariesUpdated = false;
+    const warnings = [];
+
+    try {
+      refrescarHojaMes_(ss, date.getFullYear(), date.getMonth());
+      summariesUpdated = true;
+    } catch (refErr) {
+      warnings.push('No fue posible refrescar la hoja mensual: ' + refErr.message);
+    }
+
+    try {
+      reconstruirResumenes_(ss);
+    } catch (recErr) {
+      summariesUpdated = false;
+      warnings.push('Resúmenes acumulados no actualizados: ' + recErr.message);
+    }
+
+    return {
+      ok: true,
+      date: payload.date,
+      summariesUpdated: summariesUpdated,
+      summaryWarning: warnings.length ? warnings.join(' | ') : null,
+      message: 'Día sin clases guardado correctamente.'
+    };
+
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function saveAttendance_(payload) {
+  payload = payload || {};
+  validarFechaIso_(payload.date);
+  if (!Array.isArray(payload.records)) throw new Error('No se recibieron las asistencias.');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const ss = obtenerLibro_();
+    const students = obtenerAlumnos_(ss);
+    const activeIds = new Set(students.map(student => student.id));
+    const seen = new Set();
+
+    payload.records.forEach(record => {
+      if (!activeIds.has(record.studentId)) throw new Error('Se recibió un alumno que no está activo.');
+      if (!Object.prototype.hasOwnProperty.call(STATUS, record.status)) throw new Error('Hay un estado de asistencia no válido.');
+      if (seen.has(record.studentId)) throw new Error('Hay un alumno repetido en el registro.');
+      seen.add(record.studentId);
+    });
+    if (seen.size !== students.length) throw new Error('Debes registrar a todos los alumnos antes de guardar.');
+
+    const recordsSheet = ss.getSheetByName(APP.SHEETS.RECORDS);
+    const oldRows = obtenerRegistrosCrudos_(recordsSheet);
+    // Sustituye únicamente a los alumnos activos. Conserva el historial de quienes ya fueron dados de baja.
+    const keptRows = oldRows.filter(row =>
+      isoDesdeFecha_(row[0]) !== payload.date || !activeIds.has(String(row[1]))
+    );
+    const date = fechaDesdeIso_(payload.date);
+    const studentMap = new Map(students.map(student => [student.id, student.name]));
+    const now = new Date();
+    const monthKey = Utilities.formatDate(date, APP.TIMEZONE, 'yyyy-MM');
+    const newRows = payload.records.map(record => [
+      date,
+      record.studentId,
+      studentMap.get(record.studentId),
+      record.status,
+      String(record.note || '').trim(),
+      now,
+      monthKey,
+      APP.CYCLE
+    ]);
+    reemplazarDatos_(recordsSheet, keptRows.concat(newRows), 8);
+    recordsSheet.getRange('A2:A').setNumberFormat('dd/mm/yyyy');
+    recordsSheet.getRange('F2:F').setNumberFormat('dd/mm/yyyy hh:mm');
+
+    // Una confirmación de clases prevalece sobre el calendario o un registro previo de suspensión.
+    guardarExcepcionDia_(ss, payload.date, 'Clases confirmadas', '', false);
+    refrescarHojaMes_(ss, date.getFullYear(), date.getMonth());
+    reconstruirResumenes_(ss);
+
+    const counts = { A: 0, F: 0, R: 0, J: 0 };
+    payload.records.forEach(record => counts[record.status]++);
+    const attended = counts.A + counts.R;
+    const absent = counts.F + counts.J;
+    return {
+      ok: true,
+      message: `Asistencia guardada: ${attended} asistieron y ${absent} faltaron.`,
+      counts,
+      attended,
+      absent,
+      total: payload.records.length
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getIndividualReport_(studentId, periodKey) {
+  const ss = obtenerLibro_();
+  const student = obtenerTodosAlumnos_(ss).find(item => item.id === studentId);
+  if (!student) throw new Error('Selecciona un alumno válido.');
+
+  const period = resolverPeriodo_(periodKey);
+  const noClass = obtenerFechasSinClase_(ss);
+  const rows = obtenerRegistros_(ss).filter(row =>
+    row.studentId === studentId &&
+    row.date >= period.start && row.date <= period.end &&
+    !noClass.has(isoDesdeFecha_(row.date))
+  );
+
+  const counts = { A: 0, F: 0, R: 0, J: 0 };
+  rows.forEach(row => counts[row.status]++);
+  const attended = counts.A + counts.R;
+  const absent = counts.F + counts.J;
+  const total = attended + absent;
+  const monthly = obtenerMesesCiclo_().map(month => {
+    const key = `${month.year}-${String(month.month + 1).padStart(2, '0')}`;
+    const monthRows = rows.filter(row => Utilities.formatDate(row.date, APP.TIMEZONE, 'yyyy-MM') === key);
+    const present = monthRows.filter(row => row.status === 'A' || row.status === 'R').length;
+    const missing = monthRows.filter(row => row.status === 'F' || row.status === 'J').length;
+    return { label: MONTH_SHORT[month.month], attendance: present, absence: missing };
+  });
+
+  return {
+    student,
+    period: period.label,
+    counts,
+    attended,
+    absent,
+    totalDays: total,
+    percentage: total ? Math.round(attended * 1000 / total) / 10 : 0,
+    monthly,
+    details: rows
+      .filter(row => row.status !== 'A')
+      .sort((a, b) => a.date - b.date)
+      .map(row => ({
+        date: isoDesdeFecha_(row.date),
+        displayDate: `${row.date.getDate()} de ${MONTH_NAMES[row.date.getMonth()].toLowerCase()} de ${row.date.getFullYear()}`,
+        status: row.status,
+        statusLabel: STATUS[row.status],
+        note: row.note || ''
+      }))
+  };
+}
+
+function getWeeklyAttendanceReport_(studentId, referenceDateIso) {
+  validarFechaIso_(referenceDateIso);
+  const ss = obtenerLibro_();
+  const student = obtenerTodosAlumnos_(ss).find(item => item.id === studentId);
+  if (!student) throw new Error('Selecciona un alumno válido.');
+
+  const reference = fechaDesdeIso_(referenceDateIso);
+  const mondayOffset = (reference.getDay() + 6) % 7;
+  const monday = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate() - mondayOffset, 12, 0, 0);
+  const friday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 4, 12, 0, 0);
+  const records = new Map();
+  obtenerRegistros_(ss).filter(row => row.studentId === studentId).forEach(row => records.set(isoDesdeFecha_(row.date), row));
+  const counts = { A: 0, F: 0, R: 0, J: 0 };
+  const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+  const days = dayNames.map((label, index) => {
+    const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index, 12, 0, 0);
+    const iso = isoDesdeFecha_(date);
+    const record = records.get(iso);
+    const noClass = obtenerMotivoSinClase_(ss, date);
+    if (record && Object.prototype.hasOwnProperty.call(counts, record.status)) counts[record.status]++;
+    return {
+      label,
+      date: iso,
+      displayDate: `${date.getDate()} ${MONTH_SHORT[date.getMonth()]}`,
+      status: record ? record.status : '',
+      statusLabel: record ? STATUS[record.status] : (noClass ? 'Sin clases' : 'Sin registro'),
+      note: record ? (record.note || '') : (noClass ? [noClass.reason, noClass.detail].filter(Boolean).join(' · ') : '')
+    };
+  });
+  const attended = counts.A + counts.R;
+  const absent = counts.F + counts.J;
+  const total = attended + absent;
+  return {
+    mode: 'weekly',
+    student,
+    startDate: isoDesdeFecha_(monday),
+    endDate: isoDesdeFecha_(friday),
+    period: `${monday.getDate()} de ${MONTH_NAMES[monday.getMonth()].toLowerCase()} al ${friday.getDate()} de ${MONTH_NAMES[friday.getMonth()].toLowerCase()} de ${friday.getFullYear()}`,
+    counts,
+    attended,
+    absent,
+    totalDays: total,
+    percentage: total ? Math.round(attended * 1000 / total) / 10 : 0,
+    days
+  };
+}
+
+function saveFamilyFollowUp_(payload) {
+  payload = payload || {};
+  const ss = obtenerLibro_();
+  const student = obtenerTodosAlumnos_(ss).find(item => item.id === payload.studentId);
+  if (!student) throw new Error('Selecciona un alumno válido.');
+  validarFechaIso_(payload.date);
+
+  const sheet = ss.getSheetByName(APP.SHEETS.FAMILY);
+  const reviewDate = payload.reviewDate ? fechaDesdeIso_(payload.reviewDate) : '';
+  sheet.appendRow([
+    fechaDesdeIso_(payload.date),
+    student.id,
+    student.name,
+    String(payload.familyName || '').trim(),
+    String(payload.reason || '').trim(),
+    String(payload.agreements || '').trim(),
+    String(payload.notes || '').trim(),
+    reviewDate,
+    new Date()
+  ]);
+  sheet.getRange(sheet.getLastRow(), 1).setNumberFormat('dd/mm/yyyy');
+  if (reviewDate) sheet.getRange(sheet.getLastRow(), 8).setNumberFormat('dd/mm/yyyy');
+  sheet.getRange(sheet.getLastRow(), 9).setNumberFormat('dd/mm/yyyy hh:mm');
+  return { ok: true, message: 'Entrevista familiar guardada correctamente.' };
+}
+
+function prepararConfiguracion_(ss, restablecer) {
+  const sheet = obtenerOCrearHoja_(ss, APP.SHEETS.CONFIG);
+  const lastRow = Math.max(sheet.getLastRow(), 1);
+  const values = sheet.getRange(1, 1, lastRow, 2).getValues();
+  const current = {};
+  values.forEach(row => current[String(row[0]).trim()] = row[1]);
+  const properties = PropertiesService.getScriptProperties();
+  const migrated = properties.getProperty(AUTH_MIGRATION_PROPERTY) === '1';
+  const reset = restablecer === true || !migrated;
+  const username = reset
+    ? DEFAULT_USERNAME
+    : normalizarUsuario_(current[ACCESS_USER_LABEL] || DEFAULT_USERNAME);
+  const passwordHash = reset || !/^[a-f0-9]{64}$/i.test(String(current[PASSWORD_HASH_LABEL] || ''))
+    ? hashContrasena_(DEFAULT_PASSWORD)
+    : String(current[PASSWORD_HASH_LABEL]);
+  const rows = [
+    ['Configuración', 'Valor'],
+    ['Escuela', current['Escuela'] || APP.SCHOOL],
+    ['C.C.T.', current['C.C.T.'] || APP.CCT],
+    ['Grado y grupo', current['Grado y grupo'] || current['Grupo'] || APP.GROUP],
+    ['Docente', current['Docente'] || APP.TEACHER],
+    ['Ciclo escolar', current['Ciclo escolar'] || APP.CYCLE],
+    ['Inicio del ciclo', fechaDesdeIso_(APP.CYCLE_START)],
+    ['Fin del ciclo', fechaDesdeIso_(APP.CYCLE_END)],
+    [ACCESS_USER_LABEL, username],
+    [PASSWORD_HASH_LABEL, passwordHash]
+  ];
+  sheet.getRange(1, 1, Math.max(lastRow, rows.length), 2).clearContent();
+  sheet.getRange(1, 1, rows.length, 2).setValues(rows);
+  properties.setProperty(AUTH_MIGRATION_PROPERTY, '1');
+  aplicarEncabezado_(sheet.getRange('A1:B1'));
+  sheet.getRange('B7:B8').setNumberFormat('dd/mm/yyyy');
+  sheet.getRange('B9:B10').setNumberFormat('@');
+  sheet.setColumnWidth(1, 180);
+  sheet.setColumnWidth(2, 360);
+  sheet.setFrozenRows(1);
+  sheet.setHiddenGridlines(true);
+}
+
+function prepararAlumnos_(ss) {
+  const sheet = obtenerOCrearHoja_(ss, APP.SHEETS.STUDENTS);
+  if (sheet.getLastRow() === 0) {
+    const values = [['ID', 'Nombre completo', 'Activo']].concat(
+      STUDENTS.map((name, index) => [`A${String(index + 1).padStart(3, '0')}`, name, true])
+    );
+    sheet.getRange(1, 1, values.length, 3).setValues(values);
+    sheet.getRange(2, 3, STUDENTS.length, 1).insertCheckboxes().setValue(true);
+  }
+  aplicarEncabezado_(sheet.getRange('A1:C1'));
+  sheet.setColumnWidth(1, 90);
+  sheet.setColumnWidth(2, 360);
+  sheet.setColumnWidth(3, 90);
+  sheet.setFrozenRows(1);
+  sheet.setHiddenGridlines(true);
+}
+
+function prepararCalendario_(ss) {
+  const sheet = obtenerOCrearHoja_(ss, APP.SHEETS.CALENDAR);
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 8, 5).setValues([
+      ['Tipo', 'Fecha inicial', 'Fecha final', 'Motivo', 'Activo'],
+      ['Vacaciones', '', '', 'Vacaciones de diciembre', false],
+      ['Vacaciones', '', '', 'Vacaciones de Semana Santa', false],
+      ['Vacaciones', '', '', 'Vacaciones de verano', false],
+      ['Consejo Técnico', '', '', 'Consejo Técnico Escolar', false],
+      ['Día festivo', '', '', 'Día festivo', false],
+      ['Suspensión', '', '', 'Suspensión por lluvia', false],
+      ['Otro', '', '', 'Otro motivo', false]
+    ]);
+    sheet.getRange(2, 5, 7, 1).insertCheckboxes().setValue(false);
+  }
+  aplicarEncabezado_(sheet.getRange('A1:E1'));
+  sheet.getRange('B2:C').setNumberFormat('dd/mm/yyyy');
+  sheet.setColumnWidths(1, 1, 150);
+  sheet.setColumnWidths(2, 2, 120);
+  sheet.setColumnWidth(4, 260);
+  sheet.setColumnWidth(5, 80);
+  sheet.setFrozenRows(1);
+  sheet.setHiddenGridlines(true);
+  sheet.getRange('G1:J4').breakApart().setValues([
+    ['INSTRUCCIONES', '', '', ''],
+    ['1. Escribe la fecha inicial y final del periodo.', '', '', ''],
+    ['2. Activa la casilla de la última columna.', '', '', ''],
+    ['3. En el menú “Pase de lista”, pulsa “Actualizar hojas y gráficas”.', '', '', '']
+  ]);
+  sheet.getRange('G1:J1').merge().setBackground('#DFF4F6').setFontWeight('bold').setFontColor('#075E68');
+  sheet.getRange('G2:J2').merge();
+  sheet.getRange('G3:J3').merge();
+  sheet.getRange('G4:J4').merge();
+  sheet.setColumnWidths(7, 4, 130);
+}
+
+function prepararHojaBase_(ss, name, headers) {
+  const sheet = obtenerOCrearHoja_(ss, name);
+  if (sheet.getLastRow() === 0) sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  aplicarEncabezado_(sheet.getRange(1, 1, 1, headers.length));
+  sheet.setFrozenRows(1);
+  sheet.setHiddenGridlines(true);
+  headers.forEach((header, index) => sheet.setColumnWidth(index + 1, header.includes('Observ') || header.includes('Acuerdos') ? 260 : 145));
+}
+
+function prepararHojaMes_(ss, year, month, rebuild) {
+  const name = `${MONTH_NAMES[month]} ${year}`;
+  let sheet = ss.getSheetByName(name);
+  if (sheet && !rebuild) return sheet;
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+  } else {
+    // Las validaciones de asistencia pueden permanecer en filas que cambian de
+    // función cuando aumenta o disminuye la lista de alumnos. Se eliminan antes
+    // de reconstruir el mes para permitir escribir encabezados, totales y
+    // fórmulas sin afectar el registro histórico guardado en la hoja Registro.
+    sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).clearDataValidations();
+    sheet.getDataRange().breakApart();
+    sheet.clear();
+    sheet.setConditionalFormatRules([]);
+  }
+  sheet.setHiddenGridlines(true);
+  const students = obtenerAlumnosParaMes_(ss, year, month);
+  const dates = obtenerDiasHabilesMes_(year, month);
+  const firstDateCol = 3;
+  const firstTotalCol = firstDateCol + dates.length;
+  const lastCol = firstTotalCol + 6;
+  const lastStudentRow = 4 + students.length;
+  const totalRow = lastStudentRow + 1;
+
+  if (sheet.getMaxColumns() < lastCol) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), lastCol - sheet.getMaxColumns());
+  }
+
+  // Las combinaciones se dividen exactamente en el límite de las dos columnas inmovilizadas.
+  // Así Google Sheets permite mantener visibles el número y el nombre del alumno al desplazarse.
+  sheet.getRange(1, 1, 1, 2).merge()
+    .setValue(APP.GROUP)
+    .setBackground('#075E68').setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(16)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.getRange(1, 3, 1, lastCol - 2).merge()
+    .setValue(`PASE DE LISTA · ${MONTH_NAMES[month].toUpperCase()} ${year}`)
+    .setBackground('#087F8C').setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(16)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 38);
+  sheet.getRange(2, 1, 1, 2).merge()
+    .setValue('ESCUELA')
+    .setBackground('#DFF4F6').setFontColor('#075E68').setFontWeight('bold')
+    .setHorizontalAlignment('center');
+  sheet.getRange(2, 3, 1, lastCol - 2).merge()
+    .setValue(`${APP.SCHOOL}  ·  ${APP.GROUP}  ·  ${APP.TEACHER}`)
+    .setBackground('#DFF4F6').setFontColor('#075E68').setFontWeight('bold')
+    .setHorizontalAlignment('center');
+  sheet.getRange(3, 1, 1, 2).merge()
+    .setValue('CLAVES')
+    .setBackground('#FFF8ED').setFontColor('#334155').setFontWeight('bold')
+    .setHorizontalAlignment('center');
+  sheet.getRange(3, 3, 1, lastCol - 2).merge()
+    .setValue('A = Asistencia    F = Falta    R = Retardo    J = Justificada')
+    .setBackground('#FFF8ED').setFontColor('#334155').setHorizontalAlignment('center');
+
+  const headers = ['N.º', 'Nombre del alumno']
+    .concat(dates.map(date => `${['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][date.getDay()]}\n${date.getDate()}`))
+    .concat(['A', 'R', 'F', 'J', 'Asistencias', 'Inasistencias', '% asistencia']);
+  sheet.getRange(4, 1, 1, headers.length).setValues([headers]);
+  aplicarEncabezado_(sheet.getRange(4, 1, 1, headers.length));
+  sheet.getRange(4, 1, 1, headers.length).setWrap(true).setVerticalAlignment('middle');
+  sheet.setRowHeight(4, 46);
+
+  const studentValues = students.map((student, index) => [index + 1, student.name]);
+  sheet.getRange(5, 1, studentValues.length, 2).setValues(studentValues);
+  sheet.getRange(5, 1, studentValues.length, 1).setHorizontalAlignment('center');
+  sheet.getRange(5, 2, studentValues.length, 1).setFontWeight('bold').setFontSize(9);
+
+  if (dates.length) {
+    const entryRange = sheet.getRange(5, firstDateCol, students.length, dates.length);
+    entryRange.setDataValidation(SpreadsheetApp.newDataValidation()
+      .requireValueInList(['A', 'F', 'R', 'J'], true)
+      .setAllowInvalid(false).build());
+    entryRange.setHorizontalAlignment('center').setVerticalAlignment('middle').setFontWeight('bold');
+    aplicarReglasEstado_(sheet, entryRange);
+  }
+
+  const formulaRows = students.map((student, index) => {
+    const row = 5 + index;
+    const startA1 = `${columnaA1_(firstDateCol)}${row}`;
+    const endA1 = `${columnaA1_(firstDateCol + dates.length - 1)}${row}`;
+    return [
+      `=COUNTIF(${startA1}:${endA1},"A")`,
+      `=COUNTIF(${startA1}:${endA1},"R")`,
+      `=COUNTIF(${startA1}:${endA1},"F")`,
+      `=COUNTIF(${startA1}:${endA1},"J")`,
+      `=${columnaA1_(firstTotalCol)}${row}+${columnaA1_(firstTotalCol + 1)}${row}`,
+      `=${columnaA1_(firstTotalCol + 2)}${row}+${columnaA1_(firstTotalCol + 3)}${row}`,
+      `=IFERROR(${columnaA1_(firstTotalCol + 4)}${row}/(${columnaA1_(firstTotalCol + 4)}${row}+${columnaA1_(firstTotalCol + 5)}${row}),0)`
+    ];
+  });
+  sheet.getRange(5, firstTotalCol, students.length, 7).setFormulas(formulaRows);
+  sheet.getRange(5, firstTotalCol + 6, students.length, 1).setNumberFormat('0.0%');
+
+  sheet.getRange(totalRow, 1, 1, 2).merge().setValue('TOTAL DEL GRUPO');
+  const dailyTotalFormulas = dates.map((date, index) => {
+    const col = firstDateCol + index;
+    const colA1 = columnaA1_(col);
+    return `=COUNTIF(${colA1}5:${colA1}${lastStudentRow},"A")+COUNTIF(${colA1}5:${colA1}${lastStudentRow},"R")`;
+  });
+  sheet.getRange(totalRow, firstDateCol, 1, dates.length).setFormulas([dailyTotalFormulas]);
+  const summaryTotalFormulas = Array.from({ length: 6 }, (unused, index) => {
+    const col = firstTotalCol + index;
+    const colA1 = columnaA1_(col);
+    return `=SUM(${colA1}5:${colA1}${lastStudentRow})`;
+  });
+  summaryTotalFormulas.push(`=IFERROR(${columnaA1_(firstTotalCol + 4)}${totalRow}/(${columnaA1_(firstTotalCol + 4)}${totalRow}+${columnaA1_(firstTotalCol + 5)}${totalRow}),0)`);
+  sheet.getRange(totalRow, firstTotalCol, 1, 7).setFormulas([summaryTotalFormulas]);
+  sheet.getRange(totalRow, firstTotalCol + 6).setNumberFormat('0.0%');
+  sheet.getRange(totalRow, 1, 1, lastCol).setBackground('#DFF4F6').setFontWeight('bold').setFontColor('#075E68');
+
+  sheet.setColumnWidth(1, 44);
+  sheet.setColumnWidth(2, 280);
+  if (dates.length) sheet.setColumnWidths(firstDateCol, dates.length, 44);
+  sheet.setColumnWidths(firstTotalCol, 4, 52);
+  sheet.setColumnWidths(firstTotalCol + 4, 3, 92);
+  sheet.setFrozenRows(4);
+  sheet.setFrozenColumns(2);
+  return sheet;
+}
+
+function refrescarHojaMes_(ss, year, month) {
+  const sheet = prepararHojaMes_(ss, year, month);
+  const students = obtenerAlumnosParaMes_(ss, year, month);
+  const dates = obtenerDiasHabilesMes_(year, month);
+  if (!dates.length || !students.length) return;
+
+  const firstDateCol = 3;
+  const records = obtenerRegistros_(ss);
+  const noClass = obtenerFechasSinClaseConMotivo_(ss);
+  const recordMap = new Map(records.map(row => [`${isoDesdeFecha_(row.date)}|${row.studentId}`, row]));
+  const values = students.map(student => dates.map(date => {
+    const iso = isoDesdeFecha_(date);
+    if (noClass.has(iso)) return '—';
+    const record = recordMap.get(`${iso}|${student.id}`);
+    return record ? record.status : '';
+  }));
+  const notes = students.map(student => dates.map(date => {
+    const iso = isoDesdeFecha_(date);
+    const reason = noClass.get(iso);
+    if (reason) return `${reason.reason}${reason.detail ? ': ' + reason.detail : ''}`;
+    const record = recordMap.get(`${iso}|${student.id}`);
+    return record && record.note ? record.note : '';
+  }));
+
+  
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['A', 'F', 'R', 'J'], true).setAllowInvalid(false).build();
+  const suspended = dates.map(date => noClass.has(isoDesdeFecha_(date)));
+  const range = sheet.getRange(5, firstDateCol, students.length, dates.length);
+  range.setDataValidations(students.map(() => suspended.map(flag => flag ? null : rule)));
+  range.setBackgrounds(students.map(() => suspended.map(flag => flag ? '#E2E8F0' : '#FFFFFF')))
+    .setFontColors(students.map(() => suspended.map(flag => flag ? '#64748B' : '#102A43')))
+    .setValues(values).setNotes(notes);
+  const headerBackgrounds = [[]];
+  const headerNotes = [[]];
+  dates.forEach((date, index) => {
+    const iso = isoDesdeFecha_(date);
+    const reason = noClass.get(iso);
+    headerBackgrounds[0].push(reason ? '#64748B' : '#087F8C');
+    headerNotes[0].push(reason ? `${reason.reason}${reason.detail ? ': ' + reason.detail : ''}` : '');
+
+  });
+  sheet.getRange(4, firstDateCol, 1, dates.length).setBackgrounds(headerBackgrounds).setNotes(headerNotes);
+}
+
+function actualizarTodosLosMeses_(ss, rebuild) {
+  obtenerMesesCiclo_().forEach(item => {
+    if (rebuild) prepararHojaMes_(ss, item.year, item.month, true);
+    refrescarHojaMes_(ss, item.year, item.month);
+  });
+}
+
+function reconstruirResumenes_(ss) {
+  const students = obtenerTodosAlumnos_(ss);
+  const months = obtenerMesesCiclo_();
+  const records = obtenerRegistros_(ss);
+  const noClass = obtenerFechasSinClase_(ss);
+  const stats = {};
+
+  students.forEach(student => {
+    stats[student.id] = {};
+    months.forEach(month => {
+      const key = `${month.year}-${String(month.month + 1).padStart(2, '0')}`;
+      stats[student.id][key] = { A: 0, F: 0, R: 0, J: 0 };
+    });
+  });
+  records.forEach(row => {
+    const iso = isoDesdeFecha_(row.date);
+    const monthKey = iso.slice(0, 7);
+    if (noClass.has(iso) || !stats[row.studentId] || !stats[row.studentId][monthKey]) return;
+    stats[row.studentId][monthKey][row.status]++;
+  });
+
+  reconstruirResumenMensual_(ss, students, months, stats);
+  reconstruirFaltasPorMes_(ss, students, months, stats);
+  reconstruirGraficas_(ss, students, months, stats);
+}
+
+function reconstruirResumenMensual_(ss, students, months, stats) {
+  const sheet = obtenerOCrearHoja_(ss, APP.SHEETS.MONTHLY);
+  const headers = ['N.º', 'Alumno'];
+  months.forEach(month => headers.push(`${MONTH_SHORT[month.month]} A+R`, `${MONTH_SHORT[month.month]} F+J`, `${MONTH_SHORT[month.month]} %`));
+  headers.push('Total asistencias', 'Total inasistencias', '% del ciclo');
+
+  const rows = students.map((student, index) => {
+    const row = [index + 1, student.name];
+    let totalAttendance = 0;
+    let totalAbsence = 0;
+    months.forEach(month => {
+      const key = `${month.year}-${String(month.month + 1).padStart(2, '0')}`;
+      const item = stats[student.id][key];
+      const attendance = item.A + item.R;
+      const absence = item.F + item.J;
+      const total = attendance + absence;
+      totalAttendance += attendance;
+      totalAbsence += absence;
+      row.push(attendance, absence, total ? attendance / total : 0);
+    });
+    row.push(totalAttendance, totalAbsence, totalAttendance + totalAbsence ? totalAttendance / (totalAttendance + totalAbsence) : 0);
+    return row;
+  });
+
+  const ready = sheet.getLastRow() === rows.length + 3 && sheet.getLastColumn() === headers.length &&
+    sheet.getRange(1, 3).getValue() === `RESUMEN MENSUAL DE ASISTENCIA · ${APP.CYCLE}` &&
+    JSON.stringify(sheet.getRange(3, 1, 1, headers.length).getValues()[0]) === JSON.stringify(headers);
+  if (ready) {
+    if (rows.length) sheet.getRange(4, 1, rows.length, headers.length).setValues(rows);
+    return;
+  }
+  sheet.getDataRange().breakApart();
+  sheet.clear();
+  sheet.setHiddenGridlines(true);
+  if (sheet.getMaxColumns() < headers.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  }
+
+  sheet.getRange(1, 1, 1, 2).merge().setValue(APP.GROUP)
+    .setBackground('#075E68').setFontColor('#FFFFFF').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+  sheet.getRange(1, 3, 1, headers.length - 2).merge().setValue(`RESUMEN MENSUAL DE ASISTENCIA · ${APP.CYCLE}`)
+    .setBackground('#087F8C').setFontColor('#FFFFFF').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+  sheet.getRange(3, 1, 1, headers.length).setValues([headers]);
+  aplicarEncabezado_(sheet.getRange(3, 1, 1, headers.length));
+  if (rows.length) sheet.getRange(4, 1, rows.length, headers.length).setValues(rows);
+  if (rows.length) {
+    months.forEach((month, index) => sheet.getRange(4, 3 + index * 3 + 2, rows.length, 1).setNumberFormat('0.0%'));
+    sheet.getRange(4, headers.length, rows.length, 1).setNumberFormat('0.0%');
+  }
+  sheet.setColumnWidth(1, 45);
+  sheet.setColumnWidth(2, 290);
+  sheet.setColumnWidths(3, headers.length - 2, 78);
+  sheet.setFrozenRows(3);
+  sheet.setFrozenColumns(2);
+}
+
+function reconstruirFaltasPorMes_(ss, students, months, stats) {
+  const sheet = obtenerOCrearHoja_(ss, APP.SHEETS.ABSENCES);
+  const headers = ['N.º', 'Alumno'].concat(months.map(month => `${MONTH_NAMES[month.month]} ${month.year}`)).concat(['Total']);
+  const rows = students.map((student, index) => {
+    const absences = months.map(month => {
+      const key = `${month.year}-${String(month.month + 1).padStart(2, '0')}`;
+      const item = stats[student.id][key];
+      return item.F + item.J;
+    });
+    return [index + 1, student.name].concat(absences).concat([absences.reduce((sum, value) => sum + value, 0)]);
+  });
+  const ready = sheet.getLastRow() === rows.length + 3 && sheet.getLastColumn() === headers.length &&
+    sheet.getRange(1, 3).getValue() === `FALTAS POR ALUMNO Y MES · ${APP.CYCLE}` &&
+    JSON.stringify(sheet.getRange(3, 1, 1, headers.length).getValues()[0]) === JSON.stringify(headers);
+  if (ready) {
+    if (rows.length) sheet.getRange(4, 1, rows.length, headers.length).setValues(rows);
+    return;
+  }
+  sheet.getDataRange().breakApart();
+  sheet.clear();
+  sheet.setHiddenGridlines(true);
+  if (sheet.getMaxColumns() < headers.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  sheet.getRange(1, 1, 1, 2).merge().setValue(APP.GROUP)
+    .setBackground('#075E68').setFontColor('#FFFFFF').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+  sheet.getRange(1, 3, 1, headers.length - 2).merge().setValue(`FALTAS POR ALUMNO Y MES · ${APP.CYCLE}`)
+    .setBackground('#087F8C').setFontColor('#FFFFFF').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+  sheet.getRange(3, 1, 1, headers.length).setValues([headers]);
+  aplicarEncabezado_(sheet.getRange(3, 1, 1, headers.length));
+  if (rows.length) sheet.getRange(4, 1, rows.length, headers.length).setValues(rows);
+  sheet.setColumnWidth(1, 45);
+  sheet.setColumnWidth(2, 290);
+  sheet.setColumnWidths(3, headers.length - 2, 105);
+  sheet.setFrozenRows(3);
+  sheet.setFrozenColumns(2);
+  if (rows.length) {
+    const totalRange = sheet.getRange(4, headers.length, rows.length, 1);
+    const rules = [
+      SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThanOrEqualTo(5).setBackground('#FECACA').setFontColor('#991B1B').setRanges([totalRange]).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenNumberBetween(1, 4).setBackground('#FFEDD5').setFontColor('#9A3412').setRanges([totalRange]).build()
+    ];
+    sheet.setConditionalFormatRules(rules);
+  }
+}
+
+function reconstruirGraficas_(ss, students, months, stats) {
+  const sheet = obtenerOCrearHoja_(ss, APP.SHEETS.CHARTS);
+  const rows = months.map(month => {
+    const key = `${month.year}-${String(month.month + 1).padStart(2, '0')}`;
+    let attendance = 0, absence = 0, tardies = 0, justified = 0;
+    students.forEach(student => {
+      const item = stats[student.id][key];
+      attendance += item.A + item.R;
+      absence += item.F + item.J;
+      tardies += item.R;
+      justified += item.J;
+    });
+    return [`${MONTH_SHORT[month.month]} ${month.year}`, attendance, absence, tardies, justified];
+  });
+  const charts = sheet.getCharts();
+  const ready = sheet.getLastRow() === rows.length + 3 && sheet.getLastColumn() === 5 &&
+    sheet.getRange('A1').getValue() === `GRÁFICAS DE ASISTENCIA · ${APP.CYCLE}` &&
+    JSON.stringify(sheet.getRange('A3:E3').getValues()[0]) === JSON.stringify(['Mes', 'Asistencias A+R', 'Inasistencias F+J', 'Retardos', 'Justificadas']) &&
+    charts.length === 1 && charts[0].getRanges().some(r => r.getSheet().getSheetId() === sheet.getSheetId() && r.getRow() === 3 && r.getColumn() === 1 && r.getNumRows() === rows.length + 1 && r.getNumColumns() === 3);
+  if (ready) {
+    sheet.getRange(4, 1, rows.length, 5).setValues(rows);
+    return;
+  }
+  sheet.getDataRange().breakApart();
+  sheet.clear();
+  sheet.getCharts().forEach(chart => sheet.removeChart(chart));
+  sheet.setHiddenGridlines(true);
+  sheet.getRange('A1:E1').merge().setValue(`GRÁFICAS DE ASISTENCIA · ${APP.CYCLE}`)
+    .setBackground('#087F8C').setFontColor('#FFFFFF').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+  sheet.getRange('A3:E3').setValues([['Mes', 'Asistencias A+R', 'Inasistencias F+J', 'Retardos', 'Justificadas']]);
+  aplicarEncabezado_(sheet.getRange('A3:E3'));
+
+  sheet.getRange(4, 1, rows.length, 5).setValues(rows);
+  sheet.setColumnWidth(1, 120);
+  sheet.setColumnWidths(2, 4, 135);
+
+  const chart = sheet.newChart()
+    .setChartType(Charts.ChartType.COLUMN)
+    .addRange(sheet.getRange(3, 1, rows.length + 1, 3))
+    .setPosition(3, 7, 0, 0)
+    .setOption('title', 'Asistencias e inasistencias por mes')
+    .setOption('legend', { position: 'bottom' })
+    .setOption('colors', ['#16A34A', '#DC2626'])
+    .setOption('height', 420)
+    .setOption('width', 760)
+    .build();
+  sheet.insertChart(chart);
+}
+
+function prepararHojaMesDatos_(ss, date) {
+  prepararHojaMes_(ss, date.getFullYear(), date.getMonth());
+  refrescarHojaMes_(ss, date.getFullYear(), date.getMonth());
+}
+
+function obtenerLibro_() {
+  const id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+  if (!id) throw new Error('Primero ejecuta la función configurar_ desde Apps Script.');
+  return SpreadsheetApp.openById(id);
+}
+
+function obtenerOCrearHoja_(ss, name) {
+  return ss.getSheetByName(name) || ss.insertSheet(name);
+}
+
+function leerConfiguracion_(ss) {
+  const sheet = ss.getSheetByName(APP.SHEETS.CONFIG);
+  const values = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 1), 2).getValues();
+  const map = {};
+  values.forEach(row => map[row[0]] = row[1]);
+  return {
+    school: map['Escuela'] || APP.SCHOOL,
+    cct: map['C.C.T.'] || APP.CCT,
+    group: map['Grado y grupo'] || APP.GROUP,
+    teacher: map['Docente'] || APP.TEACHER,
+    cycle: map['Ciclo escolar'] || APP.CYCLE
+  };
+}
+
+function obtenerAlumnos_(ss) {
+  return obtenerTodosAlumnos_(ss)
+    .filter(student => student.active)
+    .map(student => ({ id: student.id, name: student.name }));
+}
+
+function obtenerTodosAlumnos_(ss) {
+  const sheet = ss.getSheetByName(APP.SHEETS.STUDENTS);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const values = sheet.getDataRange().getValues();
+  const headers = values.shift().map(value => String(value).trim());
+  const idCol = headers.indexOf('id') >= 0 ? headers.indexOf('id') : headers.indexOf('ID');
+  const nameCol = headers.indexOf('nombreCompleto') >= 0 ? headers.indexOf('nombreCompleto') : headers.indexOf('Nombre completo');
+  const activeCol = headers.indexOf('activo') >= 0 ? headers.indexOf('activo') : headers.indexOf('Activo');
+  if (idCol < 0 || nameCol < 0) throw new Error('La hoja Alumnos no tiene una estructura compatible.');
+  return values
+    .filter(row => row[idCol] && row[nameCol])
+    .map(row => ({ id: String(row[idCol]), name: String(row[nameCol]), active: activeCol < 0 || row[activeCol] !== false }));
+}
+
+function obtenerAlumnosParaMes_(ss, year, month) {
+  const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const idsWithHistory = new Set(obtenerRegistros_(ss)
+    .filter(record => record.monthKey === monthKey)
+    .map(record => record.studentId));
+  return obtenerTodosAlumnos_(ss)
+    .filter(student => student.active || idsWithHistory.has(student.id))
+    .map(student => ({ id: student.id, name: student.name }));
+}
+
+function reconstruirEstructuraAlumnos_(ss) {
+  actualizarTodosLosMeses_(ss, true);
+  reconstruirResumenes_(ss);
+}
+
+function normalizarNombre_(name) {
+  return String(name || '').trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+function claveNombre_(name) {
+  return normalizarNombre_(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function crearMensajeAlumnos_(added, reactivated, repeated) {
+  const parts = [];
+  if (added.length) parts.push(`${added.length} alumno${added.length === 1 ? '' : 's'} agregado${added.length === 1 ? '' : 's'}`);
+  if (reactivated.length) parts.push(`${reactivated.length} alumno${reactivated.length === 1 ? '' : 's'} reactivado${reactivated.length === 1 ? '' : 's'}`);
+  if (repeated.length) parts.push(`${repeated.length} ya estaba${repeated.length === 1 ? '' : 'n'} activo${repeated.length === 1 ? '' : 's'}`);
+  return `${parts.join(', ') || 'No se realizaron cambios'}.`;
+}
+
+function obtenerRegistrosCrudos_(sheet) {
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues().filter(row => row[0] && row[1]);
+}
+
+function obtenerRegistros_(ss) {
+  const sheet = ss.getSheetByName(APP.SHEETS.RECORDS);
+  return obtenerRegistrosCrudos_(sheet).map(row => ({
+    date: normalizarFecha_(row[0]),
+    studentId: String(row[1]),
+    studentName: String(row[2]),
+    status: String(row[3]),
+    note: String(row[4] || ''),
+    monthKey: String(row[6] || Utilities.formatDate(normalizarFecha_(row[0]), APP.TIMEZONE, 'yyyy-MM'))
+  }));
+}
+
+function reemplazarDatos_(sheet, rows, columns) {
+  const oldRows = Math.max(sheet.getLastRow() - 1, 0);
+  if (oldRows) sheet.getRange(2, 1, oldRows, columns).clearContent();
+  if (rows.length) sheet.getRange(2, 1, rows.length, columns).setValues(rows);
+}
+
+function guardarExcepcionDia_(ss, dateIso, reason, detail, active) {
+  const sheet = ss.getSheetByName(APP.SHEETS.NO_CLASS);
+  if (!sheet) throw new Error('No se encontró la hoja Días sin clase.');
+  const rows = sheet.getLastRow() >= 2 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues() : [];
+  const updatedRow = [fechaDesdeIso_(dateIso), reason, detail, active, new Date()];
+  const updatedRows = [];
+  let found = false;
+  rows.forEach(row => {
+    if (row[0] && isoDesdeFecha_(row[0]) === dateIso) {
+      if (!found) {
+        updatedRows.push(updatedRow);
+        found = true;
+      }
+    } else {
+      updatedRows.push(row);
+    }
+  });
+  if (!found) updatedRows.push(updatedRow);
+  reemplazarDatos_(sheet, updatedRows, 5);
+  if (updatedRows.length) {
+    sheet.getRange(2, 1, updatedRows.length, 1).setNumberFormat('dd/mm/yyyy');
+    sheet.getRange(2, 5, updatedRows.length, 1).setNumberFormat('dd/mm/yyyy hh:mm');
+  }
+}
+
+function obtenerMotivoSinClase_(ss, date) {
+  const iso = isoDesdeFecha_(date);
+  const overrides = ss.getSheetByName(APP.SHEETS.NO_CLASS);
+  if (overrides && overrides.getLastRow() >= 2) {
+    const rows = overrides.getRange(2, 1, overrides.getLastRow() - 1, 5).getValues();
+    const row = rows.find(item => item[0] && isoDesdeFecha_(item[0]) === iso);
+    if (row) return row[3] === true ? { reason: String(row[1]), detail: String(row[2] || '') } : null;
+  }
+
+  const calendar = ss.getSheetByName(APP.SHEETS.CALENDAR);
+  if (calendar && calendar.getLastRow() >= 2) {
+    const rows = calendar.getRange(2, 1, calendar.getLastRow() - 1, 5).getValues();
+    for (const row of rows) {
+      if (row[4] !== true || !row[1] || !row[2]) continue;
+      const start = normalizarFecha_(row[1]);
+      const end = normalizarFecha_(row[2]);
+      if (date >= start && date <= end) return { reason: String(row[3] || row[0]), detail: '' };
+    }
+  }
+  if ([0, 6].includes(date.getDay())) return { reason: 'Fin de semana', detail: '' };
+  return null;
+}
+
+function obtenerFechasSinClase_(ss) {
+  return new Set(Array.from(obtenerFechasSinClaseConMotivo_(ss).keys()));
+}
+
+function obtenerFechasSinClaseConMotivo_(ss) {
+  const result = new Map();
+  const overrides = new Map();
+  const overrideSheet = ss.getSheetByName(APP.SHEETS.NO_CLASS);
+  if (overrideSheet && overrideSheet.getLastRow() >= 2) {
+    overrideSheet.getRange(2, 1, overrideSheet.getLastRow() - 1, 5).getValues().forEach(row => {
+      if (!row[0]) return;
+      overrides.set(isoDesdeFecha_(row[0]), {
+        active: row[3] === true,
+        reason: String(row[1] || ''),
+        detail: String(row[2] || '')
+      });
+    });
+  }
+
+  const calendarRanges = [];
+  const calendarSheet = ss.getSheetByName(APP.SHEETS.CALENDAR);
+  if (calendarSheet && calendarSheet.getLastRow() >= 2) {
+    calendarSheet.getRange(2, 1, calendarSheet.getLastRow() - 1, 5).getValues().forEach(row => {
+      if (row[4] !== true || !row[1] || !row[2]) return;
+      calendarRanges.push({
+        start: normalizarFecha_(row[1]),
+        end: normalizarFecha_(row[2]),
+        reason: String(row[3] || row[0]),
+        detail: ''
+      });
+    });
+  }
+
+  const start = fechaDesdeIso_(APP.CYCLE_START);
+  const end = fechaDesdeIso_(APP.CYCLE_END);
+  for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+    if ([0, 6].includes(cursor.getDay())) continue;
+    const iso = isoDesdeFecha_(cursor);
+    if (overrides.has(iso)) {
+      const override = overrides.get(iso);
+      if (override.active) result.set(iso, { reason: override.reason, detail: override.detail });
+      continue;
+    }
+    const period = calendarRanges.find(item => cursor >= item.start && cursor <= item.end);
+    if (period) result.set(iso, { reason: period.reason, detail: period.detail });
+  }
+  return result;
+}
+
+function obtenerDiasHabilesMes_(year, month) {
+  const dates = [];
+  const cycleStart = fechaDesdeIso_(APP.CYCLE_START);
+  const cycleEnd = fechaDesdeIso_(APP.CYCLE_END);
+  const last = new Date(year, month + 1, 0).getDate();
+  for (let day = 1; day <= last; day++) {
+    const date = new Date(year, month, day, 12, 0, 0);
+    if (![0, 6].includes(date.getDay()) && date >= cycleStart && date <= cycleEnd) dates.push(date);
+  }
+  return dates;
+}
+
+function obtenerMesesCiclo_() {
+  const start = fechaDesdeIso_(APP.CYCLE_START);
+  const end = fechaDesdeIso_(APP.CYCLE_END);
+  const months = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1, 12, 0, 0);
+  while (cursor <= end) {
+    months.push({ year: cursor.getFullYear(), month: cursor.getMonth() });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return months;
+}
+
+function obtenerPeriodosReporte_() {
+  const months = obtenerMesesCiclo_().map(item => ({
+    key: `${item.year}-${String(item.month + 1).padStart(2, '0')}`,
+    label: `${MONTH_NAMES[item.month]} ${item.year}`
+  }));
+  return months.concat([
+    { key: 'TRIM1', label: 'Primer trimestre' },
+    { key: 'TRIM2', label: 'Segundo trimestre' },
+    { key: 'TRIM3', label: 'Tercer trimestre' },
+    { key: 'CYCLE', label: `Todo el ciclo ${APP.CYCLE}` }
+  ]);
+}
+
+function resolverPeriodo_(key) {
+  if (/^\d{4}-\d{2}$/.test(key || '')) {
+    const parts = key.split('-').map(Number);
+    const start = new Date(parts[0], parts[1] - 1, 1, 12, 0, 0);
+    const end = new Date(parts[0], parts[1], 0, 12, 0, 0);
+    return { start, end, label: `${MONTH_NAMES[parts[1] - 1]} ${parts[0]}` };
+  }
+  if (key === 'TRIM1') return { start: fechaDesdeIso_(APP.CYCLE_START), end: fechaDesdeIso_('2026-11-30'), label: 'Primer trimestre' };
+  if (key === 'TRIM2') return { start: fechaDesdeIso_('2026-12-01'), end: fechaDesdeIso_('2027-03-31'), label: 'Segundo trimestre' };
+  if (key === 'TRIM3') return { start: fechaDesdeIso_('2027-04-01'), end: fechaDesdeIso_(APP.CYCLE_END), label: 'Tercer trimestre' };
+  return { start: fechaDesdeIso_(APP.CYCLE_START), end: fechaDesdeIso_(APP.CYCLE_END), label: `Ciclo escolar ${APP.CYCLE}` };
+}
+
+function aplicarEncabezado_(range) {
+  range.setBackground('#087F8C').setFontColor('#FFFFFF').setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+}
+
+function aplicarReglasEstado_(sheet, range) {
+  const current = sheet.getConditionalFormatRules().filter(rule =>
+    !rule.getRanges().some(item => item.getA1Notation() === range.getA1Notation())
+  );
+  Object.keys(STATUS_COLORS).forEach(status => {
+    current.push(SpreadsheetApp.newConditionalFormatRule()
+      .whenTextEqualTo(status)
+      .setBackground(STATUS_COLORS[status])
+      .setFontColor('#FFFFFF')
+      .setBold(true)
+      .setRanges([range])
+      .build());
+  });
+  sheet.setConditionalFormatRules(current);
+}
+
+function columnaA1_(column) {
+  let result = '';
+  let value = column;
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    value = Math.floor((value - 1) / 26);
+  }
+  return result;
+}
+
+function validarFechaIso_(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) throw new Error('La fecha no es válida.');
+  const date = fechaDesdeIso_(value);
+  if (isNaN(date.getTime()) || isoDesdeFecha_(date) !== value) throw new Error('La fecha no es válida.');
+}
+
+function fechaDesdeIso_(iso) {
+  const parts = String(iso).split('-').map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+}
+
+function isoDesdeFecha_(value) {
+  if (!value) return '';
+  return Utilities.formatDate(normalizarFecha_(value), APP.TIMEZONE, 'yyyy-MM-dd');
+}
+
+function normalizarFecha_(value) {
+  const date = value instanceof Date ? new Date(value) : new Date(value);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0);
+}
+
+function formatearFechaLarga_(date) {
+  const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  return `${days[date.getDay()].charAt(0).toUpperCase()}${days[date.getDay()].slice(1)}, ${date.getDate()} de ${MONTH_NAMES[date.getMonth()].toLowerCase()} de ${date.getFullYear()}`;
+}

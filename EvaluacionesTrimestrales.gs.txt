@@ -147,18 +147,16 @@ var EVAL_CAMPOS_FORMATIVOS = {
  *   - 27/11/2026 (Modificación funcional - Etapa 7A.3): Eliminadas las conjeturas de funciones;
  *     se vinculó exclusivamente 'validarSesionDocenteAutentica_' con rechazo por defecto estricto.
  */
-function validateTeacherAuth_(sessionToken, targetGroup) {
-  // Enlace explícito y exclusivo con el validador de sesión docente auténtico del sistema.
-  // NO se utilizan conjeturas de nombres ni se reutilizan sesiones del portal familiar.
-  if (typeof validarSesionDocenteAutentica_ !== 'function') {
-    throw new Error('SECURITY_REJECT_DEFAULT: Mecanismo de autenticación docente no vinculado en el backend. La instalación permanece detenida hasta proporcionar el validador oficial.');
-  }
-
-  var session = validarSesionDocenteAutentica_(sessionToken, targetGroup);
-  if (!session || !session.ok || !session.usuario) {
-    throw new Error('AUTH_ERROR: Sesión docente inválida, expirada o no autorizada para el grupo escolar ' + (targetGroup || '') + '.');
-  }
-
+/**
+ * TÍTULO: Adaptador de autenticación docente
+ * FECHA DE MODIFICACIÓN: 27/11/2026
+ * PROPÓSITO Y MOTIVO: Reutiliza validarSesion_ y limita el ámbito al grupo y ciclo configurados; devuelve identidad del servidor.
+ * HISTORIAL: 27/11/2026 — integración focalizada 7A.3.
+ */
+function validateTeacherAuth_(sessionToken, targetGroup, ciclo) {
+  var session = validarSesion_(sessionToken);
+  var normalize = function (v) { return String(v || '').replace(/[°º\s]/g, '').toUpperCase(); };
+  if (!session || !session.ok || !session.usuario || normalize(session.grupo) !== normalize(targetGroup) || String(session.cicloEscolar) !== String(ciclo)) throw new Error('AUTH_ERROR: ámbito no autorizado.');
   return session;
 }
 
@@ -373,7 +371,7 @@ function getTrimesterEvaluationBundle(payload, sessionToken) {
   var t = parseInt(p.trimestre || 1, 10);
 
   // Validación de seguridad Zero-Trust
-  validateTeacherAuth_(sessionToken, grupo);
+  validateTeacherAuth_(sessionToken, grupo, ciclo);
 
   // 1. Obtener última versión consolidada en EvalVersiones aislada por ciclo, grupo y trimestre
   var versiones = (typeof readRows_ === 'function' ? readRows_('EvalVersiones') : []).filter(function (v) {
@@ -394,9 +392,7 @@ function getTrimesterEvaluationBundle(payload, sessionToken) {
   });
 
   // 2. Cargar Banco de Recomendaciones pedagógicas activas desde el servidor
-  var bancoRecomendaciones = (typeof readRows_ === 'function' ? readRows_('EvalBancoRecomendaciones') : []).filter(function (b) {
-    return b.activo !== false && String(b.activo).toLowerCase() !== 'false';
-  });
+  var bancoRecomendaciones = evalReadCommittedBank_();
 
   // 3. Cargar Configuración trimestral vinculada a la versión consolidada
   var configRows = (typeof readRows_ === 'function' ? readRows_('EvalConfig') : []).filter(function (c) {
@@ -406,18 +402,14 @@ function getTrimesterEvaluationBundle(payload, sessionToken) {
   });
   // Si existe batch consolidado, buscar su config; de lo contrario la última disponible
   var activeConfig = null;
-  if (latestBatchId) {
-    activeConfig = configRows.find(function (c) { return c.batchId === latestBatchId; }) || (configRows.length > 0 ? configRows[configRows.length - 1] : null);
-  } else if (configRows.length > 0) {
-    activeConfig = configRows[configRows.length - 1];
-  }
+  if (latestBatchId) activeConfig = configRows.find(function (c) { return c.batchId === latestBatchId; }) || null;
 
   // 4. Cargar Actividades seleccionadas vinculadas
   var actividades = (typeof readRows_ === 'function' ? readRows_('EvalActividades') : []).filter(function (a) {
     return String(a.cicloEscolar) === String(ciclo) &&
            String(a.grupo) === String(grupo) &&
            parseInt(a.trimestre, 10) === t &&
-           (!latestBatchId || a.batchId === latestBatchId);
+           (latestBatchId && a.batchId === latestBatchId);
   });
 
   // 5. Si no existe versión consolidada, retornar estructura vacía con catálogo de recomendaciones
@@ -514,7 +506,7 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
   }
 
   // 1. Autenticación Zero-Trust: la identidad responsable se obtiene DIRECTAMENTE de la sesión validada
-  var authSession = validateTeacherAuth_(sessionToken, grupo);
+  var authSession = validateTeacherAuth_(sessionToken, grupo, ciclo);
   var user = authSession.usuario; // NUNCA se confía en payload.usuario del cliente
 
   // 2. Concurrencia segura: Ejecutar bajo ScriptLock para compatibilidad con Web App
@@ -861,28 +853,13 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
       }
     }
 
-    // 11. Persistencia de Banco de Recomendaciones si se proporcionó
-    if (Array.isArray(payload.bancoRecomendaciones) && payload.bancoRecomendaciones.length > 0) {
-      var recBatch = payload.bancoRecomendaciones.map(function (r) {
-        return {
-          id: r.id || ('REC_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
-          categoria: r.categoria || 'pedagogica',
-          campoFormativo: r.campoFormativo || '',
-          nivel: r.nivel || 'E',
-          texto: r.texto || '',
-          caracteres: (r.texto || '').length,
-          estadoAprobacion: r.estadoAprobacion || 'aprobada',
-          activo: r.activo !== false,
-          creadoEn: r.creadoEn || now,
-          actualizadoEn: now,
-          actualizadoPor: user,
-          version: newVersionNumber
-        };
-      });
-      if (typeof upsertObjectsBatch_ === 'function') {
-        upsertObjectsBatch_('EvalBancoRecomendaciones', recBatch, 'id');
-      }
+    // 11. Preparar versiones del banco sin sobrescribir registros consolidados.
+    if (Array.isArray(payload.bancoRecomendaciones)) {
+      var bankVersionId = 'VER_' + ciclo + '_' + grupo + '_T' + t + '_' + batchId;
+      var recBatch = evalPrepareBank_(payload.bancoRecomendaciones, bankVersionId, newVersionNumber, user, now);
+      if (recBatch.length) upsertObjectsBatch_('EvalBancoRecomendaciones', recBatch, 'id');
     }
+    SpreadsheetApp.flush();
 
     // 12. Consolidación atómica: Sellar el lote en EvalVersiones con snapshot compacto (<500 car)
     var versId = 'VER_' + ciclo + '_' + grupo + '_T' + t + '_' + batchId;
@@ -917,6 +894,7 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
       appendRow_('EvalVersiones', versionRec);
     }
 
+    SpreadsheetApp.flush();
     return { ok: true, data: result };
   });
 }
@@ -946,13 +924,13 @@ function migrateEvaluacionesTrimestralesSchema_(ss) {
     EvalConfig: [
       'id', 'cicloEscolar', 'grupo', 'trimestre', 'fechaInicio', 'fechaFin',
       'estadoPeriodo', 'ponderacionesJson', 'valoresTareasJson', 'valoresConductaJson',
-      'valoresParticipacionJson', 'configAsistenciaJson', 'ajustesAdminJson', 'version',
+      'valoresParticipacionJson', 'configAsistenciaJson', 'ajustesAdminJson', 'batchId', 'version',
       'actualizadoEn', 'actualizadoPor'
     ],
     EvalActividades: [
       'id', 'cicloEscolar', 'grupo', 'trimestre', 'campoFormativo', 'criterio',
       'actividadId', 'tipoActividad', 'fechaActividad', 'nombreActividad',
-      'seleccionada', 'peso', 'exclusionesAlumnosJson', 'version', 'actualizadoEn', 'actualizadoPor'
+      'seleccionada', 'peso', 'exclusionesAlumnosJson', 'batchId', 'version', 'actualizadoEn', 'actualizadoPor'
     ],
     EvalCalificaciones: [
       'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
@@ -973,7 +951,7 @@ function migrateEvaluacionesTrimestralesSchema_(ss) {
     ],
     EvalBancoRecomendaciones: [
       'id', 'categoria', 'campoFormativo', 'nivel', 'texto', 'caracteres',
-      'estadoAprobacion', 'activo', 'creadoEn', 'actualizadoEn', 'actualizadoPor', 'version'
+      'estadoAprobacion', 'activo', 'creadoEn', 'actualizadoEn', 'actualizadoPor', 'version', 'recomendacionId', 'loteVersionId'
     ],
     EvalVersiones: [
       'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'tipoOperacion',
@@ -1112,3 +1090,39 @@ Si se presenta alguna incompatibilidad o anomalía:
    Prohibido eliminar o vaciar hojas con datos reales.
 Cualquier información histórica o registros capturados permanecerán seguros para auditoría, consulta o reactivación futura sin riesgo de pérdida de datos.
 */
+
+/**
+ * TÍTULO: Lectura del banco consolidado
+ * FECHA DE MODIFICACIÓN: 27/11/2026
+ * PROPÓSITO Y MOTIVO: Devuelve la última revisión por ID lógico según el orden de sellado; ignora escrituras parciales.
+ * HISTORIAL: 27/11/2026 — integración focalizada 7A.3.
+ */
+function evalReadCommittedBank_() {
+  var order = new Map();
+  readRows_('EvalVersiones').forEach(function(v,i) { if (v.estadoConsolidacion === 'consolidado') order.set(String(v.id),i); });
+  var latest = new Map();
+  readRows_('EvalBancoRecomendaciones').forEach(function(r) {
+    if (!r.loteVersionId || !order.has(String(r.loteVersionId))) return;
+    var id = String(r.recomendacionId), rank = order.get(String(r.loteVersionId));
+    if (!latest.has(id) || latest.get(id).rank <= rank) latest.set(id,{rank:rank,row:r});
+  });
+  return Array.from(latest.values()).map(function(x) { return Object.assign({},x.row,{id:x.row.recomendacionId}); });
+}
+/**
+ * TÍTULO: Preparación de revisiones del banco
+ * FECHA DE MODIFICACIÓN: 27/11/2026
+ * PROPÓSITO Y MOTIVO: Valida texto y estado, genera ID físico por lote; no altera versiones anteriores.
+ * HISTORIAL: 27/11/2026 — integración focalizada 7A.3.
+ */
+function evalPrepareBank_(rows, versionId, version, user, now) {
+  var seen = new Set();
+  return rows.map(function(r,i) {
+    var id = String(r.id || ('REC_' + versionId + '_' + i));
+    if (seen.has(id)) throw new Error('Recomendación duplicada.');
+    seen.add(id);
+    var text = String(r.texto || '').trim();
+    var status = r.estadoAprobacion || 'pendiente';
+    if (!text || text.length > 245 || !['pendiente','aprobada','rechazada'].includes(status)) throw new Error('Recomendación inválida.');
+    return {id:JSON.stringify([versionId,id]),recomendacionId:id,loteVersionId:versionId,categoria:r.categoria || 'pedagogica',campoFormativo:r.campoFormativo || '',nivel:r.nivel || 'E',texto:text,caracteres:text.length,estadoAprobacion:status,activo:r.activo !== false,creadoEn:r.creadoEn || now,actualizadoEn:now,actualizadoPor:user,version:version};
+  });
+}

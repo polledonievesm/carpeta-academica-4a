@@ -10,7 +10,7 @@
  * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
  * 
  * ÍNDICE DE SECCIONES:
- *   1. const DB: Esquemas relacionales preexistentes (27 tablas originales documentadas).
+ *   1. const DB: Esquemas relacionales preexistentes (31 tablas originales documentadas).
  *   2. const DB_EVALUACIONES: Esquemas relacionales del módulo Evaluaciones Trimestrales (7 tablas).
  *   3. Funciones de Inicialización y Semillas: setupSystem_, seedEvaluationPeriods_, seedConfig_, etc.
  *   4. Utilidades CRUD y Persistencia: readRows_, upsertObject_, upsertObjectsBatch_, appendObjects_, etc.
@@ -32,7 +32,7 @@
  *   - Fecha de creación no registrada: Implementación base del esquema relacional y utilidades CRUD.
  *   - 27/11/2026 (Modificación funcional y documental - Etapa 7A.3):
  *     * Se aplicó el estándar obligatorio de documentación JSDoc a todas las funciones del archivo.
- *     * Se identificó el nombre y propósito oficial de cada una de las 27 tablas en 'const DB'.
+ *     * Se identificó el nombre y propósito oficial de cada una de las 31 tablas en 'const DB'.
  *     * Se separaron las 7 tablas de Evaluaciones Trimestrales en 'const DB_EVALUACIONES' para blindar
  *       'setupSystem_' y 'ensureInstalled_', impidiendo la creación automática no autorizada de hojas.
  *     * Se adaptaron 'upsertObjectsBatch_', 'upsertObject_', 'readRows_' y 'appendObjects_' para resolver
@@ -131,14 +131,14 @@ const DB_EVALUACIONES = {
   EvalConfig: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'fechaInicio', 'fechaFin',
     'estadoPeriodo', 'ponderacionesJson', 'valoresTareasJson', 'valoresConductaJson',
-    'valoresParticipacionJson', 'configAsistenciaJson', 'ajustesAdminJson', 'version',
+    'valoresParticipacionJson', 'configAsistenciaJson', 'ajustesAdminJson', 'batchId', 'version',
     'actualizadoEn', 'actualizadoPor'
   ],
   // Hoja 2: Actividades y tareas seleccionadas o excluidas por criterio y campo formativo
   EvalActividades: [
     'id', 'cicloEscolar', 'grupo', 'trimestre', 'campoFormativo', 'criterio',
     'actividadId', 'tipoActividad', 'fechaActividad', 'nombreActividad',
-    'seleccionada', 'peso', 'exclusionesAlumnosJson', 'version', 'actualizadoEn', 'actualizadoPor'
+    'seleccionada', 'peso', 'exclusionesAlumnosJson', 'batchId', 'version', 'actualizadoEn', 'actualizadoPor'
   ],
   // Hoja 3: Calificaciones por alumno, campo formativo, modalidad y desgloses
   EvalCalificaciones: [
@@ -163,7 +163,7 @@ const DB_EVALUACIONES = {
   // Hoja 6: Banco institucional de recomendaciones pedagógicas
   EvalBancoRecomendaciones: [
     'id', 'categoria', 'campoFormativo', 'nivel', 'texto', 'caracteres',
-    'estadoAprobacion', 'activo', 'creadoEn', 'actualizadoEn', 'actualizadoPor', 'version'
+    'estadoAprobacion', 'activo', 'creadoEn', 'actualizadoEn', 'actualizadoPor', 'version', 'recomendacionId', 'loteVersionId'
   ],
   // Hoja 7: Historial inmutable y auditoría de versiones consolidadas
   EvalVersiones: [
