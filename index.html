@@ -1351,9 +1351,17 @@
             <h1>Evaluaciones Trimestrales</h1>
             <p class="muted">Gestión de calificaciones ponderadas, desempeño integral y publicación oficial para el ciclo escolar.</p>
           </div>
-          <div class="button-row">
+          <div class="button-row" style="align-items: center; gap: 8px;">
+            <div id="evalSyncIndicatorWrap" class="eval-sync-indicator-wrap" style="display: inline-flex; align-items: center; gap: 6px;">
+              <span id="evalSyncStatusIndicator" class="eval-sync-pill eval-sync-guardado_servidor" title="Estado de persistencia con Google Sheets">
+                <span class="eval-sync-dot"></span>
+                <span id="evalSyncStatusText">✓ Guardado en Google Sheets</span>
+              </span>
+            </div>
+            <button class="btn small" data-action="eval-open-draft-migration-modal" id="evalBtnOpenMigration" title="Revisar y recuperar borradores locales para sincronización">📦 Borradores</button>
+            <button class="btn small primary" data-action="eval-sync-now" id="evalBtnSyncNow" title="Sincronizar evaluaciones con Google Sheets">☁️ Sincronizar</button>
             <button class="btn" data-action="eval-refresh">Actualizar</button>
-            <button class="btn primary" data-action="eval-save-draft">Guardar borrador</button>
+            <button class="btn secondary" data-action="eval-save-draft">Guardar borrador</button>
           </div>
         </div>
 
@@ -2164,16 +2172,16 @@
           </div>
         </div>
 
-        <!-- Modal del Banco de Recomendaciones (Etapa 6) -->
+        <!-- Modal del Banco de Recomendaciones (Etapa 6 y 7A) -->
         <div id="evalMessageBankModal" class="eval-modal-backdrop" style="display: none;">
           <div class="eval-modal-dialog" style="max-width: 680px;">
             <div class="eval-modal-header">
-              <h3>📚 Banco de recomendaciones pedagógicas</h3>
+              <h3>📚 Banco de propuestas y recomendaciones pedagógicas</h3>
               <button class="eval-modal-close" data-action="eval-close-message-bank-modal" aria-label="Cerrar modal">&times;</button>
             </div>
             <div class="eval-modal-body">
               <p class="muted" style="font-size: 13px; margin-bottom: 12px;">
-                Selecciona una recomendación institucional aprobada para insertarla en la evaluación del alumno. Todas respetan el límite de 245 caracteres y podrás personalizarlas libremente una vez insertadas.
+                Propuestas pedagógicas para orientar a las familias. Las propuestas predeterminadas se presentan pendientes de aprobación docente; puedes aprobarlas, editarlas, desactivarlas o insertar su texto para personalizarlo libremente (máx. 245 caracteres).
               </p>
 
               <!-- Filtros del banco -->
@@ -2296,6 +2304,28 @@
             <div class="eval-modal-footer">
               <button class="btn" data-action="eval-close-confirm-modal">Cancelar</button>
               <button class="btn primary" id="evalBtnConfirmModalAction">Confirmar y aplicar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal de Recuperación y Migración Controlada de Borradores (Etapa 7A) -->
+        <div id="evalDraftRecoveryModal" class="eval-modal-backdrop" style="display: none;">
+          <div class="eval-modal-dialog" style="max-width: 620px;">
+            <div class="eval-modal-header">
+              <h3>📦 Recuperación y migración de borradores locales</h3>
+              <button class="eval-modal-close" data-action="eval-close-draft-migration-modal" aria-label="Cerrar modal">&times;</button>
+            </div>
+            <div class="eval-modal-body">
+              <p class="muted" style="font-size: 13px; margin-bottom: 12px;">
+                Se ha inspeccionado el almacenamiento local de este dispositivo. Revisa la integridad de los registros antes de proceder a la sincronización remota definitiva:
+              </p>
+              <div id="evalDraftMigrationPreviewBox" style="background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 14px; font-size: 13px; max-height: 280px; overflow-y: auto;">
+                <!-- Generado dinámicamente -->
+              </div>
+            </div>
+            <div class="eval-modal-footer">
+              <button class="btn" data-action="eval-close-draft-migration-modal">Cerrar</button>
+              <button class="btn primary" data-action="eval-execute-draft-migration" id="evalBtnExecuteMigration">Migrar borradores a Google Sheets</button>
             </div>
           </div>
         </div>

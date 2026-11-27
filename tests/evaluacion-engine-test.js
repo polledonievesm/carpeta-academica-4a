@@ -163,6 +163,8 @@ const EvaluacionEngine = (function() {
     let sumWeights = 0;
     let hasPending = false;
     let validCount = 0;
+    let hasInvalidWeight = false;
+    const invalidWeightActivities = [];
     const details = [];
 
     for (const act of selectedActivities) {
@@ -179,7 +181,8 @@ const EvaluacionEngine = (function() {
         if (!isNaN(rawW) && isFinite(rawW) && rawW > 0) {
           weight = rawW;
         } else {
-          weight = 1.0; // Fallback seguro ante peso inválido
+          hasInvalidWeight = true;
+          invalidWeightActivities.push(actId);
         }
       }
 
@@ -207,6 +210,20 @@ const EvaluacionEngine = (function() {
         weight,
         record
       });
+    }
+
+    if (hasInvalidWeight) {
+      return {
+        status: 'ERROR_PONDERACION',
+        score: null,
+        hasPending,
+        hasInvalidWeight: true,
+        invalidWeightActivities,
+        validCount,
+        totalSelected: selectedActivities.length,
+        weightMode,
+        reason: 'Ponderación personalizada inválida o no asignada en actividades seleccionadas'
+      };
     }
 
     if (validCount === 0) {
@@ -839,8 +856,8 @@ function runAllMathTests() {
   }
 
   // --------------------------------------------------------------------------
-  // PRUEBA 14: Pesos individuales inválidos
-  // Pesos <= 0, negativos o NaN son rechazados y se sustituyen por peso unitario
+  // PRUEBA 14: Pesos individuales inválidos (Rechazo explícito sin sustitución silenciosa)
+  // Pesos <= 0, negativos o NaN son rechazados explícitamente sin sustitución por 1.0
   // --------------------------------------------------------------------------
   {
     const activities = [{ id: 'w1' }, { id: 'w2' }];
@@ -853,12 +870,12 @@ function runAllMathTests() {
       weightMode: 'custom',
       customWeights
     });
-    // Al corregir a 1 y 1: media de 100 y 80 = 90.00%
+    // Debe rechazar explícitamente y reportar ERROR_PONDERACION sin inventar 1.0
     assertTest(
       'Pesos individuales inválidos',
-      Math.abs(res.score - 90.0) < 0.0001,
-      '90.00% (fallback a 1.0)',
-      `${res.score.toFixed(2)}%`
+      res.status === 'ERROR_PONDERACION' && res.hasInvalidWeight === true && res.score === null,
+      'status: ERROR_PONDERACION, score: null',
+      `status: ${res.status}, score: ${res.score}`
     );
   }
 

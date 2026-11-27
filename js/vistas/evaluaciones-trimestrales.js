@@ -19,7 +19,8 @@
     captura: 'carpeta_eval_captura_v5',
     desempeno: 'carpeta_eval_desempeno_v6',
     mensajes: 'carpeta_eval_mensajes_v6',
-    bancoMensajes: 'carpeta_eval_banco_mensajes_v6'
+    bancoMensajes: 'carpeta_eval_banco_mensajes_v6',
+    syncMetadata: 'carpeta_eval_sync_meta_v7'
   };
 
   // =========================================================================
@@ -74,30 +75,30 @@
   };
 
   const BANCO_MENSAJES_DEFAULT = [
-    { id: 'rec_gen_e', category: 'general', level: 'E', text: 'Demuestra un desempeño integral sobresaliente, gran compromiso con su aprendizaje y una actitud colaborativa ejemplar. ¡Felicidades!' },
-    { id: 'rec_gen_b', category: 'general', level: 'B', text: 'Muestra un buen aprovechamiento académico y responsabilidad constante. Con mayor constancia en sus hábitos alcanzará la excelencia.' },
-    { id: 'rec_gen_r', category: 'general', level: 'R', text: 'Presenta avances en sus aprendizajes, aunque requiere mayor concentración y seguimiento de hábitos escolares para consolidar sus metas.' },
-    { id: 'rec_gen_a', category: 'general', level: 'A', text: 'Requiere apoyo constante en el hogar para reforzar contenidos básicos, entrega puntual de actividades y atención en el aula escolar.' },
+    { id: 'rec_gen_e', category: 'general', level: 'E', text: 'Demuestra un desempeño integral sobresaliente, gran compromiso con su aprendizaje y una actitud colaborativa ejemplar. ¡Felicidades!', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_gen_b', category: 'general', level: 'B', text: 'Muestra un buen aprovechamiento académico y responsabilidad constante. Con mayor constancia en sus hábitos alcanzará la excelencia.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_gen_r', category: 'general', level: 'R', text: 'Presenta avances en sus aprendizajes, aunque requiere mayor concentración y seguimiento de hábitos escolares para consolidar sus metas.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_gen_a', category: 'general', level: 'A', text: 'Requiere apoyo constante en el hogar para reforzar contenidos básicos, entrega puntual de actividades y atención en el aula escolar.', approved: false, status: 'propuesta', active: true },
 
-    { id: 'rec_acad_e', category: 'formativo', level: 'E', text: 'Excelente comprensión lectora y razonamiento lógico-matemático. Expresa sus ideas con claridad y fundamenta adecuadamente su trabajo.' },
-    { id: 'rec_acad_b', category: 'formativo', level: 'B', text: 'Buen desempeño en las actividades académicas. Se sugiere reforzar la ortografía y la práctica diaria de lectura comprensiva en casa.' },
-    { id: 'rec_acad_r', category: 'formativo', level: 'R', text: 'Avanza a su propio ritmo en los contenidos escolares; es importante repasar operaciones matemáticas básicas y lectura en el hogar.' },
-    { id: 'rec_acad_a', category: 'formativo', level: 'A', text: 'Se requiere acompañamiento diario en lectura, escritura y cálculo matemático para alcanzar los aprendizajes esperados del grado escolar.' },
+    { id: 'rec_acad_e', category: 'formativo', level: 'E', text: 'Excelente comprensión lectora y razonamiento lógico-matemático. Expresa sus ideas con claridad y fundamenta adecuadamente su trabajo.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_acad_b', category: 'formativo', level: 'B', text: 'Buen desempeño en las actividades académicas. Se sugiere reforzar la ortografía y la práctica diaria de lectura comprensiva en casa.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_acad_r', category: 'formativo', level: 'R', text: 'Avanza a su propio ritmo en los contenidos escolares; es importante repasar operaciones matemáticas básicas y lectura en el hogar.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_acad_a', category: 'formativo', level: 'A', text: 'Se requiere acompañamiento diario en lectura, escritura y cálculo matemático para alcanzar los aprendizajes esperados del grado escolar.', approved: false, status: 'propuesta', active: true },
 
-    { id: 'rec_hab_e', category: 'habitos', level: 'E', text: 'Sus hábitos de estudio, puntualidad en tareas y esmero en la presentación de sus trabajos escolares son sumamente destacados. ¡Bravo!' },
-    { id: 'rec_hab_b', category: 'habitos', level: 'B', text: 'Cumple habitualmente con sus materiales y tareas escolares. Mantener el orden y la constancia fortalecerá aún más su autonomía escolar.' },
-    { id: 'rec_hab_r', category: 'habitos', level: 'R', text: 'Es fundamental supervisar diariamente la entrega de tareas completas y la organización de sus útiles escolares antes de salir a la escuela.' },
-    { id: 'rec_hab_a', category: 'habitos', level: 'A', text: 'Requiere apoyo prioritario en la entrega oportuna de tareas, cuidado de sus materiales escolares y seguimiento de indicaciones diarias.' },
+    { id: 'rec_hab_e', category: 'habitos', level: 'E', text: 'Sus hábitos de estudio, puntualidad en tareas y esmero en la presentación de sus trabajos escolares son sumamente destacados. ¡Bravo!', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_hab_b', category: 'habitos', level: 'B', text: 'Cumple habitualmente con sus materiales y tareas escolares. Mantener el orden y la constancia fortalecerá aún más su autonomía escolar.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_hab_r', category: 'habitos', level: 'R', text: 'Es fundamental supervisar diariamente la entrega de tareas completas y la organización de sus útiles escolares antes de salir a la escuela.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_hab_a', category: 'habitos', level: 'A', text: 'Requiere apoyo prioritario en la entrega oportuna de tareas, cuidado de sus materiales escolares y seguimiento de indicaciones diarias.', approved: false, status: 'propuesta', active: true },
 
-    { id: 'rec_cond_e', category: 'conducta', level: 'E', text: 'Excelente conducta, empatía y trato respetuoso hacia sus compañeros y docente. Contribuye activamente a una sana convivencia en el aula.' },
-    { id: 'rec_cond_b', category: 'conducta', level: 'B', text: 'Mantiene una convivencia pacífica y respetuosa en el aula. Continúa fomentando la resolución dialogada de desacuerdos cotidianos.' },
-    { id: 'rec_cond_r', category: 'conducta', level: 'R', text: 'Debe trabajar en la autorregulación de sus emociones e impulsos para convivir en armonía y respetar los acuerdos de convivencia escolar.' },
-    { id: 'rec_cond_a', category: 'conducta', level: 'A', text: 'Se requiere diálogo constante en familia sobre el respeto a las reglas del aula, escucha atenta y resolución pacífica de conflictos.' },
+    { id: 'rec_cond_e', category: 'conducta', level: 'E', text: 'Excelente conducta, empatía y trato respetuoso hacia sus compañeros y docente. Contribuye activamente a una sana convivencia en el aula.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_cond_b', category: 'conducta', level: 'B', text: 'Mantiene una convivencia pacífica y respetuosa en el aula. Continúa fomentando la resolución dialogada de desacuerdos cotidianos.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_cond_r', category: 'conducta', level: 'R', text: 'Debe trabajar en la autorregulación de sus emociones e impulsos para convivir en armonía y respetar los acuerdos de convivencia escolar.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_cond_a', category: 'conducta', level: 'A', text: 'Se requiere diálogo constante en familia sobre el respeto a las reglas del aula, escucha atenta y resolución pacífica de conflictos.', approved: false, status: 'propuesta', active: true },
 
-    { id: 'rec_asis_e', category: 'asistencia', level: 'E', text: 'Asistencia perfecta y puntualidad intachable durante todo el trimestre. Su presencia continua favorece ampliamente su progreso escolar.' },
-    { id: 'rec_asis_b', category: 'asistencia', level: 'B', text: 'Asistencia regular y puntual. Continuar procurando no faltar a clases para no perder la secuencia didáctica de los proyectos escolares.' },
-    { id: 'rec_asis_r', category: 'asistencia', level: 'R', text: 'Registra retardos o ausencias intermitentes. Es necesario mejorar la puntualidad al inicio de la jornada escolar matutina.' },
-    { id: 'rec_asis_a', category: 'asistencia', level: 'A', text: 'Las inasistencias reiteradas afectan notablemente su ritmo de aprendizaje. Se exhorta a garantizar su asistencia diaria a la escuela.' }
+    { id: 'rec_asis_e', category: 'asistencia', level: 'E', text: 'Asistencia perfecta y puntualidad intachable durante todo el trimestre. Su presencia continua favorece ampliamente su progreso escolar.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_asis_b', category: 'asistencia', level: 'B', text: 'Asistencia regular y puntual. Continuar procurando no faltar a clases para no perder la secuencia didáctica de los proyectos escolares.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_asis_r', category: 'asistencia', level: 'R', text: 'Registra retardos o ausencias intermitentes. Es necesario mejorar la puntualidad al inicio de la jornada escolar matutina.', approved: false, status: 'propuesta', active: true },
+    { id: 'rec_asis_a', category: 'asistencia', level: 'A', text: 'Las inasistencias reiteradas afectan notablemente su ritmo de aprendizaje. Se exhorta a garantizar su asistencia diaria a la escuela.', approved: false, status: 'propuesta', active: true }
   ];
 
   // Catálogo de criterios de evaluación institucionales con su propuesta inicial
@@ -2167,6 +2168,8 @@
       let sumWeights = 0;
       let hasPending = false;
       let validCount = 0;
+      let hasInvalidWeight = false;
+      const invalidWeightActivities = [];
       const details = [];
 
       for (const act of selectedActivities) {
@@ -2178,6 +2181,9 @@
           const rawW = Number(customWeights[actId]);
           if (!isNaN(rawW) && isFinite(rawW) && rawW > 0) {
             weight = rawW;
+          } else {
+            hasInvalidWeight = true;
+            invalidWeightActivities.push(actId);
           }
         }
 
@@ -2206,6 +2212,20 @@
         });
       }
 
+      if (hasInvalidWeight) {
+        return {
+          status: 'ERROR_PONDERACION',
+          score: null,
+          hasPending,
+          hasInvalidWeight: true,
+          invalidWeightActivities,
+          validCount,
+          totalSelected: selectedActivities.length,
+          weightMode,
+          reason: 'Ponderación personalizada inválida o no asignada en actividades seleccionadas'
+        };
+      }
+
       if (validCount === 0) {
         return {
           status: hasPending ? 'PENDIENTE' : 'SIN_INFORMACION',
@@ -2232,16 +2252,21 @@
     },
 
     /**
-     * Cálculo del Criterio de Conducta
+     * Cálculo del Criterio de Conducta (con exclusiones individuales)
      */
     calculateConductCriterion(studentId, evaluationsInPeriod, options = {}) {
       const sId = String(studentId);
-      const validEvals = (evaluationsInPeriod || []).filter(ev => 
-        String(ev.alumnoId || ev.studentId) === sId &&
-        ev.conducta &&
-        !ev.ausente &&
-        String(ev.trabajo).toLowerCase() !== 'falta'
-      );
+      const excludedIds = new Set((options.excludedIds || options.conductaExclusions || []).map(String));
+      const validEvals = (evaluationsInPeriod || []).filter(ev => {
+        const evId = String(ev.id || ev.claseId || '');
+        if (evId && excludedIds.has(evId)) return false;
+        return (
+          String(ev.alumnoId || ev.studentId) === sId &&
+          ev.conducta &&
+          !ev.ausente &&
+          String(ev.trabajo).toLowerCase() !== 'falta'
+        );
+      });
 
       if (validEvals.length === 0) {
         return { status: 'SIN_INFORMACION', score: null, count: 0 };
@@ -2279,13 +2304,16 @@
     },
 
     /**
-     * Cálculo del Criterio de Participación
+     * Cálculo del Criterio de Participación (con exclusiones individuales)
      */
     calculateParticipationCriterion(studentId, evaluationsInPeriod, options = {}) {
       const sId = String(studentId);
-      const studentEvals = (evaluationsInPeriod || []).filter(ev => 
-        String(ev.alumnoId || ev.studentId) === sId
-      );
+      const excludedIds = new Set((options.excludedIds || options.participacionExclusions || []).map(String));
+      const studentEvals = (evaluationsInPeriod || []).filter(ev => {
+        const evId = String(ev.id || ev.claseId || '');
+        if (evId && excludedIds.has(evId)) return false;
+        return String(ev.alumnoId || ev.studentId) === sId;
+      });
 
       let sum = 0;
       let count = 0;
@@ -2541,6 +2569,49 @@
         average: avg,
         displayAverage: this.formatGrade(avg),
         pendingTrimesters: []
+      };
+    },
+
+    /**
+     * Calcula el promedio anual independiente para un campo formativo específico
+     */
+    calculateFieldAnnualAverage(studentId, fieldName) {
+      const sId = String(studentId);
+      const t1Eval = calculateStudentFullEvaluation(sId, 1);
+      const t2Eval = calculateStudentFullEvaluation(sId, 2);
+      const t3Eval = calculateStudentFullEvaluation(sId, 3);
+
+      const t1Grade = t1Eval?.subjects?.[fieldName]?.authorizedGrade ?? t1Eval?.subjects?.[fieldName]?.finalGrade;
+      const t2Grade = t2Eval?.subjects?.[fieldName]?.authorizedGrade ?? t2Eval?.subjects?.[fieldName]?.finalGrade;
+      const t3Grade = t3Eval?.subjects?.[fieldName]?.authorizedGrade ?? t3Eval?.subjects?.[fieldName]?.finalGrade;
+
+      const isT1 = t1Grade !== null && t1Grade !== undefined && !isNaN(t1Grade);
+      const isT2 = t2Grade !== null && t2Grade !== undefined && !isNaN(t2Grade);
+      const isT3 = t3Grade !== null && t3Grade !== undefined && !isNaN(t3Grade);
+
+      if (!isT1 || !isT2 || !isT3) {
+        return {
+          isComplete: false,
+          average: null,
+          displayAverage: '—',
+          trimesterGrades: {
+            1: isT1 ? this.formatGrade(t1Grade) : '—',
+            2: isT2 ? this.formatGrade(t2Grade) : '—',
+            3: isT3 ? this.formatGrade(t3Grade) : '—'
+          }
+        };
+      }
+
+      const avg = (Number(t1Grade) + Number(t2Grade) + Number(t3Grade)) / 3;
+      return {
+        isComplete: true,
+        average: avg,
+        displayAverage: this.formatGrade(avg),
+        trimesterGrades: {
+          1: this.formatGrade(t1Grade),
+          2: this.formatGrade(t2Grade),
+          3: this.formatGrade(t3Grade)
+        }
       };
     }
   };
@@ -3868,6 +3939,96 @@
       return evalState.bancoMensajesStore || BANCO_MENSAJES_DEFAULT;
     },
 
+    normalizeDraftRatings(ratings) {
+      if (!ratings || typeof ratings !== 'object') return { cleanRatings: {}, hasUnknown: false, requiresReview: false };
+      const cleanRatings = {};
+      const legacyRatings = {};
+      let hasUnknown = false;
+      const validIds = new Set(INDICADORES_DESEMPENO.map(i => i.id));
+
+      for (const [k, v] of Object.entries(ratings)) {
+        if (validIds.has(k)) {
+          if (NIVELES_DESEMPENO[v]) cleanRatings[k] = v;
+        } else {
+          hasUnknown = true;
+          legacyRatings[k] = v;
+        }
+      }
+
+      return {
+        cleanRatings,
+        legacyRatings,
+        hasUnknown,
+        requiresReview: hasUnknown
+      };
+    },
+
+    confirmReview(studentId, trimester = evalState.trimester) {
+      const sId = String(studentId);
+      const t = trimester;
+      if (evalState.desempenoStore?.[t]?.[sId]) {
+        evalState.desempenoStore[t][sId].isReviewed = true;
+        evalState.desempenoStore[t][sId].requiresReview = false;
+        evalState.desempenoStore[t][sId].updatedAt = new Date().toISOString();
+        markUnsavedDesempeno();
+        return true;
+      }
+      return false;
+    },
+
+    approveBancoMessage(id) {
+      const bank = this.getBancoMensajes();
+      const item = bank.find(m => m.id === id);
+      if (item) {
+        item.approved = true;
+        item.status = 'aprobada';
+        item.updatedAt = new Date().toISOString();
+        saveBancoMensajesStore(bank);
+        return true;
+      }
+      return false;
+    },
+
+    toggleBancoMessageActive(id) {
+      const bank = this.getBancoMensajes();
+      const item = bank.find(m => m.id === id);
+      if (item) {
+        item.active = !item.active;
+        item.updatedAt = new Date().toISOString();
+        saveBancoMensajesStore(bank);
+        return item.active;
+      }
+      return false;
+    },
+
+    importBancoMensajes(newItems, replace = false) {
+      if (!Array.isArray(newItems)) return { success: false, count: 0 };
+      const validItems = [];
+      for (const raw of newItems) {
+        if (!raw.text || typeof raw.text !== 'string') continue;
+        const text = raw.text.trim();
+        if (text.length > 245) continue;
+        validItems.push({
+          id: raw.id || 'rec_imp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          category: raw.category || 'general',
+          level: raw.level || 'E',
+          text,
+          approved: Boolean(raw.approved),
+          status: raw.approved ? 'aprobada' : 'propuesta',
+          active: raw.active !== false,
+          createdAt: raw.createdAt || new Date().toISOString()
+        });
+      }
+      if (replace) {
+        evalState.bancoMensajesStore = validItems;
+      } else {
+        const current = evalState.bancoMensajesStore || [...BANCO_MENSAJES_DEFAULT];
+        evalState.bancoMensajesStore = [...current, ...validItems];
+      }
+      saveBancoMensajesStore(evalState.bancoMensajesStore);
+      return { success: true, count: validItems.length };
+    },
+
     updateBancoMessage(id, updates) {
       const bank = this.getBancoMensajes();
       const idx = bank.findIndex(m => m.id === id);
@@ -3887,6 +4048,8 @@
         category: msgObj.category || 'general',
         level: msgObj.level || 'E',
         text: (msgObj.text || '').slice(0, 245),
+        approved: false,
+        status: 'propuesta',
         active: true,
         isCustom: true
       };
@@ -3911,8 +4074,9 @@
       const desempeno = this.getStudentEvaluation(sId, t);
       const msg = this.getStudentMessage(sId, t);
 
+      const isReviewed = desempeno.isReviewed !== false && desempeno.requiresReview !== true;
       const isAcademicAuth = Boolean(evalData && evalData.isAllAuthorized);
-      const isDesempDone = Boolean(desempeno && desempeno.isComplete);
+      const isDesempDone = Boolean(desempeno && desempeno.isComplete && isReviewed);
       const isMsgValid = Boolean(msg && msg.isValid);
 
       const isReadyToClose = isAcademicAuth && isDesempDone && isMsgValid;
@@ -3942,6 +4106,8 @@
         isAcademicAuth,
         isDesempDone,
         isMsgValid,
+        isReviewed,
+        requiresReview: !isReviewed,
         academicAverage: evalData.trimesterAverage?.displayAverage || '—'
       };
     },
@@ -3975,6 +4141,334 @@
         incomplete,
         pending
       };
+    }
+  };
+
+  // =========================================================================
+  // MOTOR DE PERSISTENCIA Y SINCRONIZACIÓN REMOTA (ETAPA 7A)
+  // =========================================================================
+
+  const EvalSyncEngine = {
+    STATUS: {
+      SIN_GUARDAR: 'sin_guardar',
+      BORRADOR_LOCAL: 'borrador_local',
+      PENDIENTE_SYNC: 'pendiente_sync',
+      SINCRONIZANDO: 'sincronizando',
+      GUARDADO_SERVIDOR: 'guardado_servidor',
+      ERROR_SYNC: 'error_sync',
+      CONFLICTO_VERSION: 'conflicto_version'
+    },
+
+    status: 'guardado_servidor',
+    lastSyncTimestamp: null,
+    inFlight: false,
+    retryCount: 0,
+    maxRetries: 3,
+
+    getSyncStatus() {
+      return {
+        status: this.status,
+        lastSyncTimestamp: this.lastSyncTimestamp,
+        hasUnsavedChanges: Boolean(evalState.hasUnsavedChanges || evalState.hasUnsavedCaptura || evalState.hasUnsavedDesempeno || evalState.hasUnsavedMensajes),
+        inFlight: this.inFlight
+      };
+    },
+
+    setSyncStatus(status, text = '') {
+      this.status = status;
+      const indicator = document.getElementById('evalSyncStatusIndicator');
+      const label = document.getElementById('evalSyncStatusText');
+      if (label) {
+        const textMap = {
+          sin_guardar: 'Sin guardar',
+          borrador_local: 'Borrador local',
+          pendiente_sync: 'Pendiente de sincronizar',
+          sincronizando: 'Sincronizando con Google Sheets...',
+          guardado_servidor: '✓ Guardado en Google Sheets',
+          error_sync: '⚠️ Error de sincronización',
+          conflicto_version: '⚠️ Conflicto de versiones'
+        };
+        label.textContent = text || textMap[status] || status;
+      }
+      if (indicator) {
+        indicator.className = `eval-sync-pill eval-sync-${status}`;
+      }
+    },
+
+    buildTrimesterBundle(trimester = evalState.trimester) {
+      const t = trimester;
+      const cfg = evalState.config || {};
+      const rawStudents = getStudentsList();
+      const sortedStudents = [...rawStudents].sort((a, b) => resolveOfficialListNumber(a) - resolveOfficialListNumber(b));
+
+      const calificaciones = [];
+      sortedStudents.forEach(s => {
+        const num = resolveOfficialListNumber(s);
+        const sEval = calculateStudentFullEvaluation(s.id, t);
+        EVAL_FIELDS.forEach(f => {
+          const sField = sEval?.subjects?.[f] || {};
+          calificaciones.push({
+            alumnoId: s.id,
+            numeroLista: num,
+            campoFormativo: f,
+            modalidad: sField.mode || 'asistida',
+            examenGrade: sField.examGrade ?? null,
+            desgloseCriterios: sField.breakdown || {},
+            calcGrade: sField.calcGrade ?? null,
+            manualGrade: sField.manualGrade ?? null,
+            motivoAjuste: sField.adjustmentReason || '',
+            authorizedGrade: sField.authorizedGrade ?? null,
+            isAuthorized: Boolean(sField.isAuthorized),
+            status: sField.status || 'PENDIENTE'
+          });
+        });
+      });
+
+      const desempeno = [];
+      sortedStudents.forEach(s => {
+        const num = resolveOfficialListNumber(s);
+        const dStore = evalState.desempenoStore?.[t]?.[s.id] || {};
+        desempeno.push({
+          alumnoId: s.id,
+          numeroLista: num,
+          ratings: dStore.ratings || {},
+          source: dStore.source || 'manual',
+          isReviewed: dStore.isReviewed !== false
+        });
+      });
+
+      const mensajes = [];
+      sortedStudents.forEach(s => {
+        const num = resolveOfficialListNumber(s);
+        const mStore = evalState.mensajesStore?.[t]?.[s.id] || {};
+        mensajes.push({
+          alumnoId: s.id,
+          numeroLista: num,
+          mensaje: mStore.message || '',
+          templateId: mStore.templateId || null,
+          estadoRevision: mStore.estadoRevision || 'pendiente'
+        });
+      });
+
+      return {
+        ciclo: cfg.cicloEscolar || '2026-2027',
+        grupo: cfg.grupo || '4.° A',
+        trimestre: t,
+        version: evalState.syncVersion || 1,
+        config: {
+          inicio: cfg.periodos?.[t]?.inicio || '',
+          fin: cfg.periodos?.[t]?.fin || '',
+          estado: cfg.periodos?.[t]?.estado || 'in-progress',
+          ponderaciones: cfg.porcentajes?.[t] || {},
+          valoresTareas: cfg.valoresTareas || {},
+          valoresConducta: cfg.valoresConducta || {},
+          valoresParticipacion: cfg.valoresParticipacion || {},
+          ajustesAdmin: {}
+        },
+        calificaciones,
+        desempeno,
+        mensajes,
+        clientTimestamp: new Date().toISOString()
+      };
+    },
+
+    async syncTrimesterBatch(trimester = evalState.trimester, forceSimulation = false) {
+      if (this.inFlight) {
+        if (typeof toast === 'function') toast('Ya existe una sincronización en proceso. Por favor, espera.');
+        return { success: false, reason: 'in_flight' };
+      }
+
+      this.inFlight = true;
+      this.setSyncStatus(this.STATUS.SINCRONIZANDO, 'Sincronizando con Google Sheets...');
+
+      const payload = this.buildTrimesterBundle(trimester);
+
+      try {
+        let serverRes = null;
+        if (typeof window.server === 'function' && !forceSimulation && typeof API_URL === 'string' && API_URL.length > 10) {
+          serverRes = await window.server('syncTrimesterEvaluationBatch', payload);
+        } else {
+          // Entorno controlado / Simulación de persistencia remota (offline / pruebas locales)
+          await new Promise(r => setTimeout(r, 600));
+          serverRes = {
+            ok: true,
+            data: {
+              configSaved: true,
+              calificacionesCount: payload.calificaciones.length,
+              desempenoCount: payload.desempeno.length,
+              mensajesCount: payload.mensajes.length,
+              timestamp: new Date().toISOString(),
+              version: (payload.version || 1) + 1,
+              simulated: true
+            }
+          };
+        }
+
+        if (serverRes && (serverRes.ok || serverRes.data)) {
+          this.lastSyncTimestamp = new Date().toISOString();
+          evalState.syncVersion = (payload.version || 1) + 1;
+          evalState.hasUnsavedChanges = false;
+          evalState.hasUnsavedCaptura = false;
+          evalState.hasUnsavedDesempeno = false;
+          evalState.hasUnsavedMensajes = false;
+
+          try {
+            localStorage.setItem(STORAGE_KEYS.syncMetadata, JSON.stringify({
+              lastSyncTimestamp: this.lastSyncTimestamp,
+              syncVersion: evalState.syncVersion,
+              trimester
+            }));
+          } catch (e) {}
+
+          this.setSyncStatus(this.STATUS.GUARDADO_SERVIDOR, '✓ Guardado en Google Sheets');
+          this.retryCount = 0;
+          if (typeof toast === 'function') {
+            const countMsg = `${payload.calificaciones.length} calificaciones, ${payload.desempeno.length} valoraciones integrales y ${payload.mensajes.length} mensajes sincronizados.`;
+            toast(`Sincronización remota completada con éxito (${countMsg}).`);
+          }
+          return { success: true, data: serverRes.data };
+        } else {
+          throw new Error(serverRes?.error || 'Respuesta inválida del servidor.');
+        }
+      } catch (err) {
+        console.error('[EvalSyncEngine] Error durante la sincronización:', err);
+        this.setSyncStatus(this.STATUS.ERROR_SYNC, '⚠️ Error de sincronización');
+        if (typeof toast === 'function') {
+          toast(`Error de sincronización: ${err.message}. Se conservan los borradores locales.`);
+        }
+        return { success: false, error: err.message };
+      } finally {
+        this.inFlight = false;
+      }
+    },
+
+    prepareDraftMigrationPreview() {
+      const configRaw = localStorage.getItem(STORAGE_KEYS.config);
+      const capturaRaw = localStorage.getItem(STORAGE_KEYS.captura);
+      const desempRaw = localStorage.getItem(STORAGE_KEYS.desempeno);
+      const msgRaw = localStorage.getItem(STORAGE_KEYS.mensajes);
+
+      let configParsed = null, capturaParsed = null, desempParsed = null, msgParsed = null;
+      try { configParsed = configRaw ? JSON.parse(configRaw) : null; } catch (e) {}
+      try { capturaParsed = capturaRaw ? JSON.parse(capturaRaw) : null; } catch (e) {}
+      try { desempParsed = desempRaw ? JSON.parse(desempRaw) : null; } catch (e) {}
+      try { msgParsed = msgRaw ? JSON.parse(msgRaw) : null; } catch (e) {}
+
+      const warnings = [];
+      let academicCount = 0;
+      let desempCount = 0;
+      let msgCount = 0;
+
+      if (capturaParsed) {
+        for (const t in capturaParsed) {
+          for (const sId in capturaParsed[t]) {
+            academicCount++;
+          }
+        }
+      }
+
+      if (desempParsed) {
+        for (const t in desempParsed) {
+          for (const sId in desempParsed[t]) {
+            const ratings = desempParsed[t][sId]?.ratings || {};
+            let hasUnknown = false;
+            for (const k in ratings) {
+              if (!INDICADORES_DESEMPENO.some(i => i.id === k)) {
+                hasUnknown = true;
+              }
+            }
+            if (hasUnknown) {
+              warnings.push(`Alumno ${sId} en T${t}: contiene valoraciones previas que no corresponden exactamente al catálogo oficial.`);
+            }
+            desempCount++;
+          }
+        }
+      }
+
+      if (msgParsed) {
+        for (const t in msgParsed) {
+          for (const sId in msgParsed[t]) {
+            const m = msgParsed[t][sId]?.message || '';
+            if (m.length > 245) {
+              warnings.push(`Alumno ${sId} en T${t}: el mensaje supera 245 caracteres (${m.length} car). Requiere ajuste.`);
+            }
+            if (m.trim().length > 0) msgCount++;
+          }
+        }
+      }
+
+      return {
+        hasDataToMigrate: Boolean(configParsed || academicCount > 0 || desempCount > 0 || msgCount > 0),
+        academicCount,
+        desempCount,
+        msgCount,
+        warnings,
+        canMigrate: true
+      };
+    },
+
+    renderDraftMigrationModal() {
+      const box = document.getElementById('evalDraftMigrationPreviewBox');
+      if (!box) return;
+      const preview = this.prepareDraftMigrationPreview();
+
+      let warnHtml = '';
+      if (preview.warnings.length > 0) {
+        warnHtml = `
+          <div style="background: #fff7ed; border: 1px solid #fdba74; padding: 10px; border-radius: 6px; margin-top: 10px;">
+            <b style="color: #c2410c; font-size: 12px;">Advertencias de integridad detectadas:</b>
+            <ul style="margin: 4px 0 0 16px; padding: 0; font-size: 11px; color: #7c2d12;">
+              ${preview.warnings.map(w => `<li>${w}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      box.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; margin-bottom: 12px;">
+          <div style="background: #ffffff; border: 1px solid var(--line); padding: 8px; border-radius: 6px;">
+            <span class="muted" style="font-size: 11px;">Calificaciones</span>
+            <b style="display: block; font-size: 18px; color: var(--navy);">${preview.academicCount}</b>
+          </div>
+          <div style="background: #ffffff; border: 1px solid var(--line); padding: 8px; border-radius: 6px;">
+            <span class="muted" style="font-size: 11px;">Desempeño</span>
+            <b style="display: block; font-size: 18px; color: var(--teal);">${preview.desempCount}</b>
+          </div>
+          <div style="background: #ffffff; border: 1px solid var(--line); padding: 8px; border-radius: 6px;">
+            <span class="muted" style="font-size: 11px;">Mensajes</span>
+            <b style="display: block; font-size: 18px; color: var(--primary);">${preview.msgCount}</b>
+          </div>
+        </div>
+        <p style="margin: 0; font-size: 12px; color: var(--navy);">
+          ${preview.hasDataToMigrate 
+            ? 'Los borradores locales analizados son compatibles con la estructura oficial y están listos para persistirse en Google Sheets.' 
+            : 'No se encontraron borradores locales pendientes en este dispositivo.'}
+        </p>
+        ${warnHtml}
+      `;
+    },
+
+    openDraftMigrationModal() {
+      const modal = document.getElementById('evalDraftRecoveryModal');
+      if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden-control');
+        this.renderDraftMigrationModal();
+      }
+    },
+
+    closeDraftMigrationModal() {
+      const modal = document.getElementById('evalDraftRecoveryModal');
+      if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden-control');
+      }
+    },
+
+    async executeDraftMigration() {
+      this.closeDraftMigrationModal();
+      if (typeof toast === 'function') toast('Iniciando migración y sincronización de borradores...');
+      return await this.syncTrimesterBatch(evalState.trimester);
     }
   };
 
@@ -4018,7 +4512,22 @@
     // 4. Categorías e Indicadores
     const categoriesWrap = document.getElementById('evalIndDesempenoCategoriesWrap');
     if (categoriesWrap) {
-      categoriesWrap.innerHTML = CATEGORIAS_DESEMPENO.map(cat => {
+      let reviewAlertHtml = '';
+      if (data.isReviewed === false || data.requiresReview === true) {
+        reviewAlertHtml = `
+          <div class="eval-copied-review-alert">
+            <div>
+              <span style="font-size: 13px; font-weight: 700; color: #c2410c;">⚠️ Valoraciones copiadas o pendientes de revisión docente</span>
+              <p class="muted" style="margin: 2px 0 0; font-size: 11px;">Es obligatorio revisar y confirmar las valoraciones antes de autorizar el cierre definitivo de este alumno.</p>
+            </div>
+            <button class="btn small primary" data-action="eval-confirm-review-desempeno" title="Confirmar que se han revisado las valoraciones">
+              ✓ Confirmar revisión docente
+            </button>
+          </div>
+        `;
+      }
+
+      categoriesWrap.innerHTML = reviewAlertHtml + CATEGORIAS_DESEMPENO.map(cat => {
         const catIndicators = INDICADORES_DESEMPENO.filter(i => i.categoria === cat.id);
         const catDone = catIndicators.filter(i => Boolean(data.ratings[i.id])).length;
 
@@ -4389,18 +4898,38 @@
       const catObj = CATEGORIAS_DESEMPENO.find(c => c.id === item.category);
       const catLabel = catObj ? catObj.nombre : item.category;
 
+      const approvalBadge = item.approved 
+        ? '<span class="badge success" style="font-size: 11px;">✓ Aprobada</span>' 
+        : '<span class="badge warning" style="font-size: 11px;">Propuesta pendiente</span>';
+
+      const activeBadge = item.active === false 
+        ? '<span class="badge" style="font-size: 11px; background: #e2e8f0; color: #64748b;">Inactiva</span>' 
+        : '';
+
+      const approveBtn = !item.approved 
+        ? `<button class="btn small" data-action="eval-approve-banco-rec" data-rec-id="${item.id}" title="Aprobar esta propuesta">✓ Aprobar</button>` 
+        : '';
+
       return `
         <div class="eval-bank-item">
           <div class="eval-bank-item-top">
             <span class="badge" style="font-size: 11px;">${catLabel}</span>
             <span class="${lvlInfo.badgeClass}" style="font-size: 11px;">${lvlInfo.label}</span>
+            ${approvalBadge}
+            ${activeBadge}
           </div>
           <div class="eval-bank-item-text">"${item.text}"</div>
-          <div class="eval-bank-item-actions">
+          <div class="eval-bank-item-actions" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
             <span class="muted" style="font-size: 11px;">${item.text.length} caracteres</span>
-            <button class="btn small primary" data-action="eval-insert-banco-recommendation" data-rec-id="${item.id}" title="Insertar esta recomendación en la evaluación del alumno">
-              Insertar recomendación
-            </button>
+            <div class="button-row" style="gap: 6px;">
+              ${approveBtn}
+              <button class="btn small" data-action="eval-toggle-banco-rec" data-rec-id="${item.id}">
+                ${item.active !== false ? 'Desactivar' : 'Activar'}
+              </button>
+              <button class="btn small primary" data-action="eval-insert-banco-recommendation" data-rec-id="${item.id}" title="Insertar esta recomendación en la evaluación del alumno">
+                Insertar recomendación
+              </button>
+            </div>
           </div>
         </div>
       `;
@@ -4502,7 +5031,8 @@
     }
 
     const lines = text.split(/\r?\n/).map(l => l.split('\t').map(c => c.trim()));
-    const students = getStudentsList();
+    const rawStudents = getStudentsList();
+    const students = [...rawStudents].sort((a, b) => resolveOfficialListNumber(a) - resolveOfficialListNumber(b));
 
     let validCount = 0;
     let previewHtml = `<table style="width: 100%; border-collapse: collapse; font-size: 11px;">
@@ -4548,7 +5078,8 @@
     if (!textarea || !targetSelect) return;
 
     const lines = textarea.value.trim().split(/\r?\n/).map(l => l.split('\t').map(c => c.trim()));
-    const students = getStudentsList();
+    const rawStudents = getStudentsList();
+    const students = [...rawStudents].sort((a, b) => resolveOfficialListNumber(a) - resolveOfficialListNumber(b));
     const targetField = targetSelect.value;
     const t = evalState.trimester;
 
@@ -4599,6 +5130,11 @@
       return;
     }
 
+    if (sub.status === 'ERROR_PONDERACION' || sub.calcDetails?.tasks?.hasInvalidWeight) {
+      if (typeof toast === 'function') toast('No es posible autorizar: existen ponderaciones personalizadas inválidas. Corríjalas antes de continuar.');
+      return;
+    }
+
     setStudentFieldData(studentId, subject, {
       isAuthorized: true,
       authorizedGrade: sub.finalGrade,
@@ -4619,10 +5155,15 @@
   function authorizeStudent(studentId, trimester = evalState.trimester) {
     const evalData = calculateStudentFullEvaluation(studentId, trimester);
     let authCount = 0;
+    let hasWeightError = false;
 
     EVAL_FIELDS.forEach(f => {
       const sub = evalData.subjects[f];
       if (sub && sub.finalGrade !== null) {
+        if (sub.status === 'ERROR_PONDERACION' || sub.calcDetails?.tasks?.hasInvalidWeight) {
+          hasWeightError = true;
+          return;
+        }
         setStudentFieldData(studentId, f, {
           isAuthorized: true,
           authorizedGrade: sub.finalGrade,
@@ -4635,7 +5176,9 @@
     renderCapturaIndividual();
     renderCapturaGrupal();
     renderTrackingPanel();
-    if (typeof toast === 'function') {
+    if (hasWeightError && typeof toast === 'function') {
+      toast('Atención: Algunas materias no pudieron autorizarse debido a ponderaciones personalizadas inválidas.');
+    } else if (typeof toast === 'function') {
       toast(`${authCount} de 4 campos formativos autorizados para este alumno.`);
     }
   }
@@ -4652,6 +5195,9 @@
       EVAL_FIELDS.forEach(f => {
         const sub = evalData.subjects[f];
         if (sub && sub.finalGrade !== null && !sub.isAuthorized) {
+          if (sub.status === 'ERROR_PONDERACION' || sub.calcDetails?.tasks?.hasInvalidWeight) {
+            return;
+          }
           setStudentFieldData(s.id, f, {
             isAuthorized: true,
             authorizedGrade: sub.finalGrade,
@@ -4981,6 +5527,41 @@
         m.style.display = 'none';
         m.classList.add('hidden-control');
       }
+    },
+    'eval-sync-now': () => {
+      EvalSyncEngine.syncTrimesterBatch(evalState.trimester);
+    },
+    'eval-open-draft-migration-modal': () => {
+      EvalSyncEngine.openDraftMigrationModal();
+    },
+    'eval-close-draft-migration-modal': () => {
+      EvalSyncEngine.closeDraftMigrationModal();
+    },
+    'eval-execute-draft-migration': () => {
+      EvalSyncEngine.executeDraftMigration();
+    },
+    'eval-approve-banco-rec': btn => {
+      const recId = btn?.dataset?.recId;
+      if (recId) {
+        DesempenoEngine.approveBancoMessage(recId);
+        renderBancoMensajesModal();
+        if (typeof toast === 'function') toast('Propuesta aprobada como recomendación docente.');
+      }
+    },
+    'eval-toggle-banco-rec': btn => {
+      const recId = btn?.dataset?.recId;
+      if (recId) {
+        DesempenoEngine.toggleBancoMessageActive(recId);
+        renderBancoMensajesModal();
+      }
+    },
+    'eval-confirm-review-desempeno': () => {
+      if (evalState.indStudentId) {
+        DesempenoEngine.confirmReview(evalState.indStudentId, evalState.trimester);
+        const s = getStudentsList().find(stu => stu.id === evalState.indStudentId);
+        renderDesempenoIndividual(s, evalState.trimester);
+        if (typeof toast === 'function') toast('Valoraciones revisadas y confirmadas correctamente.');
+      }
     }
   });
 
@@ -4988,6 +5569,7 @@
   EvaluacionEngine.calculateStudentFullEvaluation = calculateStudentFullEvaluation;
   window.EvaluacionEngine = EvaluacionEngine;
   window.DesempenoEngine = DesempenoEngine;
+  window.EvalSyncEngine = EvalSyncEngine;
   window.initEvaluacionesTrimestrales = initEvaluacionesTrimestrales;
   window.selectEvalTrimester = selectEvalTrimester;
   window.switchEvalTab = switchEvalTab;

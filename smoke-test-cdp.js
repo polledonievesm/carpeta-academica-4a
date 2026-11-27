@@ -324,6 +324,35 @@ async function runCDPTest() {
       window.actions['eval-save-captura-draft']();
       results.capturaDraftSaved = true;
 
+      // --- VERIFICACIONES DE ETAPA 7A (PERSISTENCIA Y SINCRONIZACIÓN) ---
+      // 21. Presencia del indicador de sincronización remota
+      const syncPill = document.getElementById('evalSyncStatusIndicator');
+      results.syncIndicatorPresent = Boolean(syncPill);
+
+      // 22. Apertura y renderizado de la previsualización de migración de borradores
+      window.actions['eval-open-draft-migration-modal']();
+      const draftModal = document.getElementById('evalDraftRecoveryModal');
+      results.draftMigrationModalOpened = Boolean(draftModal && draftModal.style.display !== 'none');
+      const previewBox = document.getElementById('evalDraftMigrationPreviewBox');
+      results.draftMigrationPreviewRendered = Boolean(previewBox && previewBox.innerHTML.includes('Calificaciones'));
+      window.actions['eval-close-draft-migration-modal']();
+
+      // 23. Disparo de sincronización por lotes (simulada en frontend)
+      window.actions['eval-sync-now']();
+      results.syncActionTriggered = true;
+
+      // 24. Aprobación docente de propuesta en banco de recomendaciones
+      window.actions['eval-approve-banco-rec']({ dataset: { recId: 'rec_gen_e' } });
+      const firstBankItem = window.DesempenoEngine.getBancoMensajes().find(b => b.id === 'rec_gen_e');
+      results.bancoProposalApproved = Boolean(firstBankItem && firstBankItem.approved === true);
+
+      // 25. Promedio anual independiente por campo formativo disponible
+      const annFieldRes = window.EvaluacionEngine.calculateFieldAnnualAverage('alumno_01', 'Lenguajes');
+      results.fieldAnnualAverageAvailable = (typeof annFieldRes === 'object' && annFieldRes !== null);
+
+      // 26. Motor EvalSyncEngine exportado globalmente
+      results.evalSyncEngineAvailable = (typeof window.EvalSyncEngine === 'object');
+
       return results;
     })()`,
     returnByValue: true
@@ -390,6 +419,13 @@ async function runCDPTest() {
       type: 'touchEnd',
       touchPoints: []
     });
+    await sendCommand('Runtime.evaluate', {
+      expression: `(function() {
+        const btn = document.querySelector('.eval-tab-btn[data-tab="captura-grupal"]');
+        if (btn) btn.click();
+      })()`
+    });
+    await new Promise(r => setTimeout(r, 300));
 
     await new Promise(r => setTimeout(r, 500));
   }
@@ -454,7 +490,7 @@ async function runCDPTest() {
   try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (e) {}
 
   console.log('\n============================================================');
-  console.log('[CDP SMOKE TEST] RESUMEN DE VERIFICACIÓN ETAPA 6');
+  console.log('[CDP SMOKE TEST] RESUMEN DE VERIFICACIÓN ETAPA 7A');
   console.log('============================================================');
   console.log(`Excepciones no capturadas (exceptionThrown): ${uncaughtExceptions.length}`);
   console.log(`Errores en consola (consoleErrors): ${consoleErrors.length}`);
@@ -482,6 +518,12 @@ async function runCDPTest() {
   console.log(`Área de mensaje familiar y contador dinámico: ${d.hasMsgTextarea ? 'OK' : 'FALLÓ'}`);
   console.log(`Modal de banco de recomendaciones (>= 20 items): ${d.msgBankModalOpened && d.msgBankHas20Items ? 'OK' : 'FALLÓ'}`);
   console.log(`Inserción desde banco validada (<= 245 car): ${d.msgInsertedFromBank ? 'OK' : 'FALLÓ'}`);
+  console.log(`Aprobación de propuesta en banco docente: ${d.bancoProposalApproved ? 'OK' : 'FALLÓ'}`);
+  console.log(`Indicador de sincronización en barra: ${d.syncIndicatorPresent ? 'OK' : 'FALLÓ'}`);
+  console.log(`Modal y previsualización de migración de borradores: ${d.draftMigrationModalOpened && d.draftMigrationPreviewRendered ? 'OK' : 'FALLÓ'}`);
+  console.log(`Disparo de sincronización remota: ${d.syncActionTriggered ? 'OK' : 'FALLÓ'}`);
+  console.log(`Promedio anual independiente por campo: ${d.fieldAnnualAverageAvailable ? 'OK' : 'FALLÓ'}`);
+  console.log(`Motor EvalSyncEngine disponible: ${d.evalSyncEngineAvailable ? 'OK' : 'FALLÓ'}`);
   console.log(`Mensaje familiar guardado: ${d.msgSaved ? 'OK' : 'FALLÓ'}`);
   console.log(`Tarjeta de estado consolidado renderizada: ${d.resumenCardRendered ? 'OK' : 'FALLÓ'}`);
   console.log(`Navegación de alumno (siguiente/anterior): ${d.indNextStudentNavigated ? 'OK' : 'FALLÓ'}`);
@@ -494,5 +536,5 @@ async function runCDPTest() {
     throw new Error(`Se detectaron ${uncaughtExceptions.length} excepciones no capturadas.`);
   }
 
-  console.log('\n>>> ETAPA 6 VERIFICADA CON ÉXITO: 0 EXCEPCIONES EN CHROME HEADLESS <<<\n');
+  console.log('\n>>> ETAPA 7A VERIFICADA CON ÉXITO: 0 EXCEPCIONES EN CHROME HEADLESS <<<\n');
 }

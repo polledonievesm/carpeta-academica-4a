@@ -2123,3 +2123,98 @@
     min-width: 44px;
   }
 }
+
+/* =========================================================================
+   ESTILOS DE SINCRONIZACIÓN Y PERSISTENCIA REMOTA (ETAPA 7A)
+   ========================================================================= */
+
+.eval-sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.eval-sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.eval-sync-guardado_servidor {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #86efac;
+}
+.eval-sync-guardado_servidor .eval-sync-dot {
+  background: #16a34a;
+}
+
+.eval-sync-borrador_local {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #7dd3fc;
+}
+.eval-sync-borrador_local .eval-sync-dot {
+  background: #0284c7;
+}
+
+.eval-sync-pendiente_sync {
+  background: #ffedd5;
+  color: #c2410c;
+  border-color: #fdba74;
+}
+.eval-sync-pendiente_sync .eval-sync-dot {
+  background: #ea580c;
+}
+
+.eval-sync-sincronizando {
+  background: #fef9c3;
+  color: #a16207;
+  border-color: #fde047;
+}
+.eval-sync-sincronizando .eval-sync-dot {
+  background: #eab308;
+  animation: evalSyncPulse 1.2s infinite ease-in-out;
+}
+
+.eval-sync-error_sync {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fca5a5;
+}
+.eval-sync-error_sync .eval-sync-dot {
+  background: #dc2626;
+}
+
+.eval-sync-conflicto_version {
+  background: #f3e8ff;
+  color: #7e22ce;
+  border-color: #d8b4fe;
+}
+.eval-sync-conflicto_version .eval-sync-dot {
+  background: #9333ea;
+}
+
+@keyframes evalSyncPulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.eval-copied-review-alert {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}

@@ -72,11 +72,42 @@ function test(id, desc, fn) {
 // SUITE DE 30 PRUEBAS UNITARIAS - ETAPA 6
 // =========================================================================
 
-// 1. Existencia de exactamente 23 indicadores
-test(1, "Existencia de exactamente 23 indicadores", () => {
+// 1. Existencia y verificación de nombres exactos de los 23 indicadores
+test(1, "Existencia y correspondencia exacta de nombres y orden de los 23 indicadores", () => {
   const catalog = DesempenoEngine.INDICADORES;
   assert.strictEqual(Array.isArray(catalog), true);
-  assert.strictEqual(catalog.length, 23);
+  assert.strictEqual(catalog.length, 23, "Debe tener exactamente 23 indicadores");
+
+  const expectedNames = [
+    'Lectura y comprensión',
+    'Escritura y ortografía',
+    'Habilidades matemáticas',
+    'Comprensión de contenidos',
+    'Cumplimiento de tareas',
+    'Finalización de actividades',
+    'Entrega de trabajos completos',
+    'Materiales escolares completos',
+    'Limpieza y presentación de trabajos',
+    'Seguimiento de indicaciones',
+    'Organización y autonomía',
+    'Atención y concentración',
+    'Participación activa',
+    'Respeto a sus compañeros',
+    'Respeto al docente',
+    'Cumplimiento de acuerdos',
+    'Autorregulación emocional y conductual',
+    'Resolución pacífica de conflictos',
+    'Trabajo colaborativo',
+    'Actitud y disposición para aprender',
+    'Cuidado del mobiliario escolar',
+    'Asistencia regular',
+    'Puntualidad'
+  ];
+
+  catalog.forEach((ind, idx) => {
+    assert.strictEqual(ind.numero, idx + 1, `El indicador en índice ${idx} debe tener número ${idx + 1}`);
+    assert.strictEqual(ind.nombre, expectedNames[idx], `El indicador ${idx + 1} debe llamarse exactamente "${expectedNames[idx]}"`);
+  });
 });
 
 // 2. Distribución correcta de 4, 9, 8 y 2 indicadores

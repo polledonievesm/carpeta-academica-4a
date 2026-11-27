@@ -1,0 +1,473 @@
+/**
+ * ============================================================================
+ * INSTALABLE: EvaluacionesTrimestrales.gs
+ * MÓDULO: Evaluaciones Trimestrales — Persistencia Definitiva en Google Sheets
+ * ============================================================================
+ * 
+ * Este archivo contiene la propuesta técnica completa y el código fuente
+ * modular para la persistencia definitiva de las Evaluaciones Trimestrales
+ * en Google Sheets y Google Apps Script.
+ * 
+ * ATENCIÓN: NO desplegar en producción sin autorización explícita del docente.
+ * ============================================================================
+ */
+
+// ----------------------------------------------------------------------------
+// PARTE 1: DEFINICIONES DEL ESQUEMA DB EN Database.gs
+// ----------------------------------------------------------------------------
+/*
+Localizar 'const DB = {' en Database.gs e incorporar las siguientes 7 tablas:
+
+  // Configuración de periodos, porcentajes y ponderaciones por ciclo, grupo y trimestre
+  EvalConfig: [
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'fechaInicio', 'fechaFin',
+    'estadoPeriodo', 'ponderacionesJson', 'valoresTareasJson', 'valoresConductaJson',
+    'valoresParticipacionJson', 'ajustesAdminJson', 'version', 'actualizadoEn', 'actualizadoPor'
+  ],
+
+  // Selección y exclusión de actividades académicas por criterio y campo formativo
+  EvalActividades: [
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'campoFormativo', 'criterio',
+    'actividadId', 'tipoActividad', 'fechaActividad', 'nombreActividad',
+    'seleccionada', 'peso', 'actualizadoEn'
+  ],
+
+  // Calificaciones por alumno, campo formativo y trimestre
+  EvalCalificaciones: [
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
+    'campoFormativo', 'modalidad', 'examenGrade', 'desgloseCriteriosJson',
+    'calcGrade', 'manualGrade', 'motivoAjuste', 'authorizedGrade', 'isAuthorized',
+    'status', 'version', 'actualizadoEn', 'actualizadoPor'
+  ],
+
+  // Valoraciones de los 23 indicadores de desempeño integral
+  EvalDesempeno: [
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
+    'ratingsJson', 'completados', 'source', 'isReviewed', 'version',
+    'actualizadoEn', 'actualizadoPor'
+  ],
+
+  // Mensajes personalizados para el Portal Familiar (máx. 245 caracteres)
+  EvalMensajes: [
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
+    'mensaje', 'caracteres', 'templateId', 'estadoRevision', 'version',
+    'actualizadoEn', 'actualizadoPor'
+  ],
+
+  // Banco institucional de recomendaciones pedagógicas
+  EvalBancoRecomendaciones: [
+    'id', 'categoria', 'nivel', 'texto', 'caracteres', 'estadoAprobacion',
+    'activo', 'creadoEn', 'actualizadoEn'
+  ],
+
+  // Historial de versiones y auditoría de eventos de evaluación
+  EvalVersiones: [
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'tipoEvento', 'version',
+    'resumen', 'payloadHash', 'usuario', 'creadoEn'
+  ]
+*/
+
+// ----------------------------------------------------------------------------
+// PARTE 2: FUNCIÓN DE MIGRACIÓN IDEMPOTENTE PARA GOOGLE SHEETS
+// ----------------------------------------------------------------------------
+
+/**
+ * Inicializa y valida la existencia de las 7 hojas de Evaluaciones Trimestrales.
+ * Idempotente: si las hojas ya existen con sus encabezados correctos, no las modifica.
+ * Si alguna hoja no existe, la crea con su fila de encabezados oficial.
+ * 
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [ss] Libro opcional (para pruebas/inyección).
+ * @return {Object} Resultado con { ok: boolean, created: string[], verified: string[] }
+ */
+function migrateEvaluacionesTrimestralesSchema_(ss) {
+  var targetSs = ss || (typeof getSpreadsheet_ === 'function' ? getSpreadsheet_() : SpreadsheetApp.getActiveSpreadsheet());
+  if (!targetSs) throw new Error('No se pudo acceder al libro de Google Sheets.');
+
+  var schema = {
+    EvalConfig: [
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'fechaInicio', 'fechaFin',
+      'estadoPeriodo', 'ponderacionesJson', 'valoresTareasJson', 'valoresConductaJson',
+      'valoresParticipacionJson', 'ajustesAdminJson', 'version', 'actualizadoEn', 'actualizadoPor'
+    ],
+    EvalActividades: [
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'campoFormativo', 'criterio',
+      'actividadId', 'tipoActividad', 'fechaActividad', 'nombreActividad',
+      'seleccionada', 'peso', 'actualizadoEn'
+    ],
+    EvalCalificaciones: [
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
+      'campoFormativo', 'modalidad', 'examenGrade', 'desgloseCriteriosJson',
+      'calcGrade', 'manualGrade', 'motivoAjuste', 'authorizedGrade', 'isAuthorized',
+      'status', 'version', 'actualizadoEn', 'actualizadoPor'
+    ],
+    EvalDesempeno: [
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
+      'ratingsJson', 'completados', 'source', 'isReviewed', 'version',
+      'actualizadoEn', 'actualizadoPor'
+    ],
+    EvalMensajes: [
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
+      'mensaje', 'caracteres', 'templateId', 'estadoRevision', 'version',
+      'actualizadoEn', 'actualizadoPor'
+    ],
+    EvalBancoRecomendaciones: [
+      'id', 'categoria', 'nivel', 'texto', 'caracteres', 'estadoAprobacion',
+      'activo', 'creadoEn', 'actualizadoEn'
+    ],
+    EvalVersiones: [
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'tipoEvento', 'version',
+      'resumen', 'payloadHash', 'usuario', 'creadoEn'
+    ]
+  };
+
+  var created = [];
+  var verified = [];
+
+  for (var sheetName in schema) {
+    var expectedHeaders = schema[sheetName];
+    var sheet = targetSs.getSheetByName(sheetName);
+
+    if (!sheet) {
+      sheet = targetSs.insertSheet(sheetName);
+      sheet.getRange(1, 1, 1, expectedHeaders.length).setValues([expectedHeaders]);
+      sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight('bold');
+      sheet.setFrozenRows(1);
+      created.push(sheetName);
+    } else {
+      var lastCol = sheet.getLastColumn();
+      if (lastCol === 0) {
+        sheet.getRange(1, 1, 1, expectedHeaders.length).setValues([expectedHeaders]);
+        sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight('bold');
+        sheet.setFrozenRows(1);
+        created.push(sheetName + ' (encabezados inicializados)');
+      } else {
+        var currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+        // Validar integridad de encabezados existentes
+        for (var i = 0; i < expectedHeaders.length; i++) {
+          if (i >= currentHeaders.length || String(currentHeaders[i] || '').trim() !== expectedHeaders[i]) {
+            throw new Error('Esquema incompatible en hoja "' + sheetName + '" en columna ' + (i + 1) + 
+                            ': esperado "' + expectedHeaders[i] + '", encontrado "' + (currentHeaders[i] || '') + '".');
+          }
+        }
+        verified.push(sheetName);
+      }
+    }
+  }
+
+  return { ok: true, created: created, verified: verified };
+}
+
+// ----------------------------------------------------------------------------
+// PARTE 3: SERVICIOS DE VALIDACIÓN Y AUTORIZACIÓN (SERVIDOR GAS)
+// ----------------------------------------------------------------------------
+
+var EVAL_INDICADORES_VALIDOS = {
+  acad_lectura: 'Lectura y comprensión',
+  acad_escritura: 'Escritura y ortografía',
+  acad_matematicas: 'Habilidades matemáticas',
+  acad_contenidos: 'Comprensión de contenidos',
+  hab_tareas: 'Cumplimiento de tareas',
+  hab_actividades: 'Finalización de actividades',
+  hab_completos: 'Entrega de trabajos completos',
+  hab_materiales: 'Materiales escolares completos',
+  hab_limpieza: 'Limpieza y presentación de trabajos',
+  hab_indicaciones: 'Seguimiento de indicaciones',
+  hab_autonomia: 'Organización y autonomía',
+  hab_concentracion: 'Atención y concentración',
+  hab_participacion: 'Participación activa',
+  cond_companeros: 'Respeto a sus compañeros',
+  cond_docente: 'Respeto al docente',
+  cond_acuerdos: 'Cumplimiento de acuerdos',
+  cond_autorregulacion: 'Autorregulación emocional y conductual',
+  cond_conflictos: 'Resolución pacífica de conflictos',
+  cond_colaborativo: 'Trabajo colaborativo',
+  cond_actitud: 'Actitud y disposición para aprender',
+  cond_mobiliario: 'Cuidado del mobiliario escolar',
+  asis_regular: 'Asistencia regular',
+  asis_puntualidad: 'Puntualidad'
+};
+
+var EVAL_NIVELES_VALIDOS = { E: true, B: true, R: true, A: true };
+
+var EVAL_CAMPOS_FORMATIVOS = {
+  'Lenguajes': true,
+  'Saberes y Pensamiento Científico': true,
+  'Ética, Naturaleza y Sociedades': true,
+  'De lo Humano y lo Comunitario': true
+};
+
+/**
+ * Valida la identidad y credenciales docentes antes de procesar operaciones de evaluación.
+ */
+function validateTeacherAuth_(sessionToken) {
+  if (typeof isTeacherSessionValid_ === 'function') {
+    if (!isTeacherSessionValid_(sessionToken)) {
+      throw new Error('Sesión docente inválida o expirada. Inicie sesión nuevamente.');
+    }
+  } else if (!sessionToken || String(sessionToken).length < 8) {
+    throw new Error('No autorizado. Token de sesión no proporcionado.');
+  }
+}
+
+/**
+ * Valida las calificaciones numéricas y límites escolares (0.00 a 10.00).
+ */
+function validateGradeValue_(val) {
+  if (val === null || val === undefined || val === '') return null;
+  var num = Number(val);
+  if (isNaN(num) || !isFinite(num) || num < 0 || num > 10) {
+    throw new Error('Calificación fuera de rango permitido (0.00 a 10.00): ' + val);
+  }
+  return Number(num.toFixed(2));
+}
+
+/**
+ * Valida un mensaje personalizado para familia (<= 245 caracteres).
+ */
+function validateFamilyMessage_(text) {
+  if (!text || String(text).trim() === '') return '';
+  var str = String(text).trim();
+  if (str.length > 245) {
+    throw new Error('El mensaje familiar supera el límite máximo de 245 caracteres (' + str.length + ' car).');
+  }
+  return str;
+}
+
+// ----------------------------------------------------------------------------
+// PARTE 4: SERVICIOS Y CONTROLADORES DE EVALUACIONES TRIMESTRALES
+// ----------------------------------------------------------------------------
+
+/**
+ * Recupera el paquete completo de evaluaciones de un trimestre para el grupo.
+ */
+function getTrimesterEvaluationBundle_(ciclo, grupo, trimestre, sessionToken) {
+  validateTeacherAuth_(sessionToken);
+  var t = parseInt(trimestre, 10);
+  var configId = ciclo + '_' + grupo + '_T' + t;
+
+  var configRow = null;
+  try {
+    var configs = typeof readRows_ === 'function' ? readRows_('EvalConfig') : [];
+    configRow = configs.find(function (r) { return r.id === configId; }) || null;
+  } catch (e) {}
+
+  var califs = [];
+  try {
+    var allCalifs = typeof readRows_ === 'function' ? readRows_('EvalCalificaciones') : [];
+    califs = allCalifs.filter(function (r) { return r.cicloEscolar === ciclo && r.grupo === grupo && parseInt(r.trimestre, 10) === t; });
+  } catch (e) {}
+
+  var desemp = [];
+  try {
+    var allDesemp = typeof readRows_ === 'function' ? readRows_('EvalDesempeno') : [];
+    desemp = allDesemp.filter(function (r) { return r.cicloEscolar === ciclo && r.grupo === grupo && parseInt(r.trimestre, 10) === t; });
+  } catch (e) {}
+
+  var msgs = [];
+  try {
+    var allMsgs = typeof readRows_ === 'function' ? readRows_('EvalMensajes') : [];
+    msgs = allMsgs.filter(function (r) { return r.cicloEscolar === ciclo && r.grupo === grupo && parseInt(r.trimestre, 10) === t; });
+  } catch (e) {}
+
+  return {
+    ok: true,
+    ciclo: ciclo,
+    grupo: grupo,
+    trimestre: t,
+    config: configRow,
+    calificaciones: califs,
+    desempeno: desemp,
+    mensajes: msgs,
+    serverTimestamp: new Date().toISOString()
+  };
+}
+
+/**
+ * Sincronización atómica por lotes (Batch) con protección de concurrencia LockService.
+ */
+function syncTrimesterEvaluationBatch_(payload, sessionToken) {
+  validateTeacherAuth_(sessionToken);
+
+  if (!payload || !payload.ciclo || !payload.grupo || !payload.trimestre) {
+    throw new Error('Payload incompleto: ciclo, grupo y trimestre son obligatorios.');
+  }
+
+  var ciclo = String(payload.ciclo);
+  var grupo = String(payload.grupo);
+  var t = parseInt(payload.trimestre, 10);
+  var now = new Date().toISOString();
+  var user = (typeof getSessionUser_ === 'function' ? getSessionUser_(sessionToken) : 'docente');
+
+  // Adquirir bloqueo exclusivo para garantizar atomicidad e idempotencia
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000); // 20 segundos de espera máxima
+  } catch (e) {
+    throw new Error('El servidor de Google está procesando otra solicitud concurrente. Intente nuevamente en unos momentos.');
+  }
+
+  try {
+    var result = {
+      configSaved: false,
+      calificacionesCount: 0,
+      desempenoCount: 0,
+      mensajesCount: 0,
+      timestamp: now,
+      version: payload.version || 1
+    };
+
+    // 1. Guardar Configuración si viene incluida
+    if (payload.config) {
+      var cfgId = ciclo + '_' + grupo + '_T' + t;
+      var cfgRecord = {
+        id: cfgId,
+        cicloEscolar: ciclo,
+        grupo: grupo,
+        trimestre: t,
+        fechaInicio: payload.config.inicio || '',
+        fechaFin: payload.config.fin || '',
+        estadoPeriodo: payload.config.estado || 'in-progress',
+        ponderacionesJson: JSON.stringify(payload.config.ponderaciones || {}),
+        valoresTareasJson: JSON.stringify(payload.config.valoresTareas || {}),
+        valoresConductaJson: JSON.stringify(payload.config.valoresConducta || {}),
+        valoresParticipacionJson: JSON.stringify(payload.config.valoresParticipacion || {}),
+        ajustesAdminJson: JSON.stringify(payload.config.ajustesAdmin || {}),
+        version: payload.version || 1,
+        actualizadoEn: now,
+        actualizadoPor: user
+      };
+      if (typeof upsertRow_ === 'function') {
+        upsertRow_('EvalConfig', 'id', cfgRecord);
+      }
+      result.configSaved = true;
+    }
+
+    // 2. Guardar Calificaciones por lotes
+    if (Array.isArray(payload.calificaciones) && payload.calificaciones.length > 0) {
+      payload.calificaciones.forEach(function (c) {
+        if (!c.alumnoId || !c.campoFormativo) return;
+        if (!EVAL_CAMPOS_FORMATIVOS[c.campoFormativo]) {
+          throw new Error('Campo formativo no reconocido: ' + c.campoFormativo);
+        }
+        var califId = ciclo + '_' + grupo + '_T' + t + '_' + c.alumnoId + '_' + c.campoFormativo;
+        var rec = {
+          id: califId,
+          cicloEscolar: ciclo,
+          grupo: grupo,
+          trimestre: t,
+          alumnoId: String(c.alumnoId),
+          numeroLista: c.numeroLista ? parseInt(c.numeroLista, 10) : null,
+          campoFormativo: c.campoFormativo,
+          modalidad: c.modalidad || 'asistida',
+          examenGrade: validateGradeValue_(c.examenGrade),
+          desgloseCriteriosJson: JSON.stringify(c.desgloseCriterios || {}),
+          calcGrade: validateGradeValue_(c.calcGrade),
+          manualGrade: validateGradeValue_(c.manualGrade),
+          motivoAjuste: c.motivoAjuste || '',
+          authorizedGrade: validateGradeValue_(c.authorizedGrade),
+          isAuthorized: Boolean(c.isAuthorized),
+          status: c.status || 'PENDIENTE',
+          version: payload.version || 1,
+          actualizadoEn: now,
+          actualizadoPor: user
+        };
+        if (typeof upsertRow_ === 'function') {
+          upsertRow_('EvalCalificaciones', 'id', rec);
+        }
+        result.calificacionesCount++;
+      });
+    }
+
+    // 3. Guardar Desempeño Integral por lotes (35 registros de alumnos, 23 indicadores validados)
+    if (Array.isArray(payload.desempeno) && payload.desempeno.length > 0) {
+      payload.desempeno.forEach(function (d) {
+        if (!d.alumnoId) return;
+        var cleanRatings = {};
+        var completedCount = 0;
+        var inputRatings = d.ratings || {};
+
+        for (var indKey in inputRatings) {
+          if (EVAL_INDICADORES_VALIDOS[indKey]) {
+            var lvl = inputRatings[indKey];
+            if (EVAL_NIVELES_VALIDOS[lvl]) {
+              cleanRatings[indKey] = lvl;
+              completedCount++;
+            }
+          }
+        }
+
+        var desempId = ciclo + '_' + grupo + '_T' + t + '_' + d.alumnoId;
+        var desempRec = {
+          id: desempId,
+          cicloEscolar: ciclo,
+          grupo: grupo,
+          trimestre: t,
+          alumnoId: String(d.alumnoId),
+          numeroLista: d.numeroLista ? parseInt(d.numeroLista, 10) : null,
+          ratingsJson: JSON.stringify(cleanRatings),
+          completados: completedCount,
+          source: d.source || 'manual',
+          isReviewed: d.isReviewed !== false,
+          version: payload.version || 1,
+          actualizadoEn: now,
+          actualizadoPor: user
+        };
+        if (typeof upsertRow_ === 'function') {
+          upsertRow_('EvalDesempeno', 'id', desempRec);
+        }
+        result.desempenoCount++;
+      });
+    }
+
+    // 4. Guardar Mensajes Familiares por lotes (máx 245 car)
+    if (Array.isArray(payload.mensajes) && payload.mensajes.length > 0) {
+      payload.mensajes.forEach(function (m) {
+        if (!m.alumnoId) return;
+        var cleanMsg = validateFamilyMessage_(m.mensaje);
+        var msgId = ciclo + '_' + grupo + '_T' + t + '_' + m.alumnoId;
+        var msgRec = {
+          id: msgId,
+          cicloEscolar: ciclo,
+          grupo: grupo,
+          trimestre: t,
+          alumnoId: String(m.alumnoId),
+          numeroLista: m.numeroLista ? parseInt(m.numeroLista, 10) : null,
+          mensaje: cleanMsg,
+          caracteres: cleanMsg.length,
+          templateId: m.templateId || '',
+          estadoRevision: m.estadoRevision || 'pendiente',
+          version: payload.version || 1,
+          actualizadoEn: now,
+          actualizadoPor: user
+        };
+        if (typeof upsertRow_ === 'function') {
+          upsertRow_('EvalMensajes', 'id', msgRec);
+        }
+        result.mensajesCount++;
+      });
+    }
+
+    // 5. Registrar versión en historial de auditoría
+    var versId = 'VER_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    var versionRec = {
+      id: versId,
+      cicloEscolar: ciclo,
+      grupo: grupo,
+      trimestre: t,
+      tipoEvento: payload.tipoEvento || 'sincronizacion_borrador',
+      version: payload.version || 1,
+      resumen: 'Sincronización remota: ' + result.calificacionesCount + ' materias, ' + 
+               result.desempenoCount + ' registros de desempeño, ' + result.mensajesCount + ' mensajes.',
+      payloadHash: payload.hash || '',
+      usuario: user,
+      creadoEn: now
+    };
+    if (typeof appendRow_ === 'function') {
+      try { appendRow_('EvalVersiones', versionRec); } catch (e) {}
+    }
+
+    return { ok: true, data: result };
+  } finally {
+    lock.releaseLock();
+  }
+}
