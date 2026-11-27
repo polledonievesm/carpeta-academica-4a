@@ -487,3 +487,415 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   ETAPA 2: CONFIGURACIÓN DE CRITERIOS, PERIODOS Y VALORACIONES
+   ========================================================================== */
+
+.eval-config-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.eval-config-section {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+}
+
+.eval-config-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.eval-config-section-title h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--navy);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.eval-config-section-title p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Apartado 1: Ciclo escolar y zona horaria */
+.eval-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.eval-meta-box {
+  background: #f7fafc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.eval-meta-box label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.eval-meta-box .meta-value {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+/* Apartado 2: Periodos trimestrales */
+.eval-periods-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.eval-period-edit-card {
+  background: #fbfdfe;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s ease;
+}
+
+.eval-period-edit-card.is-current-active {
+  border-color: var(--teal);
+  background: #f4fafb;
+}
+
+.eval-period-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.eval-period-card-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.eval-date-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.eval-date-field-group label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.eval-period-status-select {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 10px;
+}
+
+/* Alertas de validación */
+.eval-validation-alert {
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.eval-validation-alert.danger {
+  background: #fff0ef;
+  color: #a32929;
+  border: 1px solid #f2c2bf;
+}
+
+.eval-validation-alert.success {
+  background: #eaf8f0;
+  color: #1b7c4b;
+  border: 1px solid #b7e3ca;
+}
+
+.eval-validation-alert.info {
+  background: #eef7fc;
+  color: #0d649d;
+  border: 1px solid #bee1f5;
+}
+
+/* Apartado 3: Porcentajes y Ponderaciones */
+.eval-criteria-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.eval-criteria-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.eval-criteria-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  gap: 16px;
+  transition: all 0.15s ease;
+}
+
+.eval-criteria-row.is-active {
+  background: #ffffff;
+  border-color: #b7ccd9;
+}
+
+.eval-criteria-row.is-disabled {
+  opacity: 0.65;
+  background: #f1f5f8;
+}
+
+.eval-criteria-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.eval-criteria-toggle-btn {
+  background: transparent;
+  border: 2px solid #b8ccd8;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  color: var(--teal);
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.eval-criteria-toggle-btn.checked {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #ffffff;
+}
+
+.eval-criteria-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.eval-criteria-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.eval-criteria-input-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.eval-pct-number-input {
+  width: 80px;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 800;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+.eval-pct-number-input:focus {
+  border-color: var(--teal);
+  outline: none;
+}
+
+.eval-pct-symbol {
+  font-weight: 800;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* Barra de suma de porcentajes */
+.eval-sum-bar-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  margin-top: 10px;
+  background: #f7fafc;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.eval-sum-badge {
+  font-size: 18px;
+  font-weight: 800;
+  padding: 6px 14px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.eval-sum-badge.valid {
+  background: #e9f8ef;
+  color: #1b7c4b;
+  border: 1px solid #b7e3ca;
+}
+
+.eval-sum-badge.invalid {
+  background: #fff0ef;
+  color: #a32929;
+  border: 1px solid #f2c2bf;
+}
+
+/* Apartados 4, 5 y 6: Valoraciones de Tareas, Conducta y Participación */
+.eval-values-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.eval-value-card {
+  background: #fbfdfe;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.eval-value-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.eval-value-level {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.eval-value-input {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  font-weight: 700;
+}
+
+.eval-value-note {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+/* Barra inferior de acciones de guardado */
+.eval-config-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  position: sticky;
+  bottom: 12px;
+  z-index: 10;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.eval-unsaved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #a46d00;
+  background: #fff8e6;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #fae19d;
+}
+
+/* Adaptabilidad para dispositivos móviles y táctiles (Touch Target >= 44px) */
+@media (max-width: 900px) {
+  .eval-meta-grid,
+  .eval-periods-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .eval-criteria-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .eval-criteria-input-box {
+    align-self: flex-end;
+  }
+  .eval-config-actions-bar {
+    position: static;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .eval-config-actions-bar .button-row {
+    flex-direction: column;
+    width: 100%;
+  }
+  .eval-config-actions-bar .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
+/* Controles táctiles accesibles */
+.eval-criteria-toggle-btn,
+.eval-trimester-btn,
+.eval-tab-btn,
+.eval-config-actions-bar .btn {
+  min-height: 44px;
+}

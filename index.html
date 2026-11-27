@@ -1521,12 +1521,316 @@
         </div>
 
         <div id="evalTabCriterios" class="eval-tab-content hidden-tab">
-          <article class="panel eval-placeholder-panel">
-            <div class="eval-placeholder-icon">⚙️</div>
-            <h3>Criterios de evaluación y fechas del periodo</h3>
-            <p class="muted">Esta configuración se implementará en la <strong>Etapa 2: Almacenamiento y configuración</strong>. Permitirá ajustar fechas trimestrales, ponderaciones (tareas, actividades, examen, conducta, participación, asistencia, puntualidad) y valores iniciales.</p>
-            <button class="btn" data-action="eval-switch-tab" data-tab="seguimiento">Volver al panel de seguimiento</button>
-          </article>
+          <div class="eval-config-container">
+            <!-- Apartado 1: Configuración del ciclo escolar y grupo -->
+            <article class="eval-config-section">
+              <div class="eval-config-section-title">
+                <div>
+                  <h3>🏫 1. Configuración del ciclo escolar</h3>
+                  <p>Definición del ciclo activo, grado, grupo y zona horaria escolar.</p>
+                </div>
+              </div>
+              <div class="eval-meta-grid">
+                <div class="eval-meta-box">
+                  <label for="evalCfgCiclo">Ciclo escolar</label>
+                  <input id="evalCfgCiclo" class="input" value="2026-2027" placeholder="Ej. 2026-2027">
+                </div>
+                <div class="eval-meta-box">
+                  <label>Grado y grupo</label>
+                  <div class="meta-value">4.º A · Primaria</div>
+                </div>
+                <div class="eval-meta-box">
+                  <label>Zona horaria escolar</label>
+                  <div class="meta-value" id="evalTimezoneDisplay">Quintana Roo (America/Cancun)</div>
+                </div>
+              </div>
+            </article>
+
+            <!-- Apartado 2: Periodos trimestrales -->
+            <article class="eval-config-section">
+              <div class="eval-config-section-title">
+                <div>
+                  <h3>📅 2. Periodos trimestrales</h3>
+                  <p>Fechas de inicio y fin por trimestre, determinación automática del trimestre actual y ajuste administrativo.</p>
+                </div>
+                <div class="button-row">
+                  <label style="font-size: 13px; font-weight: 700; color: var(--navy); display: flex; align-items: center; gap: 8px;">
+                    Modo:
+                    <select id="evalPeriodModeSelect" class="input compact-input" style="width: auto;">
+                      <option value="auto">Automático según calendario</option>
+                      <option value="manual">Ajuste administrativo manual</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div id="evalManualOverrideRow" class="eval-validation-alert info" style="display: none; margin-bottom: 14px;">
+                <span>⚠️ Ajuste administrativo activo: Se evaluará manualmente el </span>
+                <select id="evalManualTrimesterChoice" class="input compact-input" style="width: auto; margin-left: 6px;">
+                  <option value="1">Trimestre 1</option>
+                  <option value="2">Trimestre 2</option>
+                  <option value="3">Trimestre 3</option>
+                </select>
+              </div>
+
+              <div class="eval-periods-grid">
+                <!-- Trimestre 1 -->
+                <div class="eval-period-edit-card" id="evalPeriodCard1">
+                  <div class="eval-period-card-header">
+                    <span class="eval-period-card-title">1.er Trimestre</span>
+                    <span id="evalCardBadge1" class="eval-status-pill status-in-progress">En curso</span>
+                  </div>
+                  <div class="eval-date-field-group">
+                    <label for="evalDateStart1">Fecha de inicio</label>
+                    <input type="date" id="evalDateStart1" class="input eval-date-input" value="2026-08-26">
+                  </div>
+                  <div class="eval-date-field-group">
+                    <label for="evalDateEnd1">Fecha de finalización</label>
+                    <input type="date" id="evalDateEnd1" class="input eval-date-input" value="2026-11-27">
+                  </div>
+                  <div class="eval-date-field-group">
+                    <label for="evalStatusSelect1">Estado del periodo</label>
+                    <select id="evalStatusSelect1" class="input eval-period-status-select">
+                      <option value="in-progress">En curso</option>
+                      <option value="review">En revisión</option>
+                      <option value="completed">Finalizado</option>
+                      <option value="pending">Pendiente</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Trimestre 2 -->
+                <div class="eval-period-edit-card" id="evalPeriodCard2">
+                  <div class="eval-period-card-header">
+                    <span class="eval-period-card-title">2.º Trimestre</span>
+                    <span id="evalCardBadge2" class="eval-status-pill status-pending">Pendiente</span>
+                  </div>
+                  <div class="eval-date-field-group">
+                    <label for="evalDateStart2">Fecha de inicio</label>
+                    <input type="date" id="evalDateStart2" class="input eval-date-input" value="2026-11-30">
+                  </div>
+                  <div class="eval-date-field-group">
+                    <label for="evalDateEnd2">Fecha de finalización</label>
+                    <input type="date" id="evalDateEnd2" class="input eval-date-input" value="2027-03-26">
+                  </div>
+                  <div class="eval-date-field-group">
+                    <label for="evalStatusSelect2">Estado del periodo</label>
+                    <select id="evalStatusSelect2" class="input eval-period-status-select">
+                      <option value="pending">Pendiente</option>
+                      <option value="in-progress">En curso</option>
+                      <option value="review">En revisión</option>
+                      <option value="completed">Finalizado</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Trimestre 3 -->
+                <div class="eval-period-edit-card" id="evalPeriodCard3">
+                  <div class="eval-period-card-header">
+                    <span class="eval-period-card-title">3.er Trimestre</span>
+                    <span id="evalCardBadge3" class="eval-status-pill status-pending">Pendiente</span>
+                  </div>
+                  <div class="eval-date-field-group">
+                    <label for="evalDateStart3">Fecha de inicio</label>
+                    <input type="date" id="evalDateStart3" class="input eval-date-input" value="2027-04-12">
+                  </div>
+                  <div class="eval-date-field-group">
+                    <label for="evalDateEnd3">Fecha de finalización (configurable)</label>
+                    <input type="date" id="evalDateEnd3" class="input eval-date-input" value="2027-07-16">
+                  </div>
+                  <div class="eval-date-field-group">
+                    <label for="evalStatusSelect3">Estado del periodo</label>
+                    <select id="evalStatusSelect3" class="input eval-period-status-select">
+                      <option value="pending">Pendiente</option>
+                      <option value="in-progress">En curso</option>
+                      <option value="review">En revisión</option>
+                      <option value="completed">Finalizado</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Alerta de validación de fechas -->
+              <div id="evalDateValidationAlert" class="eval-validation-alert success">
+                <span>✓ Las fechas respetan el orden cronológico escolar y no presentan superposición de periodos.</span>
+              </div>
+            </article>
+
+            <!-- Apartado 3: Porcentajes de evaluación -->
+            <article class="eval-config-section">
+              <div class="eval-config-section-title">
+                <div>
+                  <h3>⚖️ 3. Porcentajes de evaluación (Ponderaciones)</h3>
+                  <p>Configuración editable por trimestre. Desactive criterios con 0%. La suma debe ser exactamente 100%.</p>
+                </div>
+                <div class="button-row">
+                  <label style="font-size: 13px; font-weight: 700; color: var(--navy); display: flex; align-items: center; gap: 8px;">
+                    Trimestre a configurar:
+                    <select id="evalCriteriaTrimesterSelect" class="input compact-input" style="width: auto;">
+                      <option value="1">1.er Trimestre</option>
+                      <option value="2">2.º Trimestre</option>
+                      <option value="3">3.er Trimestre</option>
+                    </select>
+                  </label>
+                  <button class="btn small" data-action="eval-copy-criteria-to-all" title="Copiar estos porcentajes a los otros 2 trimestres">Copiar a todos</button>
+                  <button class="btn small" data-action="eval-restore-default-criteria" title="Restablecer a la propuesta editable inicial">Restablecer propuesta</button>
+                </div>
+              </div>
+
+              <!-- Lista de los 7 criterios -->
+              <div class="eval-criteria-list" id="evalCriteriaListContainer">
+                <!-- Generado dinámicamente por renderCriteriaInputs() -->
+              </div>
+
+              <!-- Barra de cálculo de suma en tiempo real -->
+              <div class="eval-sum-bar-container">
+                <div>
+                  <strong style="color: var(--navy);">Suma total de los criterios seleccionados</strong>
+                  <p id="evalSumStatusMessage" class="muted" style="margin: 2px 0 0;">Configuración balanceada y lista para evaluar.</p>
+                </div>
+                <div id="evalSumBadge" class="eval-sum-badge valid">
+                  Total: 100%
+                </div>
+              </div>
+            </article>
+
+            <!-- Apartado 4: Valoración de tareas y actividades -->
+            <article class="eval-config-section">
+              <div class="eval-config-section-title">
+                <div>
+                  <h3>📝 4. Valoración de tareas y actividades</h3>
+                  <p>Valores editables para calificar estados de entrega. La ausencia de registros no se computa como 0%.</p>
+                </div>
+              </div>
+              <div class="eval-values-grid">
+                <div class="eval-value-card">
+                  <div class="eval-value-card-header">
+                    <span class="eval-value-level">Entregada</span>
+                    <span class="badge" style="background: #eaf8f0; color: #1b7c4b;">100%</span>
+                  </div>
+                  <input type="number" id="evalValTaskEntregada" class="input eval-value-input" min="0" max="100" value="100">
+                  <span class="eval-value-note">Trabajo completado en tiempo y forma.</span>
+                </div>
+                <div class="eval-value-card">
+                  <div class="eval-value-card-header">
+                    <span class="eval-value-level">Incompleta</span>
+                    <span class="badge" style="background: #fff8e6; color: #a46d00;">50%</span>
+                  </div>
+                  <input type="number" id="evalValTaskIncompleta" class="input eval-value-input" min="0" max="100" value="50">
+                  <span class="eval-value-note">Faltan secciones requeridas.</span>
+                </div>
+                <div class="eval-value-card">
+                  <div class="eval-value-card-header">
+                    <span class="eval-value-level">Entregada tarde</span>
+                    <span class="badge" style="background: #eef7fc; color: #0d649d;">80%</span>
+                  </div>
+                  <input type="number" id="evalValTaskTarde" class="input eval-value-input" min="0" max="100" value="80">
+                  <span class="eval-value-note">Presentada después de la fecha límite.</span>
+                </div>
+                <div class="eval-value-card">
+                  <div class="eval-value-card-header">
+                    <span class="eval-value-level">No entregada</span>
+                    <span class="badge" style="background: #fff0ef; color: #a32929;">0%</span>
+                  </div>
+                  <input type="number" id="evalValTaskNoEntregada" class="input eval-value-input" min="0" max="100" value="0">
+                  <span class="eval-value-note">Sin entrega al cierre del periodo.</span>
+                </div>
+                <div class="eval-value-card" style="background: #f8fafc;">
+                  <div class="eval-value-card-header">
+                    <span class="eval-value-level">Pendiente</span>
+                    <span class="badge">Sin valoración</span>
+                  </div>
+                  <input type="text" class="input eval-value-input" value="Sin valoración definitiva" disabled style="background:#eef4f8; color:var(--muted); font-weight:600;">
+                  <span class="eval-value-note">Requiere resolución. No se convierte en 0% automáticamente.</span>
+                </div>
+              </div>
+            </article>
+
+            <!-- Apartado 5: Valoración de conducta -->
+            <article class="eval-config-section">
+              <div class="eval-config-section-title">
+                <div>
+                  <h3>⭐ 5. Valoración de conducta</h3>
+                  <p>Escala aprobada para registros del periodo. Las ausencias escolares no se consideran mala conducta.</p>
+                </div>
+              </div>
+              <div class="eval-values-grid">
+                <div class="eval-value-card">
+                  <div class="eval-value-card-header">
+                    <span class="eval-value-level">Excelente</span>
+                    <span class="badge" style="background: #eaf8f0; color: #1b7c4b;">100%</span>
+                  </div>
+                  <input type="number" id="evalValConductaExcelente" class="input eval-value-input" min="0" max="100" value="100">
+                  <span class="eval-value-note">Convivencia respetuosa y autorregulación destacada.</span>
+                </div>
+                <div class="eval-value-card">
+                  <div class="eval-value-card-header">
+                    <span class="eval-value-level">Adecuada</span>
+                    <span class="badge" style="background: #eef7fc; color: #0d649d;">80%</span>
+                  </div>
+                  <input type="number" id="evalValConductaAdecuada" class="input eval-value-input" min="0" max="100" value="80">
+                  <span class="eval-value-note">Cumplimiento habitual de acuerdos del aula.</span>
+                </div>
+                <div class="eval-value-card">
+                  <div class="eval-value-card-header">
+                    <span class="eval-value-level">Requiere apoyo</span>
+                    <span class="badge" style="background: #fff8e6; color: #a46d00;">60%</span>
+                  </div>
+                  <input type="number" id="evalValConductaApoyo" class="input eval-value-input" min="0" max="100" value="60">
+                  <span class="eval-value-note">Dificultad recurrente en acuerdos o convivencia.</span>
+                </div>
+              </div>
+            </article>
+
+            <!-- Apartado 6: Valoración de participación -->
+            <article class="eval-config-section">
+              <div class="eval-config-section-title">
+                <div>
+                  <h3>🙋 6. Valoración de participación</h3>
+                  <p>Niveles aprobados. No considerar ausencias escolares como participación nula.</p>
+                </div>
+              </div>
+              <div class="eval-values-grid">
+                <div class="eval-value-card">
+                  <div class="eval-value-card-header">
+                    <span class="eval-value-level">Alta</span>
+                    <span class="badge" style="background: #eaf8f0; color: #1b7c4b;">100%</span>
+                  </div>
+                  <input type="number" id="evalValPartAlta" class="input eval-value-input" min="0" max="100" value="100">
+                  <span class="eval-value-note">Intervenciones constantes y pertinentes.</span>
+                </div>
+                <div class="eval-value-card">
+                  <div class="eval-value-card-header">
+                    <span class="eval-value-level">Media</span>
+                    <span class="badge" style="background: #eef7fc; color: #0d649d;">75%</span>
+                  </div>
+                  <input type="number" id="evalValPartMedia" class="input eval-value-input" min="0" max="100" value="75">
+                  <span class="eval-value-note">Participa cuando se le solicita directamente.</span>
+                </div>
+                <div class="eval-value-card">
+                  <div class="eval-value-card-header">
+                    <span class="eval-value-level">Nula</span>
+                    <span class="badge" style="background: #fff0ef; color: #a32929;">0%</span>
+                  </div>
+                  <input type="number" id="evalValPartNula" class="input eval-value-input" min="0" max="100" value="0">
+                  <span class="eval-value-note">Sin intervenciones activas estando presente en clase.</span>
+                </div>
+              </div>
+            </article>
+
+            <!-- Barra flotante de acciones y guardado -->
+            <div class="eval-config-actions-bar">
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <span id="evalUnsavedNotice" class="eval-unsaved-badge" style="display: none;">● Cambios pendientes de guardar</span>
+                <span id="evalPersistStatus" class="muted" style="font-size: 13px;">✓ Configuración confirmada y sincronizada</span>
+              </div>
+              <div class="button-row">
+                <button class="btn" data-action="eval-restore-saved-config" title="Descartar cambios actuales y recargar la última configuración guardada">Descartar cambios</button>
+                <button class="btn" data-action="eval-save-config-draft" title="Guardar borrador local en este dispositivo">Guardar borrador</button>
+                <button class="btn primary" id="evalBtnSaveConfig" data-action="eval-save-config">Guardar y aplicar configuración</button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

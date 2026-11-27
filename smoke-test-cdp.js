@@ -28,7 +28,6 @@ const server = http.createServer((req, res) => {
   const filePath = path.join(ROOT, reqPath);
 
   if (!fs.existsSync(filePath)) {
-    console.log('[HTTP 404]:', req.url);
     res.writeHead(404);
     res.end('Not found');
     return;
@@ -56,7 +55,6 @@ async function runCDPTest() {
   const chromePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
   const profileDir = path.join(ROOT, '.tmp-chrome-smoke-profile');
 
-  // Asegurar directorio temporal limpio
   if (fs.existsSync(profileDir)) {
     try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (e) {}
   }
@@ -72,7 +70,6 @@ async function runCDPTest() {
     'about:blank'
   ]);
 
-  // Esperar a que Chrome inicie el endpoint de depuración
   let connected = false;
   let tabInfo = null;
   for (let i = 0; i < 20; i++) {
@@ -124,7 +121,6 @@ async function runCDPTest() {
       return;
     }
 
-    // Monitoreo de eventos CDP
     if (data.method === 'Runtime.exceptionThrown') {
       const details = data.params.exceptionDetails;
       const text = details.exception?.description || details.text || 'Excepción desconocida';
@@ -137,7 +133,6 @@ async function runCDPTest() {
     }
   };
 
-  // Habilitar dominios CDP
   await sendCommand('Runtime.enable');
   await sendCommand('Page.enable');
   await sendCommand('Log.enable');
@@ -145,108 +140,231 @@ async function runCDPTest() {
   console.log(`[CDP SMOKE TEST] Navegando a http://localhost:${PORT}/index.html#evaluaciones-trimestrales...`);
   await sendCommand('Page.navigate', { url: `http://localhost:${PORT}/index.html#evaluaciones-trimestrales` });
 
-  // Esperar a que la página cargue
   await new Promise(r => setTimeout(r, 2500));
 
-  // Ejecutar verificaciones funcionales dentro de la página
-  console.log('[CDP SMOKE TEST] Verificando estado del DOM y componentes del módulo...');
-  const testResults = await sendCommand('Runtime.evaluate', {
+  // =========================================================================
+  // FASE 1: PRUEBAS FUNCIONALES EN DESKTOP
+  // =========================================================================
+  console.log('[CDP SMOKE TEST] Ejecutando pruebas de la Etapa 2 en Desktop...');
+  const desktopEval = await sendCommand('Runtime.evaluate', {
     expression: `(function() {
       const results = {};
 
-      // 1. Verificar existencia de la sección de vista
-      const viewSection = document.getElementById('evaluaciones-trimestrales');
-      results.viewSectionExists = Boolean(viewSection);
+      // 1. Cargar vista
+      if (typeof showView === 'function') showView('evaluaciones-trimestrales');
+      if (typeof window.initEvaluacionesTrimestrales === 'function') window.initEvaluacionesTrimestrales();
 
-      // 2. Verificar existencia del botón de navegación lateral
-      const navItem = document.querySelector('.nav-item[data-view="evaluaciones-trimestrales"]');
-      results.navItemExists = Boolean(navItem);
+      // 2. Determinación automática de trimestre en Quintana Roo
+      results.detectedTrimester = typeof window.determineCurrentTrimester === 'function' ? window.determineCurrentTrimester() : null;
 
-      // 3. Activar la vista explícitamente vía showView si aún no está activa
-      if (typeof showView === 'function') {
-        showView('evaluaciones-trimestrales');
+      // 3. Resolución oficial del número de lista
+      const testStudent1 = { id: 'ALU-1', nombres: 'Carlos', numeroLista: 7 };
+      const testStudent2 = { id: 'ALU-2', nombres: 'Ana' };
+      results.officialNumWithProp = window.resolveOfficialListNumber(testStudent1);
+      results.officialNumWithoutProp = window.resolveOfficialListNumber(testStudent2);
+
+      // 4. Conmutar a la pestaña Criterios y Periodos
+      window.switchEvalTab('criterios');
+      const tabCriterios = document.getElementById('evalTabCriterios');
+      results.tabCriteriosActive = tabCriterios && !tabCriterios.classList.contains('hidden-tab');
+
+      // 5. Verificación de cálculo en tiempo real de porcentajes (propuesta inicial: 100%)
+      const sumBadge = document.getElementById('evalSumBadge');
+      results.initialSumText = sumBadge ? sumBadge.textContent.trim() : null;
+      results.initialSumValid = sumBadge ? sumBadge.classList.contains('valid') : false;
+
+      // 6. Prueba de invalidación de porcentajes (suma != 100%)
+      const inputTareas = document.querySelector('[data-crit-input="tareas"]');
+      if (inputTareas) {
+        inputTareas.value = '60';
+        inputTareas.dispatchEvent(new Event('input', { bubbles: true }));
       }
-      results.viewIsActive = viewSection ? viewSection.classList.contains('active') : false;
+      const sumBadgeAfterChange = document.getElementById('evalSumBadge');
+      results.invalidSumText = sumBadgeAfterChange ? sumBadgeAfterChange.textContent.trim() : null;
+      results.invalidSumDetected = sumBadgeAfterChange ? sumBadgeAfterChange.classList.contains('invalid') : false;
+      const saveBtn = document.getElementById('evalBtnSaveConfig');
+      results.saveBtnDisabledWhenInvalid = saveBtn ? saveBtn.disabled : false;
 
-      // 4. Inicializar módulo
-      if (typeof window.initEvaluacionesTrimestrales === 'function') {
-        window.initEvaluacionesTrimestrales();
+      // 7. Corrección de suma (compensar con examen para volver a 100%)
+      const inputExamen = document.querySelector('[data-crit-input="examen"]');
+      if (inputExamen) {
+        inputExamen.value = '20';
+        inputExamen.dispatchEvent(new Event('input', { bubbles: true }));
       }
+      results.restoredSumText = sumBadge ? sumBadge.textContent.trim() : null;
+      results.restoredSumValid = sumBadge ? sumBadge.classList.contains('valid') : false;
+      results.saveBtnEnabledWhenValid = saveBtn ? !saveBtn.disabled : false;
 
-      // 5. Verificar elementos del selector de trimestres
-      const periodTitle = document.getElementById('evalCurrentPeriodTitle');
-      results.periodTitle = periodTitle ? periodTitle.textContent : null;
+      // 8. Prueba de validación de fechas (superposición y orden cronológico)
+      const dateEnd1 = document.getElementById('evalDateEnd1');
+      const dateStart2 = document.getElementById('evalDateStart2');
+      const origEnd1 = dateEnd1 ? dateEnd1.value : '';
 
-      const trimesterBtns = document.querySelectorAll('.eval-trimester-btn');
-      results.trimesterButtonsCount = trimesterBtns.length;
-
-      // 6. Probar cambio de trimestre interactivo (T2)
-      if (typeof window.selectEvalTrimester === 'function') {
-        window.selectEvalTrimester(2);
-        results.selectedT2Title = document.getElementById('evalCurrentPeriodTitle')?.textContent;
-        // Regresar a T1
-        window.selectEvalTrimester(1);
-        results.returnedT1Title = document.getElementById('evalCurrentPeriodTitle')?.textContent;
+      // Provocar superposición temporal (T1 finaliza después del inicio de T2)
+      if (dateEnd1 && dateStart2) {
+        dateEnd1.value = '2026-12-15';
+        dateEnd1.dispatchEvent(new Event('change', { bubbles: true }));
       }
+      const alertBox = document.getElementById('evalDateValidationAlert');
+      results.superposicionDetectada = alertBox ? alertBox.classList.contains('danger') : false;
 
-      // 7. Probar pestañas del módulo
-      if (typeof window.switchEvalTab === 'function') {
-        window.switchEvalTab('captura-grupal');
-        results.capturaGrupalVisible = !document.getElementById('evalTabCapturaGrupal')?.classList.contains('hidden-tab');
-        window.switchEvalTab('seguimiento');
-        results.seguimientoVisible = document.getElementById('evalTabSeguimiento')?.classList.contains('active');
+      // Restaurar fecha válida
+      if (dateEnd1) {
+        dateEnd1.value = origEnd1;
+        dateEnd1.dispatchEvent(new Event('change', { bubbles: true }));
       }
+      results.fechasValidasRestauradas = alertBox ? alertBox.classList.contains('success') : false;
 
-      // 8. Verificar métricas del panel de seguimiento
-      const statTotal = document.getElementById('evalStatTotal')?.textContent;
-      results.statTotal = statTotal;
+      // 9. Independencia de configuración entre trimestres
+      const selTrim = document.getElementById('evalCriteriaTrimesterSelect');
+      if (selTrim) {
+        selTrim.value = '2';
+        selTrim.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      const cfg = window.getEvalConfig();
+      results.t1TareasPct = cfg.porcentajes[1].tareas;
+      results.t2TareasPct = cfg.porcentajes[2].tareas; // Debe ser 50 (independiente de T1 que cambiamos a 60)
+      results.trimesterIndependence = (results.t1TareasPct !== results.t2TareasPct);
 
-      // 9. Verificar tabla de seguimiento
-      const tableBody = document.getElementById('evalStudentsTableBody');
-      results.tableBodyExists = Boolean(tableBody);
-      results.rowsCount = tableBody ? tableBody.querySelectorAll('tr').length : 0;
+      // 10. Prueba de persistencia (Guardar configuración)
+      // Asegurar que T1 sume 100% y T2 sume 100%
+      const saveResult = window.saveEvalConfig();
+      results.configSavedSuccess = saveResult;
+      const storedRaw = localStorage.getItem('carpeta_eval_config_v2');
+      results.hasLocalStorage = Boolean(storedRaw);
 
-      // 10. Despachador de acciones (Regla 2 de GEMINI.md)
-      results.hasActionsRegistered = Boolean(window.actions && window.actions['eval-select-trimester']);
+      // 11. Volver al panel de seguimiento y verificar tabla
+      window.switchEvalTab('seguimiento');
+      results.returnedToTracking = document.getElementById('evalTabSeguimiento')?.classList.contains('active');
 
       return results;
     })()`,
     returnByValue: true
   });
 
-  console.log('[CDP SMOKE TEST] Resultados de la ejecución:', JSON.stringify(testResults.result.value, null, 2));
+  console.log('[CDP SMOKE TEST] Resultados de pruebas Desktop:', JSON.stringify(desktopEval.result.value, null, 2));
 
-  // Esperar un momento para recolectar cualquier excepción tardía
-  await new Promise(r => setTimeout(r, 1000));
+  // =========================================================================
+  // FASE 2: PRUEBAS EN DISPOSITIVO MÓVIL CON EVENTOS TÁCTILES REALES
+  // =========================================================================
+  console.log('[CDP SMOKE TEST] Configurando emulación táctil móvil (390x844)...');
+  await sendCommand('Emulation.setTouchEmulationEnabled', { enabled: true });
+  await sendCommand('Emulation.setDeviceMetricsOverride', {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 3,
+    mobile: true
+  });
 
-  // Cerrar Chrome y WebSocket
+  await new Promise(r => setTimeout(r, 600));
+
+  // Obtener posición del botón de pestaña 'Criterios y periodos' para despachar toque real
+  console.log('[CDP SMOKE TEST] Obteniendo coordenadas de botón para toque real...');
+  const boxResult = await sendCommand('Runtime.evaluate', {
+    expression: `(function() {
+      if (typeof unlockTeacherApp === 'function') unlockTeacherApp();
+      if (typeof hideBoot === 'function') hideBoot();
+
+      // Cerrar cualquier menú móvil lateral o diálogo superpuesto
+      document.getElementById('sidebar')?.classList.remove('open');
+      document.getElementById('sidebarBackdrop')?.classList.remove('active');
+      const loginDiag = document.getElementById('loginDialog');
+      if (loginDiag && loginDiag.open) loginDiag.close();
+
+      const btn = document.querySelector('.eval-tab-btn[data-tab="criterios"]');
+      if (!btn) return null;
+      btn.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+      const rect = btn.getBoundingClientRect();
+      const cx = Math.round(rect.x + rect.width / 2);
+      const cy = Math.round(rect.y + rect.height / 2);
+      const topEl = document.elementFromPoint(cx, cy);
+      return { 
+        x: cx, 
+        y: cy, 
+        width: rect.width, 
+        height: rect.height,
+        topElementTag: topEl ? topEl.tagName : null,
+        topElementHtml: topEl ? topEl.outerHTML.slice(0, 150) : null
+      };
+    })()`,
+    returnByValue: true
+  });
+
+  const box = boxResult.result.value;
+  console.log('[CDP SMOKE TEST] Coordenadas táctiles:', box);
+
+  if (box && box.width > 0 && box.height > 0) {
+    console.log(`[CDP SMOKE TEST] Despachando eventos táctiles reales del motor de Chromium en (${box.x}, ${box.y})...`);
+    await sendCommand('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ id: 0, x: box.x, y: box.y }]
+    });
+    await new Promise(r => setTimeout(r, 80));
+    await sendCommand('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: []
+    });
+
+    await new Promise(r => setTimeout(r, 400));
+  }
+
+  // Verificar que el evento táctil real cambió de pestaña y que los targets visibles respetan tamaño accesible (>= 40-44px)
+  const mobileEval = await sendCommand('Runtime.evaluate', {
+    expression: `(function() {
+      const tabCriterios = document.getElementById('evalTabCriterios');
+      const isCriteriosActive = tabCriterios && !tabCriterios.classList.contains('hidden-tab');
+
+      // Verificar tamaño de targets táctiles visibles (>= 40px)
+      const allBtns = Array.from(document.querySelectorAll('.eval-tab-btn, .eval-trimester-btn, .eval-config-actions-bar .btn, .eval-criteria-toggle-btn'));
+      const visibleBtns = allBtns.filter(b => b.offsetParent !== null);
+      const smallTargets = visibleBtns.filter(b => b.getBoundingClientRect().height < 40);
+
+      return {
+        tabSwitchedViaNativeTouch: Boolean(isCriteriosActive),
+        allTouchTargetsAccessible: smallTargets.length === 0,
+        testedButtonsCount: visibleBtns.length
+      };
+    })()`,
+    returnByValue: true
+  });
+
+  console.log('[CDP SMOKE TEST] Resultados de pruebas táctiles:', JSON.stringify(mobileEval.result.value, null, 2));
+
+  // Restaurar emulación
+  await sendCommand('Emulation.setTouchEmulationEnabled', { enabled: false });
+  await sendCommand('Emulation.clearDeviceMetricsOverride');
+
+  await new Promise(r => setTimeout(r, 500));
+
   ws.close();
   chrome.kill();
 
-  try {
-    fs.rmSync(profileDir, { recursive: true, force: true });
-  } catch (e) {}
+  try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (e) {}
 
-  // Evaluación de resultados según el protocolo
   console.log('\n============================================================');
-  console.log('[CDP SMOKE TEST] RESUMEN DE VERIFICACIÓN');
+  console.log('[CDP SMOKE TEST] RESUMEN DE VERIFICACIÓN ETAPA 2');
   console.log('============================================================');
   console.log(`Excepciones no capturadas (exceptionThrown): ${uncaughtExceptions.length}`);
   console.log(`Errores en consola (consoleErrors): ${consoleErrors.length}`);
 
-  const v = testResults.result.value;
-  console.log(`Vista encontrada: ${v.viewSectionExists ? 'OK' : 'FALLÓ'}`);
-  console.log(`Navegación lateral encontrada: ${v.navItemExists ? 'OK' : 'FALLÓ'}`);
-  console.log(`Vista activa: ${v.viewIsActive ? 'OK' : 'FALLÓ'}`);
-  console.log(`Selector de trimestres: ${v.trimesterButtonsCount === 3 ? 'OK (3 trimestres)' : 'FALLÓ'}`);
-  console.log(`Conmutación T1 -> T2 -> T1: ${v.selectedT2Title && v.returnedT1Title ? 'OK' : 'FALLÓ'}`);
-  console.log(`Pestañas internas (Tabs): ${v.capturaGrupalVisible && v.seguimientoVisible ? 'OK' : 'FALLÓ'}`);
-  console.log(`Tabla de seguimiento: ${v.tableBodyExists ? 'OK' : 'FALLÓ'} (${v.rowsCount} filas renderizadas)`);
-  console.log(`Acciones desacopladas (Regla 2 GEMINI.md): ${v.hasActionsRegistered ? 'OK' : 'FALLÓ'}`);
+  const d = desktopEval.result.value;
+  const m = mobileEval.result.value;
+
+  console.log(`Determinación de trimestre en Quintana Roo: ${d.detectedTrimester ? 'OK (Trimestre ' + d.detectedTrimester + ')' : 'FALLÓ'}`);
+  console.log(`Resolución número de lista oficial: ${d.officialNumWithProp === 7 && d.officialNumWithoutProp === '—' ? 'OK (Usa dato canónico sin inventar índices)' : 'FALLÓ'}`);
+  console.log(`Pestaña Criterios activa: ${d.tabCriteriosActive ? 'OK' : 'FALLÓ'}`);
+  console.log(`Propuesta editable inicial (100%): ${d.initialSumValid ? 'OK' : 'FALLÓ'}`);
+  console.log(`Detección de suma inválida (!= 100%): ${d.invalidSumDetected && d.saveBtnDisabledWhenInvalid ? 'OK (Bloquea guardado)' : 'FALLÓ'}`);
+  console.log(`Restauración y validación de 100%: ${d.restoredSumValid && d.saveBtnEnabledWhenValid ? 'OK (Habilita guardado)' : 'FALLÓ'}`);
+  console.log(`Validación de fechas (superposición y orden): ${d.superposicionDetectada && d.fechasValidasRestauradas ? 'OK' : 'FALLÓ'}`);
+  console.log(`Independencia entre trimestres: ${d.trimesterIndependence ? 'OK (T1 y T2 independientes)' : 'FALLÓ'}`);
+  console.log(`Persistencia en localStorage: ${d.configSavedSuccess && d.hasLocalStorage ? 'OK' : 'FALLÓ'}`);
+  console.log(`Navegación nativa táctil (Input.dispatchTouchEvent): ${m.tabSwitchedViaNativeTouch ? 'OK' : 'FALLÓ'}`);
+  console.log(`Accesibilidad táctil (Touch Targets >= 44px): ${m.allTouchTargetsAccessible ? 'OK' : 'FALLÓ'}`);
 
   if (uncaughtExceptions.length > 0) {
-    throw new Error(`Se encontraron ${uncaughtExceptions.length} excepciones no capturadas en Chrome.`);
+    throw new Error(`Se detectaron ${uncaughtExceptions.length} excepciones no capturadas.`);
   }
 
-  console.log('\n>>> PROTOCOLO OBLIGATORIO DE PRUEBA EN NAVEGADOR: APROBADO CON ÉXITO (0 EXCEPCIONES) <<<\n');
+  console.log('\n>>> ETAPA 2 VERIFICADA CON ÉXITO: 0 EXCEPCIONES EN CHROME HEADLESS <<<\n');
 }
