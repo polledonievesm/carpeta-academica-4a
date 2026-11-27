@@ -73,6 +73,11 @@
  *     * Comprobación preventiva obligatoria de todas las condiciones antes de crear hojas.
  *     * Supresión de adquisición duplicada de ScriptLock en verificarInstalacionEvaluacionesTrimestrales mediante skipLockCheck.
  *     * Bloqueo garantizado de retorno exitoso si existen incompatibilidades en la instalación.
+ *   - 27/11/2026 (Activación y verificación de persistencia - Etapa 7A.3):
+ *     * Supresión definitiva de valores por defecto permisivos ('trimestre || 1') en getTrimesterEvaluationBundle y syncTrimesterEvaluationBatch.
+ *     * Conservación estricta de ponderaciones, valores, configuraciones, actividades y exclusiones previas en guardados parciales mediante evalParseJsonField_.
+ *     * Aislamiento total de lotes no consolidados en consultas de configuración y actividades, incluso sin versión consolidada previa.
+ *     * Normalización bidireccional de campos JSON para entrega consistente al cliente y persistencia robusta en hojas.
  * ============================================================================
  */
 
@@ -209,6 +214,38 @@ function evalNormalizeGroup_(g) {
  *   @return {number} Número entero validado (1, 2 o 3).
  *   @throws {Error} Si el trimestre no es 1, 2 o 3.
  */
+/**
+ * TÍTULO: Deserialización segura de campos JSON almacenados en Google Sheets
+ * NOMBRE TÉCNICO: evalParseJsonField_
+ * FECHA DE CREACIÓN: 27/11/2026
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * 
+ * QUÉ HACE:
+ *   Parsea una cadena JSON o devuelve el objeto directamente si ya ha sido deserializado,
+ *   retornando un valor por defecto seguro en caso de error o valor nulo/vacío.
+ * 
+ * PARA QUÉ SIRVE:
+ *   Impide que lecturas directas de Google Sheets produzcan undefined o sobrescriban
+ *   propiedades JSON complejas (ponderaciones, valores, exclusiones) con objetos vacíos.
+ * 
+ * PARÁMETROS:
+ *   @param {*} val Cadena JSON u objeto ya parseado.
+ *   @param {*} defaultVal Valor de respaldo seguro (ej. {} o []).
+ * 
+ * RESULTADO:
+ *   @return {*} Objeto o arreglo deserializado.
+ */
+function evalParseJsonField_(val, defaultVal) {
+  if (val === null || val === undefined || val === '') return defaultVal;
+  if (typeof val === 'object') return val;
+  try {
+    var parsed = JSON.parse(val);
+    return (parsed !== null && parsed !== undefined) ? parsed : defaultVal;
+  } catch (e) {
+    return defaultVal;
+  }
+}
+
 function evalValidateTrimester_(trimestre) {
   if (trimestre === null || trimestre === undefined || typeof trimestre === 'boolean') {
     throw new Error('TRIMESTRE_INVALIDO: El trimestre no puede ser nulo, indefinido ni booleano.');
@@ -501,12 +538,19 @@ function computeBundleIntegrityHash_(payload) {
  * 
  * RESULTADO:
  *   @return {Object} { ok: boolean, data: Object } con los registros consolidados y recomendaciones.
+ * 
+ * HISTORIAL DE MODIFICACIONES:
+ *   - 27/11/2026: Creación inicial del servicio de consulta desacoplado.
+ *   - 27/11/2026 (Etapa 7A.3): Supresión definitiva de 'trimestre || 1' para rechazar valores inválidos;
+ *     aislamiento estricto de lotes no consolidados en EvalConfig y EvalActividades cuando no existe versión previa;
+ *     deserialización y normalización de propiedades JSON (ponderaciones, valores, exclusiones).
  */
 function getTrimesterEvaluationBundle(payload, sessionToken) {
   var p = payload || {};
   var ciclo = String(p.cicloEscolar || '2026-2027').trim();
   var grupo = evalNormalizeGroup_(p.grupo || '4A');
-  var t = evalValidateTrimester_(p.trimestre || 1);
+  // Validación estricta: rechazar valores inválidos sin convertirlos automáticamente en 1
+  var t = evalValidateTrimester_(p.trimestre);
 
   // Validación de seguridad Zero-Trust
   validateTeacherAuth_(sessionToken, grupo, ciclo);
@@ -532,22 +576,43 @@ function getTrimesterEvaluationBundle(payload, sessionToken) {
   // 2. Cargar Banco de Recomendaciones pedagógicas activas desde el servidor
   var bancoRecomendaciones = evalReadCommittedBank_();
 
-  // 3. Cargar Configuración trimestral vinculada a la versión consolidada
-  var configRows = (typeof readRows_ === 'function' ? readRows_('EvalConfig') : []).filter(function (c) {
-    return String(c.cicloEscolar) === ciclo &&
-           evalNormalizeGroup_(c.grupo) === grupo &&
-           parseInt(c.trimestre, 10) === t &&
-           (!latestBatchId || c.batchId === latestBatchId);
-  });
-  var configTrimestral = configRows.length > 0 ? configRows[configRows.length - 1] : null;
+  // 3. Cargar Configuración trimestral vinculada estrictamente a la versión consolidada
+  // Ignorar lotes no consolidados: si no existe versión consolidada previa, se devuelve null
+  var configTrimestral = null;
+  if (latestBatchId) {
+    var configRows = (typeof readRows_ === 'function' ? readRows_('EvalConfig') : []).filter(function (c) {
+      return String(c.cicloEscolar) === ciclo &&
+             evalNormalizeGroup_(c.grupo) === grupo &&
+             parseInt(c.trimestre, 10) === t &&
+             c.batchId === latestBatchId;
+    });
+    if (configRows.length > 0) {
+      configTrimestral = Object.assign({}, configRows[configRows.length - 1]);
+      // Recuperar y normalizar propiedades JSON para el cliente garantizando que no sean undefined
+      configTrimestral.ponderaciones = evalParseJsonField_(configTrimestral.ponderacionesJson, configTrimestral.ponderaciones || {});
+      configTrimestral.valoresTareas = evalParseJsonField_(configTrimestral.valoresTareasJson, configTrimestral.valoresTareas || {});
+      configTrimestral.valoresConducta = evalParseJsonField_(configTrimestral.valoresConductaJson, configTrimestral.valoresConducta || {});
+      configTrimestral.valoresParticipacion = evalParseJsonField_(configTrimestral.valoresParticipacionJson, configTrimestral.valoresParticipacion || {});
+      configTrimestral.configAsistencia = evalParseJsonField_(configTrimestral.configAsistenciaJson, configTrimestral.configAsistencia || {});
+      configTrimestral.ajustesAdmin = evalParseJsonField_(configTrimestral.ajustesAdminJson, configTrimestral.ajustesAdmin || {});
+    }
+  }
 
-  // 4. Cargar Actividades seleccionadas de la versión consolidada
-  var actividadesTrimestre = (typeof readRows_ === 'function' ? readRows_('EvalActividades') : []).filter(function (a) {
-    return String(a.cicloEscolar) === ciclo &&
-           evalNormalizeGroup_(a.grupo) === grupo &&
-           parseInt(a.trimestre, 10) === t &&
-           (!latestBatchId || a.batchId === latestBatchId);
-  });
+  // 4. Cargar Actividades seleccionadas vinculadas estrictamente a la versión consolidada
+  // Ignorar lotes no consolidados: si no existe versión consolidada previa, se devuelve []
+  var actividadesTrimestre = [];
+  if (latestBatchId) {
+    actividadesTrimestre = (typeof readRows_ === 'function' ? readRows_('EvalActividades') : []).filter(function (a) {
+      return String(a.cicloEscolar) === ciclo &&
+             evalNormalizeGroup_(a.grupo) === grupo &&
+             parseInt(a.trimestre, 10) === t &&
+             a.batchId === latestBatchId;
+    }).map(function (a) {
+      var actCopy = Object.assign({}, a);
+      actCopy.exclusionesAlumnos = evalParseJsonField_(actCopy.exclusionesAlumnosJson, actCopy.exclusionesAlumnos || []);
+      return actCopy;
+    });
+  }
 
   // 5. Cargar Calificaciones consolidadas del lote vigente
   var calificacionesTrimestre = [];
@@ -628,6 +693,12 @@ function getTrimesterEvaluationBundle(payload, sessionToken) {
  * 
  * RESULTADO:
  *   @return {Object} { ok: boolean, data: { batchId, version, ... } }
+ * 
+ * HISTORIAL DE MODIFICACIONES:
+ *   - 27/11/2026: Creación inicial del servicio atómico de sincronización en dos fases.
+ *   - 27/11/2026 (Etapa 7A.3): Supresión definitiva de 'trimestre || 1' para validación estricta;
+ *     conservación íntegra de ponderaciones, configuraciones, actividades y exclusiones previas en guardados parciales
+ *     mediante deserialización segura de campos JSON (evalParseJsonField_); sellado consolidado de registros.
  */
 function syncTrimesterEvaluationBatch(payload, sessionToken) {
   if (!payload || typeof payload !== 'object') {
@@ -636,7 +707,8 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
 
   var ciclo = String(payload.cicloEscolar || '2026-2027').trim();
   var grupo = evalNormalizeGroup_(payload.grupo || '4A');
-  var t = evalValidateTrimester_(payload.trimestre || 1);
+  // Validación estricta: rechazar valores inválidos sin convertirlos automáticamente en 1
+  var t = evalValidateTrimester_(payload.trimestre);
   var batchId = payload.batchId;
 
   if (!batchId) {
@@ -780,7 +852,7 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
       califBatchMap[key] = Object.assign({}, prev, {
         id: newId,
         batchId: batchId,
-        estadoConsolidacion: 'en_preparacion',
+        estadoConsolidacion: 'consolidado',
         version: newVersionNumber,
         // Conservar autoría y fecha originales de registros que no hayan cambiado
         authorizedPor: prev.authorizedPor || '',
@@ -846,7 +918,7 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
           authorizedAt: authAt,
           authorizedPor: authPor,
           batchId: batchId,
-          estadoConsolidacion: 'en_preparacion',
+          estadoConsolidacion: 'consolidado',
           version: newVersionNumber,
           actualizadoEn: now,
           actualizadoPor: user
@@ -873,7 +945,7 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
       desempBatchMap[dKey] = Object.assign({}, prevD, {
         id: newDId,
         batchId: batchId,
-        estadoConsolidacion: 'en_preparacion',
+        estadoConsolidacion: 'consolidado',
         version: newVersionNumber,
         actualizadoEn: now,
         actualizadoPor: user
@@ -936,7 +1008,7 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
           origen: d.source || 'manual',
           trimestreOrigen: t,
           batchId: batchId,
-          estadoConsolidacion: 'en_preparacion',
+          estadoConsolidacion: 'consolidado',
           version: newVersionNumber,
           actualizadoEn: now,
           actualizadoPor: user
@@ -963,7 +1035,7 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
       msgBatchMap[mKey] = Object.assign({}, prevM, {
         id: newMId,
         batchId: batchId,
-        estadoConsolidacion: 'en_preparacion',
+        estadoConsolidacion: 'consolidado',
         version: newVersionNumber,
         actualizadoEn: now,
         actualizadoPor: user
@@ -989,7 +1061,7 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
           templateId: m.templateId || '',
           estadoRevision: m.estadoRevision || 'pendiente',
           batchId: batchId,
-          estadoConsolidacion: 'en_preparacion',
+          estadoConsolidacion: 'consolidado',
           version: newVersionNumber,
           actualizadoEn: now,
           actualizadoPor: user
@@ -1009,23 +1081,62 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
     }
 
     // 9. Persistencia de Configuración (con batchId para aislamiento total ante fallos)
-    var activeConfigData = payload.config || prevConfig;
-    if (activeConfigData && typeof activeConfigData === 'object') {
+    // Conservar ponderaciones, valores y configuraciones previas ante guardados parciales
+    var incomingConfig = (payload.config && typeof payload.config === 'object') ? payload.config : null;
+    if (incomingConfig || prevConfig) {
       var confId = ciclo + '_' + grupo + '_T' + t + '_' + batchId;
+
+      // Recuperar valores previos garantizando la deserialización de campos JSON
+      var prevPond = prevConfig ? evalParseJsonField_(prevConfig.ponderacionesJson || prevConfig.ponderaciones, {}) : {};
+      var prevTareas = prevConfig ? evalParseJsonField_(prevConfig.valoresTareasJson || prevConfig.valoresTareas, {}) : {};
+      var prevConducta = prevConfig ? evalParseJsonField_(prevConfig.valoresConductaJson || prevConfig.valoresConducta, {}) : {};
+      var prevPartic = prevConfig ? evalParseJsonField_(prevConfig.valoresParticipacionJson || prevConfig.valoresParticipacion, {}) : {};
+      var prevAsis = prevConfig ? evalParseJsonField_(prevConfig.configAsistenciaJson || prevConfig.configAsistencia, {}) : {};
+      var prevAjustes = prevConfig ? evalParseJsonField_(prevConfig.ajustesAdminJson || prevConfig.ajustesAdmin, {}) : {};
+
+      // Si incomingConfig provee propiedades, deserializarlas/usarlas; si no, conservar previas intactas
+      var finalPond = (incomingConfig && (incomingConfig.ponderaciones !== undefined || incomingConfig.ponderacionesJson !== undefined))
+        ? evalParseJsonField_(incomingConfig.ponderaciones !== undefined ? incomingConfig.ponderaciones : incomingConfig.ponderacionesJson, {})
+        : prevPond;
+
+      var finalTareas = (incomingConfig && (incomingConfig.valoresTareas !== undefined || incomingConfig.valoresTareasJson !== undefined))
+        ? evalParseJsonField_(incomingConfig.valoresTareas !== undefined ? incomingConfig.valoresTareas : incomingConfig.valoresTareasJson, {})
+        : prevTareas;
+
+      var finalConducta = (incomingConfig && (incomingConfig.valoresConducta !== undefined || incomingConfig.valoresConductaJson !== undefined))
+        ? evalParseJsonField_(incomingConfig.valoresConducta !== undefined ? incomingConfig.valoresConducta : incomingConfig.valoresConductaJson, {})
+        : prevConducta;
+
+      var finalPartic = (incomingConfig && (incomingConfig.valoresParticipacion !== undefined || incomingConfig.valoresParticipacionJson !== undefined))
+        ? evalParseJsonField_(incomingConfig.valoresParticipacion !== undefined ? incomingConfig.valoresParticipacion : incomingConfig.valoresParticipacionJson, {})
+        : prevPartic;
+
+      var finalAsis = (incomingConfig && (incomingConfig.configAsistencia !== undefined || incomingConfig.configAsistenciaJson !== undefined))
+        ? evalParseJsonField_(incomingConfig.configAsistencia !== undefined ? incomingConfig.configAsistencia : incomingConfig.configAsistenciaJson, {})
+        : prevAsis;
+
+      var finalAjustes = (incomingConfig && (incomingConfig.ajustesAdmin !== undefined || incomingConfig.ajustesAdminJson !== undefined))
+        ? evalParseJsonField_(incomingConfig.ajustesAdmin !== undefined ? incomingConfig.ajustesAdmin : incomingConfig.ajustesAdminJson, {})
+        : prevAjustes;
+
+      var finalFechaInicio = (incomingConfig && incomingConfig.fechaInicio !== undefined) ? incomingConfig.fechaInicio : (prevConfig ? prevConfig.fechaInicio || '' : '');
+      var finalFechaFin = (incomingConfig && incomingConfig.fechaFin !== undefined) ? incomingConfig.fechaFin : (prevConfig ? prevConfig.fechaFin || '' : '');
+      var finalEstadoPeriodo = (incomingConfig && incomingConfig.estadoPeriodo !== undefined) ? incomingConfig.estadoPeriodo : (prevConfig ? prevConfig.estadoPeriodo || 'activo' : 'activo');
+
       var confRec = {
         id: confId,
         cicloEscolar: ciclo,
         grupo: grupo,
         trimestre: t,
-        fechaInicio: activeConfigData.fechaInicio || '',
-        fechaFin: activeConfigData.fechaFin || '',
-        estadoPeriodo: activeConfigData.estadoPeriodo || 'activo',
-        ponderacionesJson: JSON.stringify(activeConfigData.ponderaciones || {}),
-        valoresTareasJson: JSON.stringify(activeConfigData.valoresTareas || {}),
-        valoresConductaJson: JSON.stringify(activeConfigData.valoresConducta || {}),
-        valoresParticipacionJson: JSON.stringify(activeConfigData.valoresParticipacion || {}),
-        configAsistenciaJson: JSON.stringify(activeConfigData.configAsistencia || {}),
-        ajustesAdminJson: JSON.stringify(activeConfigData.ajustesAdmin || {}),
+        fechaInicio: finalFechaInicio,
+        fechaFin: finalFechaFin,
+        estadoPeriodo: finalEstadoPeriodo,
+        ponderacionesJson: JSON.stringify(finalPond),
+        valoresTareasJson: JSON.stringify(finalTareas),
+        valoresConductaJson: JSON.stringify(finalConducta),
+        valoresParticipacionJson: JSON.stringify(finalPartic),
+        configAsistenciaJson: JSON.stringify(finalAsis),
+        ajustesAdminJson: JSON.stringify(finalAjustes),
         batchId: batchId,
         version: newVersionNumber,
         actualizadoEn: now,
@@ -1037,6 +1148,7 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
     }
 
     // 10. Persistencia de Actividades Seleccionadas (con batchId para aislamiento)
+    // Conservar actividades y exclusiones previas ante guardados parciales
     var actsToSave = [];
     if (Array.isArray(payload.actividades)) {
       actsToSave = payload.actividades;
@@ -1046,6 +1158,16 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
     if (actsToSave.length > 0) {
       var actBatch = actsToSave.map(function (a) {
         var actId = ciclo + '_' + grupo + '_T' + t + '_' + batchId + '_' + a.campoFormativo + '_' + (a.criterio || 'general') + '_' + a.actividadId;
+        var actKey = a.campoFormativo + '_' + (a.criterio || 'general') + '_' + a.actividadId;
+        var prevAct = prevActividadesMap[actKey];
+
+        // Recuperar exclusiones previas correctamente deserializadas si no vienen en la actividad actual
+        var rawExclusiones = (a.exclusionesAlumnos !== undefined) ? a.exclusionesAlumnos : a.exclusionesAlumnosJson;
+        if (rawExclusiones === undefined && prevAct) {
+          rawExclusiones = (prevAct.exclusionesAlumnos !== undefined) ? prevAct.exclusionesAlumnos : prevAct.exclusionesAlumnosJson;
+        }
+        var finalExclusiones = evalParseJsonField_(rawExclusiones, []);
+
         return {
           id: actId,
           cicloEscolar: ciclo,
@@ -1054,12 +1176,12 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
           campoFormativo: a.campoFormativo,
           criterio: a.criterio || 'general',
           actividadId: String(a.actividadId),
-          tipoActividad: a.tipoActividad || 'tarea',
-          fechaActividad: a.fechaActividad || '',
-          nombreActividad: a.nombreActividad || '',
-          seleccionada: a.seleccionada !== false,
-          peso: a.peso || 1.0,
-          exclusionesAlumnosJson: JSON.stringify(a.exclusionesAlumnos || []),
+          tipoActividad: a.tipoActividad || (prevAct ? prevAct.tipoActividad : 'tarea'),
+          fechaActividad: (a.fechaActividad !== undefined) ? a.fechaActividad : (prevAct ? prevAct.fechaActividad : ''),
+          nombreActividad: (a.nombreActividad !== undefined) ? a.nombreActividad : (prevAct ? prevAct.nombreActividad : ''),
+          seleccionada: a.seleccionada !== undefined ? (a.seleccionada !== false) : (prevAct ? prevAct.seleccionada !== false : true),
+          peso: (a.peso !== undefined) ? a.peso : (prevAct ? prevAct.peso : 1.0),
+          exclusionesAlumnosJson: JSON.stringify(finalExclusiones),
           batchId: batchId,
           version: newVersionNumber,
           actualizadoEn: now,
