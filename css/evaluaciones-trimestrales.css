@@ -1361,3 +1361,427 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   ETAPA 5: MODALIDADES DE CAPTURA INDIVIDUAL Y GRUPAL
+   ========================================================================== */
+
+.eval-grupal-container,
+.eval-ind-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.eval-grupal-toolbar-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.eval-grupal-toolbar-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.eval-subview-selector {
+  display: inline-flex;
+  gap: 6px;
+  background: #f1f5f8;
+  padding: 4px;
+  border-radius: 12px;
+  flex-wrap: wrap;
+}
+
+.eval-subview-selector .btn {
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  transition: all 0.2s ease;
+}
+
+.eval-subview-selector .btn.active {
+  background: #ffffff;
+  color: var(--navy);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.eval-grupal-toolbar-bottom {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.eval-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.eval-filter-group label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.eval-grupal-table-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.eval-grupal-table-meta-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.eval-matrix-table-wrap {
+  max-height: 560px;
+  overflow: auto;
+  position: relative;
+}
+
+.eval-matrix-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+.eval-matrix-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f7fafc;
+  z-index: 5;
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.eval-matrix-table th.eval-sticky-col,
+.eval-matrix-table td.eval-sticky-col {
+  position: sticky;
+  left: 0;
+  background: #ffffff;
+  z-index: 2;
+  box-shadow: 1px 0 0 var(--line);
+}
+
+.eval-matrix-table thead th.eval-sticky-col {
+  z-index: 6;
+  background: #f7fafc;
+}
+
+.eval-cell-input {
+  width: 68px;
+  height: 38px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 800;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fbfdfe;
+  color: var(--navy);
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.eval-cell-input:focus {
+  outline: none;
+  border-color: var(--teal);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(16, 169, 176, 0.2);
+}
+
+.eval-cell-input.cell-empty {
+  color: var(--muted);
+  background: #fafcfd;
+}
+
+.eval-cell-input.cell-zero {
+  color: #a32929;
+  background: #fff5f5;
+  border-color: #f2c2bf;
+}
+
+.eval-cell-input.cell-authorized {
+  border-color: #a7edd9;
+  background: #f0fdf9;
+  color: #1b7c4b;
+}
+
+/* Captura Individual */
+.eval-ind-nav-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.eval-ind-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.eval-ind-student-select-wrap {
+  flex: 1;
+  min-width: 200px;
+}
+
+.eval-ind-student-profile-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.eval-ind-subtabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid var(--line);
+  padding-bottom: 8px;
+  overflow-x: auto;
+}
+
+.eval-ind-subtab-btn {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.eval-ind-subtab-btn:hover {
+  background: #f1f5f8;
+  color: var(--navy);
+}
+
+.eval-ind-subtab-btn.active {
+  background: var(--navy);
+  color: #ffffff;
+}
+
+.eval-ind-subjects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.eval-ind-subject-card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.eval-ind-subject-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.eval-ind-bottom-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+/* Modal Accesible de Pegado Masivo */
+.eval-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 34, 43, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.eval-modal-dialog {
+  background: #ffffff;
+  border-radius: 18px;
+  max-width: 580px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.eval-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.eval-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--navy);
+}
+
+.eval-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--muted);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.eval-modal-close:hover {
+  background: #f1f5f8;
+  color: var(--navy);
+}
+
+.eval-modal-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+.eval-paste-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 12px;
+  border-radius: 10px;
+}
+
+.eval-paste-preview-box {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.eval-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line);
+  background: #fafcfd;
+}
+
+/* Touch Targets accesibles (>= 44px) */
+.eval-grupal-toolbar-panel .btn,
+.eval-ind-nav-panel .btn,
+.eval-ind-subtab-btn,
+.eval-ind-bottom-actions .btn,
+.eval-modal-footer .btn {
+  min-height: 44px;
+}
+
+@media (max-width: 900px) {
+  .eval-grupal-toolbar-top,
+  .eval-grupal-toolbar-bottom {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .eval-subview-selector {
+    width: 100%;
+  }
+  .eval-subview-selector .btn {
+    flex: 1;
+  }
+}
+
+@media (max-width: 600px) {
+  .eval-ind-nav-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .eval-ind-nav-bar .btn {
+    width: 100%;
+  }
+  .eval-ind-bottom-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .eval-ind-bottom-actions .button-row {
+    margin-left: 0;
+    width: 100%;
+  }
+  .eval-ind-bottom-actions .btn {
+    width: 100%;
+  }
+  .eval-modal-dialog {
+    margin: 8px;
+    max-height: 95vh;
+  }
+}
+
+/* Soporte especial para pantallas ultra-estrechas (348px) */
+@media (max-width: 360px) {
+  .eval-subview-selector .btn {
+    font-size: 11px;
+    padding: 8px 6px;
+  }
+  .eval-cell-input {
+    width: 58px;
+    font-size: 13px;
+  }
+}

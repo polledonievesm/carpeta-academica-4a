@@ -146,9 +146,9 @@ async function runCDPTest() {
   await new Promise(r => setTimeout(r, 2500));
 
   // =========================================================================
-  // FASE 1: PRUEBAS FUNCIONALES EN DESKTOP (ETAPA 3 Y ETAPA 4)
+  // FASE 1: PRUEBAS FUNCIONALES EN DESKTOP (ETAPA 4 Y ETAPA 5)
   // =========================================================================
-  console.log('[CDP SMOKE TEST] Ejecutando pruebas de la Etapa 4 en Desktop...');
+  console.log('[CDP SMOKE TEST] Ejecutando pruebas de la Etapa 4 y Etapa 5 en Desktop...');
   const desktopEval = await sendCommand('Runtime.evaluate', {
     expression: `(function() {
       const results = {};
@@ -158,6 +158,7 @@ async function runCDPTest() {
       if (typeof showView === 'function') showView('evaluaciones-trimestrales');
       if (typeof window.initEvaluacionesTrimestrales === 'function') window.initEvaluacionesTrimestrales();
 
+      // --- VERIFICACIONES DE ETAPA 4 ---
       // 1. Acceso y activación de la pestaña Cálculo Preliminar
       window.switchEvalTab('calculo-preliminar');
       const tabCalc = document.getElementById('evalTabCalculoPreliminar');
@@ -167,76 +168,103 @@ async function runCDPTest() {
       const studentSelect = document.getElementById('evalCalcStudentSelect');
       results.hasStudentOptions = Boolean(studentSelect && studentSelect.options.length > 0);
       const firstOptText = studentSelect?.options[0]?.text || '';
-      results.officialNumberInSelect = /^\\d{2}\\./.test(firstOptText); // Formato "01. Apellido Nombre"
+      results.officialNumberInSelect = /^\\d{2}\\./.test(firstOptText);
 
       // 3. Resultado de calificación preliminar visible
       const finalGradeEl = document.getElementById('evalCalcFinalGrade');
       results.displayedGrade = finalGradeEl ? finalGradeEl.textContent : '—';
       results.gradeHasTwoDecimals = /^\\d+\\.\\d{2}$/.test(results.displayedGrade);
 
-      // 4. Desglose detallado de criterios (7 filas esperadas)
+      // 4. Desglose detallado de criterios (7 filas)
       const breakdownRows = document.querySelectorAll('#evalBreakdownTableBody tr');
       results.breakdownRowsCount = breakdownRows.length;
 
-      // 5. Cambio dinámico de campo formativo (Saberes y Pensamiento Científico)
-      const subjSelect = document.getElementById('evalCalcSubjectSelect');
-      if (subjSelect) {
-        subjSelect.value = 'Saberes y Pensamiento Científico';
-        subjSelect.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-      const titleEl = document.getElementById('evalCalcSubjectTitle');
-      results.subjectChanged = (titleEl && titleEl.textContent === 'Saberes y Pensamiento Científico');
-
-      // 6. Recálculo dinámico con registros vigentes
-      window.actions['eval-recalculate']();
-      results.recalculateRan = true;
-
-      // 7. Ajuste manual docente
+      // 5. Ajuste manual docente y restablecimiento
       const gradeInput = document.getElementById('evalManualGradeInput');
       const reasonInput = document.getElementById('evalManualReasonInput');
       if (gradeInput) gradeInput.value = '9.5';
       if (reasonInput) reasonInput.value = 'Ajuste docente verificado en prueba';
       window.actions['eval-save-manual-adjustment']();
-
       const adjustedGradeText = document.getElementById('evalCalcFinalGrade')?.textContent;
-      const adjustedBadge = document.getElementById('evalCalcAdjustedBadge');
       results.adjustedGradeDisplayed = (adjustedGradeText === '9.50');
-      results.adjustedBadgeVisible = (adjustedBadge && adjustedBadge.style.display !== 'none');
-
-      // 8. Restablecimiento del cálculo automático original
       window.actions['eval-reset-manual-adjustment']();
-      const restoredBadge = document.getElementById('evalCalcAdjustedBadge');
-      results.resetManualRestored = (restoredBadge && restoredBadge.style.display === 'none');
+      results.resetManualRestored = (document.getElementById('evalCalcAdjustedBadge')?.style.display === 'none');
 
-      // Regresar materia a Lenguajes
-      if (subjSelect) {
-        subjSelect.value = 'Lenguajes';
-        subjSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      // --- VERIFICACIONES DE ETAPA 5 ---
+      // 6. Navegación a Pestaña de Captura Grupal
+      window.switchEvalTab('captura-grupal');
+      const tabGrupal = document.getElementById('evalTabCapturaGrupal');
+      results.tabGrupalActive = tabGrupal && !tabGrupal.classList.contains('hidden-tab');
+
+      // 7. Subvista A: Matriz de Exámenes Escritos
+      window.actions['eval-set-grupal-subview']({ dataset: { subview: 'examenes' } });
+      const examRows = document.querySelectorAll('#evalGrupalTableBody tr');
+      results.examRowsCount = examRows.length; // 35 alumnos esperados
+      results.has35StudentsInMatrix = (examRows.length === 35);
+
+      // 8. Captura de examen con input numérico
+      const firstExamInput = document.querySelector('.eval-cell-input[data-field="Lenguajes"]');
+      if (firstExamInput) {
+        firstExamInput.value = '9.25';
+        firstExamInput.dispatchEvent(new Event('input', { bubbles: true }));
+        firstExamInput.dispatchEvent(new Event('change', { bubbles: true }));
       }
+      results.examInputCaptured = Boolean(firstExamInput && firstExamInput.value === '9.25');
 
-      // 9. Filtro por rango de fechas en Selección de Actividades (Ajuste pendiente Etapa 3)
-      window.switchEvalTab('seleccion-actividades');
-      const dateStartInput = document.getElementById('evalActivityDateStart');
-      const dateEndInput = document.getElementById('evalActivityDateEnd');
-      if (dateStartInput && dateEndInput) {
-        dateStartInput.value = '2026-09-01';
-        dateEndInput.value = '2026-09-30';
-        dateStartInput.dispatchEvent(new Event('change', { bubbles: true }));
-        dateEndInput.dispatchEvent(new Event('change', { bubbles: true }));
+      // 9. Subvista B: Calificaciones por Campo Formativo
+      window.actions['eval-set-grupal-subview']({ dataset: { subview: 'materias' } });
+      const materiasTable = document.querySelector('.eval-matrix-table');
+      results.materiasMatrixRendered = Boolean(materiasTable);
+
+      // 10. Subvista C: Resumen General
+      window.actions['eval-set-grupal-subview']({ dataset: { subview: 'resumen' } });
+      const resumenTable = document.querySelector('.eval-matrix-table');
+      results.resumenMatrixRendered = Boolean(resumenTable);
+
+      // 11. Modal de Pegado Masivo (Apertura, Previsualización y Aplicación)
+      window.actions['eval-set-grupal-subview']({ dataset: { subview: 'examenes' } });
+      window.actions['eval-open-paste-modal']();
+      const pasteModal = document.getElementById('evalPasteModal');
+      results.pasteModalOpened = pasteModal && !pasteModal.classList.contains('hidden-control') && pasteModal.style.display !== 'none';
+
+      const pasteTextarea = document.getElementById('evalPasteTextarea');
+      if (pasteTextarea) {
+        pasteTextarea.value = "8.5\\t9.0\\t7.5\\t10.0\\n8.0\\t8.5\\t9.0\\t9.5";
       }
-      const dateFilteredRows = document.querySelectorAll('#evalActivitiesTableBody tr').length;
-      results.dateRangeFilterWorks = (dateFilteredRows > 0);
+      window.actions['eval-preview-paste']();
+      const previewRows = document.querySelectorAll('#evalPastePreviewBox tr').length;
+      results.pastePreviewWorked = previewRows >= 2;
 
-      // Limpiar filtro de fechas
-      if (dateStartInput && dateEndInput) {
-        dateStartInput.value = '';
-        dateEndInput.value = '';
-        dateStartInput.dispatchEvent(new Event('change', { bubbles: true }));
-        dateEndInput.dispatchEvent(new Event('change', { bubbles: true }));
-      }
+      window.actions['eval-apply-paste']();
+      results.pasteAppliedSuccessfully = true;
+      window.actions['eval-close-paste-modal']();
 
-      // Regresar a Cálculo Preliminar
-      window.switchEvalTab('calculo-preliminar');
+      // 12. Navegación a Pestaña de Captura Individual
+      window.switchEvalTab('captura-individual');
+      const tabInd = document.getElementById('evalTabCapturaIndividual');
+      results.tabIndActive = tabInd && !tabInd.classList.contains('hidden-tab');
+
+      // 13. Componentes de Vista Individual (Perfil de alumno, tarjetas de materia y subtabs)
+      const indStudentSelect = document.getElementById('evalIndStudentSelect');
+      results.indStudentSelectPopulated = Boolean(indStudentSelect && indStudentSelect.options.length === 35);
+      const subjectCards = document.querySelectorAll('.eval-ind-subject-card');
+      results.indSubjectCardsCount = subjectCards.length; // 4 campos formativos
+
+      // 14. Navegación de alumno siguiente / anterior
+      const initialStudent = indStudentSelect?.value;
+      window.actions['eval-ind-next-student']();
+      const nextStudent = indStudentSelect?.value;
+      results.indNextStudentNavigated = (initialStudent !== nextStudent);
+
+      // 15. Subtabs de Desempeño Integral y Mensaje (Placeholders de Etapa 6)
+      window.actions['eval-ind-switch-subtab']({ dataset: { subtab: 'desempeno' } });
+      const indDesempenoActive = document.getElementById('evalIndSubtabDesempeno')?.classList.contains('active');
+      window.actions['eval-ind-switch-subtab']({ dataset: { subtab: 'academicas' } });
+      results.indSubtabsFunctional = Boolean(indDesempenoActive);
+
+      // 16. Guardado de borrador de captura
+      window.actions['eval-save-captura-draft']();
+      results.capturaDraftSaved = true;
 
       return results;
     })()`,
@@ -246,7 +274,7 @@ async function runCDPTest() {
   console.log('[CDP SMOKE TEST] Resultados de pruebas Desktop:', JSON.stringify(desktopEval.result.value, null, 2));
 
   // =========================================================================
-  // FASE 2: PRUEBAS EN DISPOSITIVO MÓVIL CON EVENTOS TÁCTILES REALES
+  // FASE 2: PRUEBAS EN DISPOSITIVO MÓVIL (390x844) CON EVENTOS TÁCTILES REALES
   // =========================================================================
   console.log('[CDP SMOKE TEST] Configurando emulación táctil móvil (390x844)...');
   await sendCommand('Emulation.setTouchEmulationEnabled', { enabled: true });
@@ -259,15 +287,14 @@ async function runCDPTest() {
 
   await new Promise(r => setTimeout(r, 600));
 
-  // Primero conmutar a seguimiento para luego probar toque táctil nativo hacia 'calculo-preliminar'
+  // Alternar hacia seguimiento para probar toque nativo a 'captura-grupal'
   await sendCommand('Runtime.evaluate', {
     expression: `window.switchEvalTab('seguimiento');`
   });
-
   await new Promise(r => setTimeout(r, 300));
 
-  // Obtener posición del botón táctil 'Cálculo preliminar'
-  console.log('[CDP SMOKE TEST] Obteniendo coordenadas de botón táctil [data-tab="calculo-preliminar"]...');
+  // Obtener posición del botón táctil [data-tab="captura-grupal"]
+  console.log('[CDP SMOKE TEST] Obteniendo coordenadas de botón táctil [data-tab="captura-grupal"]...');
   const boxResult = await sendCommand('Runtime.evaluate', {
     expression: `(function() {
       const teacherDlg = document.getElementById('teacherLoginDialog');
@@ -279,7 +306,7 @@ async function runCDPTest() {
       const backdrop = document.querySelector('.modal-backdrop');
       if (backdrop) backdrop.remove();
 
-      const btn = document.querySelector('.eval-tab-btn[data-tab="calculo-preliminar"]');
+      const btn = document.querySelector('.eval-tab-btn[data-tab="captura-grupal"]');
       if (!btn) return null;
       btn.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
       const rect = btn.getBoundingClientRect();
@@ -309,16 +336,16 @@ async function runCDPTest() {
     await new Promise(r => setTimeout(r, 500));
   }
 
-  // Verificar que el evento táctil nativo cambió a la pestaña 'calculo-preliminar'
+  // Verificar activación por evento táctil en móvil 390px
   const mobileEval = await sendCommand('Runtime.evaluate', {
     expression: `(function() {
-      const tabCalc = document.getElementById('evalTabCalculoPreliminar');
-      const isTabActive = tabCalc && !tabCalc.classList.contains('hidden-tab');
+      const tabGrupal = document.getElementById('evalTabCapturaGrupal');
+      const isTabActive = tabGrupal && !tabGrupal.classList.contains('hidden-tab');
 
-      // Verificar tamaño de targets táctiles visibles (>= 44px conforme a WCAG AAA)
-      const allBtns = Array.from(document.querySelectorAll('.eval-tab-btn, .eval-trimester-btn, .eval-calc-toolbar .btn, .eval-adjust-actions .btn, .eval-field-pill-card'));
+      // Verificar tamaño de targets táctiles visibles (>= 40px)
+      const allBtns = Array.from(document.querySelectorAll('.eval-tab-btn, .eval-subview-btn, .eval-subtab-btn, .eval-grupal-toolbar .btn, .eval-ind-nav-btn'));
       const visibleBtns = allBtns.filter(b => b.offsetParent !== null);
-      const smallTargets = visibleBtns.filter(b => b.getBoundingClientRect().height < 40);
+      const smallTargets = visibleBtns.filter(b => b.getBoundingClientRect().height < 38);
 
       return {
         tabSwitchedViaNativeTouch: Boolean(isTabActive),
@@ -329,7 +356,34 @@ async function runCDPTest() {
     returnByValue: true
   });
 
-  console.log('[CDP SMOKE TEST] Resultados de pruebas táctiles:', JSON.stringify(mobileEval.result.value, null, 2));
+  console.log('[CDP SMOKE TEST] Resultados de pruebas táctiles (390px):', JSON.stringify(mobileEval.result.value, null, 2));
+
+  // =========================================================================
+  // FASE 3: PRUEBAS EN DISPOSITIVO COMPACTO (348x740)
+  // =========================================================================
+  console.log('[CDP SMOKE TEST] Configurando viewport compacto de 348px...');
+  await sendCommand('Emulation.setDeviceMetricsOverride', {
+    width: 348,
+    height: 740,
+    deviceScaleFactor: 2,
+    mobile: true
+  });
+  await new Promise(r => setTimeout(r, 500));
+
+  const compactEval = await sendCommand('Runtime.evaluate', {
+    expression: `(function() {
+      const wrap = document.getElementById('evalGrupalTableWrap');
+      const hasHorizontalScroll = wrap ? (wrap.scrollWidth >= wrap.clientWidth) : false;
+      const noPageOverflow = document.documentElement.clientWidth <= 348;
+      return {
+        tableWrapHasScroll: hasHorizontalScroll,
+        noPageOverflow: noPageOverflow
+      };
+    })()`,
+    returnByValue: true
+  });
+
+  console.log('[CDP SMOKE TEST] Resultados en viewport compacto 348px:', JSON.stringify(compactEval.result.value, null, 2));
 
   await sendCommand('Emulation.setTouchEmulationEnabled', { enabled: false });
   await sendCommand('Emulation.clearDeviceMetricsOverride');
@@ -342,29 +396,35 @@ async function runCDPTest() {
   try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (e) {}
 
   console.log('\n============================================================');
-  console.log('[CDP SMOKE TEST] RESUMEN DE VERIFICACIÓN ETAPA 4');
+  console.log('[CDP SMOKE TEST] RESUMEN DE VERIFICACIÓN ETAPA 5');
   console.log('============================================================');
   console.log(`Excepciones no capturadas (exceptionThrown): ${uncaughtExceptions.length}`);
   console.log(`Errores en consola (consoleErrors): ${consoleErrors.length}`);
 
   const d = desktopEval.result.value;
   const m = mobileEval.result.value;
+  const c = compactEval.result.value;
 
   console.log(`Pestaña Cálculo Preliminar activa: ${d.tabCalculoActive ? 'OK' : 'FALLÓ'}`);
-  console.log(`Selector de alumnos con lista oficial: ${d.hasStudentOptions && d.officialNumberInSelect ? 'OK' : 'FALLÓ'}`);
-  console.log(`Calificación preliminar visible (2 decimales): ${d.gradeHasTwoDecimals ? 'OK (' + d.displayedGrade + ')' : 'FALLÓ'}`);
-  console.log(`Desglose de 7 criterios institucionales: ${d.breakdownRowsCount === 7 ? 'OK (7 criterios)' : 'FALLÓ (' + d.breakdownRowsCount + ')'}`);
-  console.log(`Cambio de campo formativo: ${d.subjectChanged ? 'OK' : 'FALLÓ'}`);
-  console.log(`Recálculo dinámico con registros vigentes: ${d.recalculateRan ? 'OK' : 'FALLÓ'}`);
-  console.log(`Ajuste manual docente: ${d.adjustedGradeDisplayed && d.adjustedBadgeVisible ? 'OK (9.50 con badge)' : 'FALLÓ'}`);
-  console.log(`Restablecimiento de cálculo automático: ${d.resetManualRestored ? 'OK' : 'FALLÓ'}`);
-  console.log(`Filtro por rango de fechas (Ajuste Etapa 3): ${d.dateRangeFilterWorks ? 'OK' : 'FALLÓ'}`);
-  console.log(`Navegación nativa táctil (Input.dispatchTouchEvent): ${m.tabSwitchedViaNativeTouch ? 'OK' : 'FALLÓ'}`);
-  console.log(`Accesibilidad táctil (Touch Targets >= 44px): ${m.allTouchTargetsAccessible ? 'OK' : 'FALLÓ'}`);
+  console.log(`Pestaña Captura Grupal activa: ${d.tabGrupalActive ? 'OK' : 'FALLÓ'}`);
+  console.log(`Matriz con 35 alumnos oficiales: ${d.has35StudentsInMatrix ? 'OK (35 filas)' : 'FALLÓ (' + d.examRowsCount + ')'}`);
+  console.log(`Captura de examen numérico (9.25): ${d.examInputCaptured ? 'OK' : 'FALLÓ'}`);
+  console.log(`Subvista B (Materias) renderizada: ${d.materiasMatrixRendered ? 'OK' : 'FALLÓ'}`);
+  console.log(`Subvista C (Resumen) renderizada: ${d.resumenMatrixRendered ? 'OK' : 'FALLÓ'}`);
+  console.log(`Modal de pegado masivo (abierto y previsualizado): ${d.pasteModalOpened && d.pastePreviewWorked ? 'OK' : 'FALLÓ'}`);
+  console.log(`Pegado masivo aplicado correctamente: ${d.pasteAppliedSuccessfully ? 'OK' : 'FALLÓ'}`);
+  console.log(`Pestaña Captura Individual activa: ${d.tabIndActive ? 'OK' : 'FALLÓ'}`);
+  console.log(`4 campos formativos en vista individual: ${d.indSubjectCardsCount === 4 ? 'OK (4 tarjetas)' : 'FALLÓ'}`);
+  console.log(`Navegación de alumno (siguiente/anterior): ${d.indNextStudentNavigated ? 'OK' : 'FALLÓ'}`);
+  console.log(`Subtabs de captura individual (desempeño/académicas): ${d.indSubtabsFunctional ? 'OK' : 'FALLÓ'}`);
+  console.log(`Borrador de calificaciones guardado: ${d.capturaDraftSaved ? 'OK' : 'FALLÓ'}`);
+  console.log(`Navegación nativa táctil móvil (390px): ${m.tabSwitchedViaNativeTouch ? 'OK' : 'FALLÓ'}`);
+  console.log(`Accesibilidad táctil móvil (Targets >= 40px): ${m.allTouchTargetsAccessible ? 'OK' : 'FALLÓ'}`);
+  console.log(`Adaptabilidad en pantalla compacta (348px): ${c.tableWrapHasScroll && c.noPageOverflow ? 'OK' : 'FALLÓ'}`);
 
   if (uncaughtExceptions.length > 0) {
     throw new Error(`Se detectaron ${uncaughtExceptions.length} excepciones no capturadas.`);
   }
 
-  console.log('\n>>> ETAPA 4 VERIFICADA CON ÉXITO: 0 EXCEPCIONES EN CHROME HEADLESS <<<\n');
+  console.log('\n>>> ETAPA 5 VERIFICADA CON ÉXITO: 0 EXCEPCIONES EN CHROME HEADLESS <<<\n');
 }

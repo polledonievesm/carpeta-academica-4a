@@ -15,7 +15,8 @@
     evals: 'carpeta_eval_records_v2',
     activitySelection: 'carpeta_eval_act_selection_v3',
     activityDraft: 'carpeta_eval_act_draft_v3',
-    adjustments: 'carpeta_eval_adjustments_v4'
+    adjustments: 'carpeta_eval_adjustments_v4',
+    captura: 'carpeta_eval_captura_v5'
   };
 
   // Catálogo de criterios de evaluación institucionales con su propuesta inicial
@@ -102,7 +103,18 @@
     selectedStudentId: null,
     selectedSubject: 'Lenguajes',
     calcMode: 'mixta',
-    manualAdjustments: loadManualAdjustments()
+    manualAdjustments: loadManualAdjustments(),
+
+    // Estado específico de la Etapa 5 (Captura individual y grupal)
+    grupalSubview: 'examenes', // 'examenes' | 'criterios' | 'resumen'
+    grupalSearch: '',
+    grupalStatusFilter: 'all', // 'all' | 'pending' | 'calculated' | 'authorized' | 'adjusted'
+    grupalSubject: 'Lenguajes',
+    grupalMode: 'mixta',
+    indStudentId: null,
+    indSubtab: 'academicas', // 'academicas' | 'desempeno' | 'mensaje' | 'resumen'
+    capturaStore: loadCapturaStore(),
+    hasUnsavedCaptura: false
   };
 
   /**
@@ -211,6 +223,43 @@
       console.error('Error al guardar ajustes manuales de evaluación:', e);
       return false;
     }
+  }
+
+  /**
+   * Carga el almacén de calificaciones capturadas (exámenes, modos, autorizaciones)
+   */
+  function loadCapturaStore() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.captura);
+      if (raw) return JSON.parse(raw) || {};
+    } catch (e) {}
+    return {};
+  }
+
+  /**
+   * Guarda el almacén de captura en localStorage
+   */
+  function saveCapturaStore(store = evalState.capturaStore) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.captura, JSON.stringify(store));
+      evalState.hasUnsavedCaptura = false;
+      const notice = document.getElementById('evalCapturaUnsavedNotice');
+      if (notice) notice.style.display = 'none';
+      const status = document.getElementById('evalCapturaPersistStatus');
+      if (status) status.textContent = '✓ Cambios guardados localmente';
+      return true;
+    } catch (e) {
+      console.error('Error al guardar captura de evaluaciones:', e);
+      return false;
+    }
+  }
+
+  function markUnsavedCaptura() {
+    evalState.hasUnsavedCaptura = true;
+    const notice = document.getElementById('evalCapturaUnsavedNotice');
+    if (notice) notice.style.display = 'inline-flex';
+    const status = document.getElementById('evalCapturaPersistStatus');
+    if (status) status.textContent = '● Calificaciones modificadas sin guardar';
   }
 
   /**
@@ -528,10 +577,38 @@
 
     // Advertencia de navegación
     window.addEventListener('beforeunload', e => {
-      if (evalState.hasUnsavedChanges || evalState.hasUnsavedActivityChanges) {
+      if (evalState.hasUnsavedChanges || evalState.hasUnsavedActivityChanges || evalState.hasUnsavedCaptura) {
         e.preventDefault();
         e.returnValue = 'Tienes cambios sin guardar en Evaluaciones Trimestrales.';
       }
+    });
+
+    // Filtros y controles de Captura Grupal e Individual (Etapa 5)
+    const grupalSearch = document.getElementById('evalGrupalSearch');
+    const grupalStatus = document.getElementById('evalGrupalStatusFilter');
+    const grupalSubject = document.getElementById('evalGrupalSubjectSelect');
+    const grupalMode = document.getElementById('evalGrupalModeSelect');
+    const indStudentSelect = document.getElementById('evalIndStudentSelect');
+
+    grupalSearch?.addEventListener('input', e => {
+      evalState.grupalSearch = (e.target.value || '').trim().toLowerCase();
+      renderCapturaGrupal();
+    });
+    grupalStatus?.addEventListener('change', e => {
+      evalState.grupalStatusFilter = e.target.value || 'all';
+      renderCapturaGrupal();
+    });
+    grupalSubject?.addEventListener('change', e => {
+      evalState.grupalSubject = e.target.value || 'Lenguajes';
+      renderCapturaGrupal();
+    });
+    grupalMode?.addEventListener('change', e => {
+      evalState.grupalMode = e.target.value || 'asistida';
+      renderCapturaGrupal();
+    });
+    indStudentSelect?.addEventListener('change', e => {
+      evalState.indStudentId = e.target.value || null;
+      renderCapturaIndividual();
     });
 
     _eventsBound = true;
@@ -567,6 +644,10 @@
     renderActivitiesTab();
     if (evalState.activeTab === 'calculo-preliminar') {
       renderCalculoPreliminar();
+    } else if (evalState.activeTab === 'captura-grupal') {
+      renderCapturaGrupal();
+    } else if (evalState.activeTab === 'captura-individual') {
+      renderCapturaIndividual();
     }
 
     if (typeof toast === 'function') {
@@ -587,6 +668,9 @@
     }
     if (evalState.hasUnsavedActivityChanges && evalState.activeTab === 'seleccion-actividades' && targetTab !== 'seleccion-actividades') {
       saveActivityDraftSilently();
+    }
+    if (evalState.hasUnsavedCaptura && (evalState.activeTab === 'captura-grupal' || evalState.activeTab === 'captura-individual') && targetTab !== 'captura-grupal' && targetTab !== 'captura-individual') {
+      saveCapturaStore();
     }
 
     evalState.activeTab = targetTab;
@@ -617,6 +701,10 @@
       renderActivitiesTab();
     } else if (targetTab === 'calculo-preliminar') {
       renderCalculoPreliminar();
+    } else if (targetTab === 'captura-grupal') {
+      renderCapturaGrupal();
+    } else if (targetTab === 'captura-individual') {
+      renderCapturaIndividual();
     } else if (targetTab === 'criterios') {
       renderConfigTab();
     } else if (targetTab === 'seguimiento') {
@@ -2090,7 +2178,16 @@
         }
       }
 
-      const isComplete = !hasMissingInfo && !hasPending;
+      const hasAnyValid = activeCriteria.some(crit => {
+        const res = criteriaResults[crit];
+        return res && (res.status === 'VALIDO' || res.status === 'CERO_REGISTRADO');
+      });
+
+      const isComplete = !hasMissingInfo && !hasPending && hasAnyValid;
+
+      if (!isComplete && !hasAnyValid && !isAdjusted) {
+        finalGrade = null;
+      }
 
       return {
         mode,
@@ -2567,8 +2664,886 @@
   }
 
   // ==========================================================================
-  // REGISTRO DESACOPLADO DE ACCIONES (REGLA 2 DE GEMINI.MD)
+  // ETAPA 5: MODALIDADES DE CAPTURA INDIVIDUAL Y GRUPAL
   // ==========================================================================
+
+  const EVAL_FIELDS = [
+    'Lenguajes',
+    'Saberes y Pensamiento Científico',
+    'Ética, Naturaleza y Sociedades',
+    'De lo Humano y lo Comunitario'
+  ];
+
+  /**
+   * Obtiene la clave de identificación única para la captura de un alumno y materia
+   */
+  function getCapturaItemKey(studentId, subject, trimester = evalState.trimester) {
+    const ciclo = evalState.config?.cicloEscolar || '2026-2027';
+    const grupo = evalState.config?.grupo || '4.° A';
+    return `${ciclo}_${grupo}_T${trimester}_${studentId}_${subject}`;
+  }
+
+  /**
+   * Obtiene los datos de captura de un alumno y materia
+   */
+  function getStudentFieldData(studentId, subject, trimester = evalState.trimester) {
+    const key = getCapturaItemKey(studentId, subject, trimester);
+    const stored = evalState.capturaStore?.[key];
+    const adjKey = getAdjustmentKey(studentId, subject, trimester);
+    const adj = evalState.manualAdjustments?.[adjKey];
+
+    return Object.assign({
+      mode: evalState.grupalMode || 'mixta',
+      manualExam: null,
+      manualGrade: null,
+      adjustedGrade: adj ? adj.adjustedGrade : null,
+      adjustmentReason: adj ? adj.reason : '',
+      authorizedGrade: null,
+      isAuthorized: false,
+      authorizedAt: null,
+      authorizedBy: null
+    }, stored || {});
+  }
+
+  /**
+   * Guarda los datos de captura de un alumno y materia
+   */
+  function setStudentFieldData(studentId, subject, data, trimester = evalState.trimester) {
+    const key = getCapturaItemKey(studentId, subject, trimester);
+    evalState.capturaStore = evalState.capturaStore || {};
+    const existing = getStudentFieldData(studentId, subject, trimester);
+    evalState.capturaStore[key] = Object.assign({}, existing, data);
+    markUnsavedCaptura();
+  }
+
+  /**
+   * Calcula la evaluación completa de un alumno en los 4 campos formativos
+   */
+  function calculateStudentFullEvaluation(studentId, trimester = evalState.trimester) {
+    const t = trimester;
+    const cfg = evalState.config;
+    const percentages = cfg.porcentajes?.[t] || { tareas: 50, examen: 30, conducta: 10, participacion: 10 };
+    const raw = getRawActivities();
+    const sel = getCurrentActivitySelection(t);
+    const activitiesInPeriod = raw.classes.filter(a => isActivityInPeriod(a, t));
+    const evaluations = raw.evaluations;
+
+    const subjects = {};
+    let allAuthorized = true;
+
+    EVAL_FIELDS.forEach(field => {
+      const fieldData = getStudentFieldData(studentId, field, t);
+
+      // Actividades de este campo formativo (tipo TAREA para tareas, tipo ACTIVIDAD para actividades en clase)
+      const taskActs = activitiesInPeriod.filter(a => 
+        (a.materia === field) && (a.tipoActividad !== 'ACTIVIDAD') && sel.selectedIds.includes(String(a.id))
+      );
+      const classActs = activitiesInPeriod.filter(a => 
+        (a.materia === field) && (a.tipoActividad === 'ACTIVIDAD') && sel.selectedIds.includes(String(a.id))
+      );
+
+      const tasksRes = EvaluacionEngine.calculateTasksCriterion(studentId, taskActs, evaluations, {
+        weightMode: sel.weightMode,
+        customWeights: sel.customWeights
+      });
+
+      const actClassRes = EvaluacionEngine.calculateTasksCriterion(studentId, classActs, evaluations, {
+        weightMode: sel.weightMode,
+        customWeights: sel.customWeights
+      });
+
+      const conductRes = EvaluacionEngine.calculateConductCriterion(studentId, evaluations);
+      const partRes = EvaluacionEngine.calculateParticipationCriterion(studentId, evaluations);
+
+      // Examen escrito (desde captura manual)
+      const examRes = EvaluacionEngine.calculateExamCriterion(fieldData.manualExam);
+
+      const criteriaResults = {
+        tareas: tasksRes,
+        actividades: actClassRes,
+        examen: examRes,
+        conducta: conductRes,
+        participacion: partRes,
+        asistencia: { status: 'PENDIENTE', score: null },
+        puntualidad: { status: 'PENDIENTE', score: null }
+      };
+
+      const manualAdjustment = fieldData.adjustedGrade !== null ? {
+        adjustedGrade: fieldData.adjustedGrade,
+        reason: fieldData.adjustmentReason
+      } : null;
+
+      const calcRes = EvaluacionEngine.calculateSubjectGrade({
+        studentId,
+        subject: field,
+        percentages,
+        criteriaResults,
+        mode: fieldData.mode,
+        manualGrade: fieldData.manualGrade,
+        manualAdjustment
+      });
+
+      calcRes.isAuthorized = fieldData.isAuthorized === true;
+      calcRes.authorizedGrade = fieldData.authorizedGrade;
+      calcRes.manualExam = fieldData.manualExam;
+      calcRes.fieldData = fieldData;
+
+      if (!calcRes.isAuthorized) {
+        allAuthorized = false;
+      }
+
+      subjects[field] = calcRes;
+    });
+
+    const trimesterAverage = EvaluacionEngine.calculateTrimesterAverage(subjects);
+
+    return {
+      studentId,
+      subjects,
+      trimesterAverage,
+      isAllAuthorized: allAuthorized && trimesterAverage.isComplete
+    };
+  }
+
+  /**
+   * Renderiza la pestaña de Captura Grupal (Etapa 5)
+   */
+  function renderCapturaGrupal() {
+    const tableWrap = document.getElementById('evalGrupalTableWrap');
+    if (!tableWrap) return;
+
+    const students = getStudentsList();
+    if (!students || students.length === 0) {
+      tableWrap.innerHTML = '<p class="muted" style="padding: 24px; text-align: center;">No hay alumnos disponibles.</p>';
+      return;
+    }
+
+    const t = evalState.trimester;
+    const subview = evalState.grupalSubview || 'examenes';
+    const searchQuery = (evalState.grupalSearch || '').trim().toLowerCase();
+    const statusFilter = evalState.grupalStatusFilter || 'all';
+
+    // Filtrar alumnos
+    const filteredStudents = students.filter(s => {
+      const num = resolveOfficialListNumber(s);
+      const name = String(typeof fullName === 'function' ? fullName(s) : (s.apellidos ? `${s.apellidos} ${s.nombres || ''}` : s.nombre || '')).toLowerCase();
+      
+      // Búsqueda por texto o número
+      if (searchQuery) {
+        const matchesName = name.includes(searchQuery);
+        const matchesNum = String(num) === searchQuery || `${num < 10 ? '0' + num : num}` === searchQuery;
+        if (!matchesName && !matchesNum) return false;
+      }
+
+      // Filtro de estado
+      if (statusFilter !== 'all') {
+        const evalData = calculateStudentFullEvaluation(s.id, t);
+        const anyPending = Object.values(evalData.subjects).some(sub => sub.hasPending || sub.status === 'INCOMPLETO' || sub.status === 'PRELIMINAR_CON_PENDIENTES');
+        const anyAdjusted = Object.values(evalData.subjects).some(sub => sub.isAdjusted);
+        const allAuth = evalData.isAllAuthorized;
+
+        if (statusFilter === 'pending' && !anyPending) return false;
+        if (statusFilter === 'authorized' && !allAuth) return false;
+        if (statusFilter === 'adjusted' && !anyAdjusted) return false;
+        if (statusFilter === 'calculated' && allAuth) return false;
+      }
+
+      return true;
+    });
+
+    // Actualizar botones de subvista activa
+    document.querySelectorAll('[data-action="eval-set-grupal-subview"]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.subview === subview);
+    });
+
+    // Mostrar/ocultar selector de materia para Vista B
+    const subjGroup = document.getElementById('evalGrupalSubjectFilterGroup');
+    if (subjGroup) {
+      subjGroup.style.display = (subview === 'criterios') ? 'flex' : 'none';
+    }
+
+    // Actualizar título y badge de estadísticas
+    const titleEl = document.getElementById('evalGrupalMatrixTitle');
+    const badgeEl = document.getElementById('evalGrupalStatsBadge');
+    if (badgeEl) badgeEl.textContent = `${filteredStudents.length} de ${students.length} alumnos`;
+
+    if (subview === 'examenes') {
+      if (titleEl) titleEl.textContent = `Matriz de Exámenes Escritos · Trimestre ${t}`;
+      renderMatrizExamenes(tableWrap, filteredStudents, t);
+    } else if (subview === 'criterios') {
+      const subj = evalState.grupalSubject || 'Lenguajes';
+      if (titleEl) titleEl.textContent = `Calificaciones y Criterios: ${subj} · Trimestre ${t}`;
+      renderMatrizCriterios(tableWrap, filteredStudents, subj, t);
+    } else {
+      if (titleEl) titleEl.textContent = `Resumen General de Calificaciones · Trimestre ${t}`;
+      renderMatrizResumen(tableWrap, filteredStudents, t);
+    }
+
+    attachMatrixKeyboardNavigation(tableWrap);
+  }
+
+  /**
+   * Vista A: Matriz de Exámenes Escritos
+   */
+  function renderMatrizExamenes(container, studentsList, trimester) {
+    const t = trimester;
+
+    let html = `
+      <table class="eval-tracking-table eval-matrix-table" id="evalMatrixTable">
+        <thead>
+          <tr>
+            <th class="eval-sticky-col" style="width: 50px; text-align: center;">No.</th>
+            <th class="eval-sticky-col" style="min-width: 200px;">Nombre del alumno</th>
+            <th style="text-align: center; width: 110px;">Lenguajes</th>
+            <th style="text-align: center; width: 110px;">Saberes</th>
+            <th style="text-align: center; width: 110px;">Ética</th>
+            <th style="text-align: center; width: 110px;">De lo Humano</th>
+            <th style="text-align: center; width: 120px;">Estado de captura</th>
+          </tr>
+        </thead>
+        <tbody id="evalGrupalTableBody">
+    `;
+
+    studentsList.forEach((s, rowIdx) => {
+      const num = resolveOfficialListNumber(s);
+      const name = s.apellidos ? `${s.apellidos} ${s.nombres || ''}` : (s.nombre || 'Alumno');
+      const evalData = calculateStudentFullEvaluation(s.id, t);
+
+      let capturedCount = 0;
+
+      const cellInputsHtml = EVAL_FIELDS.map((field, colIdx) => {
+        const fieldData = getStudentFieldData(s.id, field, t);
+        const val = fieldData.manualExam !== null && fieldData.manualExam !== undefined ? fieldData.manualExam : '';
+        if (val !== '') capturedCount++;
+        const isAuth = fieldData.isAuthorized;
+
+        let cellClass = 'eval-cell-input';
+        if (val === '') cellClass += ' cell-empty';
+        else if (Number(val) === 0) cellClass += ' cell-zero';
+        else if (isAuth) cellClass += ' cell-authorized';
+
+        return `
+          <td style="text-align: center;">
+            <input type="number" step="0.1" min="0" max="10" 
+                   class="${cellClass}" 
+                   value="${val}" 
+                   placeholder="—"
+                   data-student-id="${s.id}" 
+                   data-field="${field}"
+                   data-row="${rowIdx}" 
+                   data-col="${colIdx}"
+                   title="${field}: ${val !== '' ? val : 'Pendiente de examen'}">
+          </td>
+        `;
+      }).join('');
+
+      let statusBadge = '<span class="eval-status-pill status-pending" style="font-size: 11px;">Pendiente</span>';
+      if (capturedCount === 4) {
+        statusBadge = '<span class="eval-status-pill status-completed" style="font-size: 11px;">4 exámenes ✓</span>';
+      } else if (capturedCount > 0) {
+        statusBadge = `<span class="eval-status-pill status-review" style="font-size: 11px;">${capturedCount} de 4</span>`;
+      }
+
+      html += `
+        <tr>
+          <td class="eval-sticky-col" style="text-align: center; font-weight: 800; color: var(--navy);">${num < 10 ? '0' + num : num}</td>
+          <td class="eval-sticky-col" style="font-weight: 700; color: var(--navy);">${name}</td>
+          ${cellInputsHtml}
+          <td style="text-align: center;">${statusBadge}</td>
+        </tr>
+      `;
+    });
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+  }
+
+  /**
+   * Vista B: Matriz de Calificaciones y Criterios por Campo Formativo
+   */
+  function renderMatrizCriterios(container, studentsList, subject, trimester) {
+    const t = trimester;
+    const cfg = evalState.config;
+    const pcts = cfg.porcentajes?.[t] || {};
+
+    const activeCriteria = CRITERIOS_CATALOGO.filter(c => (pcts[c.id] || 0) > 0);
+
+    let html = `
+      <table class="eval-tracking-table eval-matrix-table" id="evalMatrixTable">
+        <thead>
+          <tr>
+            <th class="eval-sticky-col" style="width: 50px; text-align: center;">No.</th>
+            <th class="eval-sticky-col" style="min-width: 200px;">Nombre del alumno</th>
+            <th style="text-align: center; width: 90px;">Modalidad</th>
+            ${activeCriteria.map(c => `<th style="text-align: center; min-width: 90px;" title="${c.desc}">${c.nombre} (${pcts[c.id]}%)</th>`).join('')}
+            <th style="text-align: center; width: 95px;">Calculada</th>
+            <th style="text-align: center; width: 95px;">Autorizada</th>
+            <th style="text-align: center; width: 100px;">Estado</th>
+          </tr>
+        </thead>
+        <tbody id="evalGrupalTableBody">
+    `;
+
+    studentsList.forEach((s, rowIdx) => {
+      const num = resolveOfficialListNumber(s);
+      const name = s.apellidos ? `${s.apellidos} ${s.nombres || ''}` : (s.nombre || 'Alumno');
+      const evalData = calculateStudentFullEvaluation(s.id, t);
+      const sub = evalData.subjects[subject];
+      const fieldData = sub.fieldData;
+
+      const criteriaCells = activeCriteria.map((c, colIdx) => {
+        const item = sub.breakdown?.[c.id];
+        let valDisplay = '—';
+        if (c.id === 'examen') {
+          const exVal = fieldData.manualExam !== null && fieldData.manualExam !== undefined ? fieldData.manualExam : '';
+          return `
+            <td style="text-align: center;">
+              <input type="number" step="0.1" min="0" max="10" 
+                     class="eval-cell-input ${exVal === '' ? 'cell-empty' : ''}" 
+                     value="${exVal}" 
+                     placeholder="—"
+                     data-student-id="${s.id}" 
+                     data-field="${subject}"
+                     data-row="${rowIdx}" 
+                     data-col="${colIdx}"
+                     title="Examen: ${exVal}">
+            </td>
+          `;
+        }
+        if (item && item.result && item.result.score !== null) {
+          valDisplay = `${EvaluacionEngine.formatGrade(item.result.score / 10)}`;
+        }
+        return `<td style="text-align: center; font-size: 13px; font-weight: 600;">${valDisplay}</td>`;
+      }).join('');
+
+      let statusPill = '<span class="eval-status-pill status-pending" style="font-size: 11px;">Incompleto</span>';
+      if (sub.isAuthorized) {
+        statusPill = '<span class="eval-status-pill status-completed" style="font-size: 11px;">Autorizado ✓</span>';
+      } else if (sub.isComplete) {
+        statusPill = '<span class="eval-status-pill status-review" style="font-size: 11px;">Calculado</span>';
+      }
+
+      html += `
+        <tr>
+          <td class="eval-sticky-col" style="text-align: center; font-weight: 800; color: var(--navy);">${num < 10 ? '0' + num : num}</td>
+          <td class="eval-sticky-col" style="font-weight: 700; color: var(--navy);">${name}</td>
+          <td style="text-align: center;">
+            <span class="badge" style="font-size: 10px; text-transform: uppercase;">${fieldData.mode}</span>
+          </td>
+          ${criteriaCells}
+          <td style="text-align: center; font-weight: 800; color: var(--navy);">${sub.displayGrade}</td>
+          <td style="text-align: center; font-weight: 800; color: var(--teal);">${sub.isAuthorized ? EvaluacionEngine.formatGrade(sub.authorizedGrade) : '—'}</td>
+          <td style="text-align: center;">${statusPill}</td>
+        </tr>
+      `;
+    });
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+  }
+
+  /**
+   * Vista C: Matriz de Resumen General
+   */
+  function renderMatrizResumen(container, studentsList, trimester) {
+    const t = trimester;
+
+    let html = `
+      <table class="eval-tracking-table eval-matrix-table" id="evalMatrixTable">
+        <thead>
+          <tr>
+            <th class="eval-sticky-col" style="width: 50px; text-align: center;">No.</th>
+            <th class="eval-sticky-col" style="min-width: 200px;">Nombre del alumno</th>
+            <th style="text-align: center; width: 95px;">Lenguajes</th>
+            <th style="text-align: center; width: 95px;">Saberes</th>
+            <th style="text-align: center; width: 95px;">Ética</th>
+            <th style="text-align: center; width: 95px;">De lo Humano</th>
+            <th style="text-align: center; width: 110px;">Promedio Trim.</th>
+            <th style="text-align: center; width: 110px;">Estado</th>
+            <th style="text-align: center; width: 90px;">Acción</th>
+          </tr>
+        </thead>
+        <tbody id="evalGrupalTableBody">
+    `;
+
+    studentsList.forEach(s => {
+      const num = resolveOfficialListNumber(s);
+      const name = s.apellidos ? `${s.apellidos} ${s.nombres || ''}` : (s.nombre || 'Alumno');
+      const evalData = calculateStudentFullEvaluation(s.id, t);
+      const avg = evalData.trimesterAverage;
+
+      const subCells = EVAL_FIELDS.map(f => {
+        const sub = evalData.subjects[f];
+        const gradeText = sub.isAuthorized ? EvaluacionEngine.formatGrade(sub.authorizedGrade) : sub.displayGrade;
+        const color = sub.isAuthorized ? '#1b7c4b' : (sub.isAdjusted ? '#a46d00' : 'var(--navy)');
+        return `<td style="text-align: center; font-weight: 800; color: ${color};">${gradeText}</td>`;
+      }).join('');
+
+      let statusBadge = '<span class="eval-status-pill status-pending" style="font-size: 11px;">Pendiente</span>';
+      if (evalData.isAllAuthorized) {
+        statusBadge = '<span class="eval-status-pill status-completed" style="font-size: 11px;">Autorizado ✓</span>';
+      } else if (avg.isComplete) {
+        statusBadge = '<span class="eval-status-pill status-review" style="font-size: 11px;">Completo</span>';
+      }
+
+      html += `
+        <tr>
+          <td class="eval-sticky-col" style="text-align: center; font-weight: 800; color: var(--navy);">${num < 10 ? '0' + num : num}</td>
+          <td class="eval-sticky-col" style="font-weight: 700; color: var(--navy);">${name}</td>
+          ${subCells}
+          <td style="text-align: center; font-weight: 900; color: var(--teal); font-size: 15px;">${avg.displayAverage}</td>
+          <td style="text-align: center;">${statusBadge}</td>
+          <td style="text-align: center;">
+            <button class="btn small" data-action="eval-open-individual" data-student-id="${s.id}" title="Abrir captura individual de este alumno">
+              Abrir
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+  }
+
+  /**
+   * Conecta eventos de teclado en la matriz de captura rápida
+   */
+  function attachMatrixKeyboardNavigation(container) {
+    const inputs = container.querySelectorAll('.eval-cell-input');
+    inputs.forEach(input => {
+      // Selección instantánea de texto al enfocar
+      input.addEventListener('focus', () => input.select());
+
+      // Navegación por teclado
+      input.addEventListener('keydown', e => {
+        const r = parseInt(input.dataset.row, 10);
+        const c = parseInt(input.dataset.col, 10);
+
+        let targetR = r;
+        let targetC = c;
+
+        if (e.key === 'Enter' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          targetR = e.shiftKey ? r - 1 : r + 1;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          targetR = r - 1;
+        } else if (e.key === 'Tab' || e.key === 'ArrowRight') {
+          if (e.key === 'Tab') e.preventDefault();
+          targetC = e.shiftKey ? c - 1 : c + 1;
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          targetC = c - 1;
+        } else {
+          return;
+        }
+
+        const nextInput = container.querySelector(`[data-row="${targetR}"][data-col="${targetC}"]`);
+        if (nextInput) {
+          nextInput.focus();
+        }
+      });
+
+      // Guardar cambio en celda
+      input.addEventListener('change', () => {
+        const studentId = input.dataset.studentId;
+        const field = input.dataset.field;
+        const val = input.value.trim();
+
+        if (val === '') {
+          setStudentFieldData(studentId, field, { manualExam: null });
+          input.className = 'eval-cell-input cell-empty';
+        } else {
+          const num = Number(val);
+          if (isNaN(num) || num < 0 || num > 10) {
+            if (typeof toast === 'function') toast('La calificación debe ser un número entre 0 y 10.');
+            input.value = '';
+            setStudentFieldData(studentId, field, { manualExam: null });
+            input.className = 'eval-cell-input cell-empty';
+          } else {
+            setStudentFieldData(studentId, field, { manualExam: num });
+            input.className = 'eval-cell-input' + (num === 0 ? ' cell-zero' : '');
+          }
+        }
+      });
+    });
+  }
+
+  /**
+   * Renderiza la pestaña de Captura Individual (Etapa 5)
+   */
+  function renderCapturaIndividual() {
+    const students = getStudentsList();
+    if (!students || students.length === 0) return;
+
+    const sortedStudents = [...students].sort((a, b) => resolveOfficialListNumber(a) - resolveOfficialListNumber(b));
+    const currentId = evalState.indStudentId || evalState.selectedStudentId || sortedStudents[0]?.id;
+    evalState.indStudentId = currentId;
+
+    const student = sortedStudents.find(s => String(s.id) === String(currentId)) || sortedStudents[0];
+    if (!student) return;
+
+    const num = resolveOfficialListNumber(student);
+    const fullNameText = student.apellidos ? `${student.apellidos} ${student.nombres || ''}` : (student.nombre || 'Alumno');
+
+    // 1. Selector de Alumno en la barra de navegación
+    const selEl = document.getElementById('evalIndStudentSelect');
+    if (selEl) {
+      selEl.innerHTML = sortedStudents.map(s => {
+        const sNum = resolveOfficialListNumber(s);
+        const sName = s.apellidos ? `${s.apellidos} ${s.nombres || ''}` : (s.nombre || 'Alumno');
+        const isSel = String(s.id) === String(student.id);
+        return `<option value="${s.id}" ${isSel ? 'selected' : ''}>${sNum < 10 ? '0' + sNum : sNum}. ${sName}</option>`;
+      }).join('');
+    }
+
+    // 2. Barra de perfil del alumno
+    const profileBar = document.getElementById('evalIndStudentProfileBar');
+    const t = evalState.trimester;
+    const evalData = calculateStudentFullEvaluation(student.id, t);
+
+    if (profileBar) {
+      profileBar.innerHTML = `
+        <div>
+          <h3 style="margin: 0; font-size: 16px; color: var(--navy);">${num < 10 ? '0' + num : num}. ${fullNameText}</h3>
+          <span class="muted" style="font-size: 12px;">Lista # ${num} · Matrícula / CURP: ${student.curp || student.matricula || student.id}</span>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <span class="eval-status-pill ${evalData.isAllAuthorized ? 'status-completed' : 'status-pending'}">
+            ${evalData.isAllAuthorized ? 'Evaluación autorizada ✓' : 'En proceso de captura'}
+          </span>
+          <span class="badge">Trimestre ${t}</span>
+        </div>
+      `;
+    }
+
+    // 3. Grid de los 4 campos formativos en el Subtab Académico
+    const gridEl = document.getElementById('evalIndSubjectsGrid');
+    if (gridEl) {
+      gridEl.innerHTML = EVAL_FIELDS.map(field => {
+        const sub = evalData.subjects[field];
+        const fieldData = sub.fieldData;
+        const examVal = fieldData.manualExam !== null && fieldData.manualExam !== undefined ? fieldData.manualExam : '';
+        const isAuth = sub.isAuthorized;
+
+        return `
+          <div class="eval-ind-subject-card">
+            <div class="eval-ind-subject-header">
+              <div>
+                <h4 style="margin: 0; font-size: 15px; color: var(--navy);">${field}</h4>
+                <span class="muted" style="font-size: 11px;">Modalidad: ${fieldData.mode.toUpperCase()}</span>
+              </div>
+              <span class="eval-status-pill ${isAuth ? 'status-completed' : (sub.isComplete ? 'status-review' : 'status-pending')}" style="font-size: 11px;">
+                ${isAuth ? 'Autorizada ✓' : (sub.isComplete ? 'Calculada' : 'Pendiente')}
+              </span>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin: 6px 0;">
+              <div>
+                <span style="font-size: 11px; color: var(--muted); display: block;">Calificación</span>
+                <b style="font-size: 28px; color: ${isAuth ? '#1b7c4b' : 'var(--teal)'}; font-weight: 900;">
+                  ${isAuth ? EvaluacionEngine.formatGrade(sub.authorizedGrade) : sub.displayGrade}
+                </b>
+              </div>
+              <div style="text-align: right;">
+                <label for="evalIndExam_${student.id}_${field}" style="font-size: 11px; font-weight: 700; color: var(--muted); display: block;">Examen escrito:</label>
+                <input type="number" step="0.1" min="0" max="10" 
+                       id="evalIndExam_${student.id}_${field}"
+                       class="eval-cell-input ${examVal === '' ? 'cell-empty' : ''}" 
+                       value="${examVal}" 
+                       placeholder="—"
+                       data-action="eval-ind-exam-change" 
+                       data-student-id="${student.id}" 
+                       data-field="${field}">
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 8px; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid var(--line);">
+              <span class="muted" style="font-size: 11px;">${sub.isAdjusted ? 'Con ajuste docente' : 'Cálculo automático'}</span>
+              <button class="btn small ${isAuth ? '' : 'primary'}" 
+                      data-action="eval-authorize-subject" 
+                      data-student-id="${student.id}" 
+                      data-field="${field}" 
+                      title="${isAuth ? 'Calificación autorizada' : 'Autorizar calificación definitiva'}">
+                ${isAuth ? '✓ Autorizada' : 'Autorizar campo'}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Escuchar cambios en los inputs de examen de la captura individual
+      gridEl.querySelectorAll('[data-action="eval-ind-exam-change"]').forEach(inp => {
+        inp.addEventListener('change', () => {
+          const sId = inp.dataset.studentId;
+          const f = inp.dataset.field;
+          const val = inp.value.trim();
+          const numVal = val === '' ? null : Number(val);
+          if (numVal !== null && (isNaN(numVal) || numVal < 0 || numVal > 10)) {
+            if (typeof toast === 'function') toast('La calificación debe estar entre 0 y 10.');
+            inp.value = '';
+            setStudentFieldData(sId, f, { manualExam: null });
+          } else {
+            setStudentFieldData(sId, f, { manualExam: numVal });
+          }
+          renderCapturaIndividual();
+        });
+      });
+    }
+
+    // 4. Promedio general trimestral
+    const avgDisplay = document.getElementById('evalIndTrimesterAvgDisplay');
+    const avgStatus = document.getElementById('evalIndTrimesterAvgStatus');
+    if (avgDisplay) {
+      avgDisplay.textContent = evalData.isAllAuthorized 
+        ? evalData.trimesterAverage.displayAverage 
+        : (evalData.trimesterAverage.isComplete ? `${evalData.trimesterAverage.displayAverage} (Preliminar)` : '—');
+    }
+    if (avgStatus) {
+      avgStatus.textContent = evalData.isAllAuthorized 
+        ? '(Definitivo y autorizado)' 
+        : (evalData.trimesterAverage.isComplete ? '(Pendiente de autorización)' : '(Requiere autorizar los 4 campos)');
+    }
+
+    // 5. Resumen consolidado del alumno en Subtab 4
+    const summaryPanel = document.getElementById('evalIndSummaryPanel');
+    if (summaryPanel) {
+      summaryPanel.innerHTML = `
+        <div class="section-head">
+          <h3>Resumen del Alumno · Trimestre ${t}</h3>
+          <span class="badge">${fullNameText}</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 14px;">
+          <div class="eval-stat-card"><span>Lenguajes</span><b>${evalData.subjects['Lenguajes'].displayGrade}</b></div>
+          <div class="eval-stat-card"><span>Saberes y Pensamiento</span><b>${evalData.subjects['Saberes y Pensamiento Científico'].displayGrade}</b></div>
+          <div class="eval-stat-card"><span>Ética y Naturaleza</span><b>${evalData.subjects['Ética, Naturaleza y Sociedades'].displayGrade}</b></div>
+          <div class="eval-stat-card"><span>De lo Humano</span><b>${evalData.subjects['De lo Humano y lo Comunitario'].displayGrade}</b></div>
+        </div>
+      `;
+    }
+
+    // 6. Activar el subtab seleccionado (académicas, desempeño, mensaje, resumen)
+    const curSubtab = evalState.indSubtab || 'academicas';
+    const subtabsMap = {
+      academicas: 'evalIndSubtabAcademicas',
+      desempeno: 'evalIndSubtabDesempeno',
+      mensaje: 'evalIndSubtabMensaje',
+      resumen: 'evalIndSubtabResumen'
+    };
+
+    Object.entries(subtabsMap).forEach(([k, id]) => {
+      const pane = document.getElementById(id);
+      if (pane) {
+        pane.classList.toggle('active', k === curSubtab);
+        pane.classList.toggle('hidden-tab', k !== curSubtab);
+      }
+    });
+
+    document.querySelectorAll('.eval-ind-subtab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.subtab === curSubtab);
+    });
+  }
+
+  /**
+   * Modal de Pegado Masivo: Apertura, previsualización y aplicación
+   */
+  function openPasteModal() {
+    const modal = document.getElementById('evalPasteModal');
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.classList.remove('hidden-control');
+    }
+  }
+
+  function closePasteModal() {
+    const modal = document.getElementById('evalPasteModal');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.add('hidden-control');
+    }
+  }
+
+  function previewPaste() {
+    const textarea = document.getElementById('evalPasteTextarea');
+    const previewBox = document.getElementById('evalPastePreviewBox');
+    const applyBtn = document.getElementById('evalBtnApplyPaste');
+    if (!textarea || !previewBox) return;
+
+    const text = textarea.value.trim();
+    if (!text) {
+      if (typeof toast === 'function') toast('Pega primero los datos antes de previsualizar.');
+      return;
+    }
+
+    const lines = text.split(/\r?\n/).map(l => l.split('\t').map(c => c.trim()));
+    const students = getStudentsList();
+
+    let validCount = 0;
+    let previewHtml = `<table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+      <thead><tr style="border-bottom: 1px solid var(--line);"><th style="text-align: left;">No. Alumno</th><th>Valores detectados</th><th>Estado</th></tr></thead><tbody>`;
+
+    lines.slice(0, 35).forEach((row, idx) => {
+      const s = students[idx];
+      const num = s ? resolveOfficialListNumber(s) : idx + 1;
+      const name = s ? (s.apellidos ? `${s.apellidos} ${s.nombres || ''}` : s.nombre) : '—';
+      const val = row[0];
+
+      let status = '<span style="color: #1b7c4b;">Válido</span>';
+      if (val === '' || val === undefined) {
+        status = '<span style="color: var(--muted);">Vacío (sin cambio)</span>';
+      } else {
+        const numVal = Number(val);
+        if (isNaN(numVal) || numVal < 0 || numVal > 10) {
+          status = '<span style="color: #a32929;">Inválido (no numérico / fuera de rango)</span>';
+        } else {
+          validCount++;
+        }
+      }
+
+      previewHtml += `<tr style="border-bottom: 1px solid #f1f5f8;">
+        <td><b>${num < 10 ? '0' + num : num}.</b> ${name}</td>
+        <td style="text-align: center; font-weight: 700;">${val !== '' ? val : '—'}</td>
+        <td style="text-align: right;">${status}</td>
+      </tr>`;
+    });
+
+    previewHtml += '</tbody></table>';
+    previewBox.innerHTML = previewHtml;
+    previewBox.style.display = 'block';
+
+    if (applyBtn) {
+      applyBtn.disabled = validCount === 0;
+    }
+  }
+
+  function applyPaste() {
+    const textarea = document.getElementById('evalPasteTextarea');
+    const targetSelect = document.getElementById('evalPasteFieldSelect');
+    if (!textarea || !targetSelect) return;
+
+    const lines = textarea.value.trim().split(/\r?\n/).map(l => l.split('\t').map(c => c.trim()));
+    const students = getStudentsList();
+    const targetField = targetSelect.value;
+    const t = evalState.trimester;
+
+    let appliedCount = 0;
+
+    lines.slice(0, 35).forEach((row, idx) => {
+      const s = students[idx];
+      if (!s) return;
+
+      if (targetField === 'all-exams') {
+        EVAL_FIELDS.forEach((f, cIdx) => {
+          const val = row[cIdx];
+          if (val !== undefined && val !== '') {
+            const num = Number(val);
+            if (!isNaN(num) && num >= 0 && num <= 10) {
+              setStudentFieldData(s.id, f, { manualExam: num }, t);
+              appliedCount++;
+            }
+          }
+        });
+      } else {
+        const val = row[0];
+        if (val !== undefined && val !== '') {
+          const num = Number(val);
+          if (!isNaN(num) && num >= 0 && num <= 10) {
+            setStudentFieldData(s.id, targetField, { manualExam: num }, t);
+            appliedCount++;
+          }
+        }
+      }
+    });
+
+    closePasteModal();
+    renderCapturaGrupal();
+    if (typeof toast === 'function') {
+      toast(`${appliedCount} calificaciones aplicadas correctamente.`);
+    }
+  }
+
+  /**
+   * Autoriza individualmente una materia de un alumno
+   */
+  function authorizeSubject(studentId, subject, trimester = evalState.trimester) {
+    const evalData = calculateStudentFullEvaluation(studentId, trimester);
+    const sub = evalData.subjects[subject];
+    if (!sub || sub.finalGrade === null) {
+      if (typeof toast === 'function') toast('No se puede autorizar una materia con información pendiente.');
+      return;
+    }
+
+    setStudentFieldData(studentId, subject, {
+      isAuthorized: true,
+      authorizedGrade: sub.finalGrade,
+      authorizedAt: new Date().toISOString()
+    }, trimester);
+
+    renderCapturaIndividual();
+    renderCapturaGrupal();
+    renderTrackingPanel();
+    if (typeof toast === 'function') {
+      toast(`Calificación definitiva de ${EvaluacionEngine.formatGrade(sub.finalGrade)} autorizada para ${subject}.`);
+    }
+  }
+
+  /**
+   * Autoriza los 4 campos formativos de un alumno
+   */
+  function authorizeStudent(studentId, trimester = evalState.trimester) {
+    const evalData = calculateStudentFullEvaluation(studentId, trimester);
+    let authCount = 0;
+
+    EVAL_FIELDS.forEach(f => {
+      const sub = evalData.subjects[f];
+      if (sub && sub.finalGrade !== null) {
+        setStudentFieldData(studentId, f, {
+          isAuthorized: true,
+          authorizedGrade: sub.finalGrade,
+          authorizedAt: new Date().toISOString()
+        }, trimester);
+        authCount++;
+      }
+    });
+
+    renderCapturaIndividual();
+    renderCapturaGrupal();
+    renderTrackingPanel();
+    if (typeof toast === 'function') {
+      toast(`${authCount} de 4 campos formativos autorizados para este alumno.`);
+    }
+  }
+
+  /**
+   * Autoriza calificaciones completas del grupo para los alumnos sin pendientes
+   */
+  function authorizeGroup(trimester = evalState.trimester) {
+    const students = getStudentsList();
+    let totalAuth = 0;
+
+    students.forEach(s => {
+      const evalData = calculateStudentFullEvaluation(s.id, trimester);
+      EVAL_FIELDS.forEach(f => {
+        const sub = evalData.subjects[f];
+        if (sub && sub.finalGrade !== null && !sub.isAuthorized) {
+          setStudentFieldData(s.id, f, {
+            isAuthorized: true,
+            authorizedGrade: sub.finalGrade,
+            authorizedAt: new Date().toISOString()
+          }, trimester);
+          totalAuth++;
+        }
+      });
+    });
+
+    renderCapturaGrupal();
+    renderCapturaIndividual();
+    renderTrackingPanel();
+    if (typeof toast === 'function') {
+      toast(`${totalAuth} calificaciones de materias autorizadas a nivel grupal.`);
+    }
+  }
   window.actions = window.actions || {};
   Object.assign(window.actions, {
     'eval-select-trimester': btn => {
@@ -2589,11 +3564,9 @@
     },
     'eval-open-student': btn => {
       const studentId = btn?.dataset?.id;
-      const student = (getStudentsList() || []).find(s => String(s.id) === String(studentId));
-      const sName = student ? (typeof fullName === 'function' ? fullName(student) : student.nombres) : 'el alumno';
-      const num = student ? resolveOfficialListNumber(student) : '';
-      if (typeof toast === 'function') {
-        toast(`La captura detallada para ${sName} (No. ${num}) se habilitará en la Etapa 5.`);
+      if (studentId) {
+        evalState.indStudentId = studentId;
+        switchEvalTab('captura-individual');
       }
     },
     'open-evaluaciones-trimestrales': () => {
@@ -2655,6 +3628,91 @@
     },
     'eval-reset-manual-adjustment': () => {
       resetManualAdjustmentFromUI();
+    },
+
+    // Acciones de Captura Grupal e Individual (Etapa 5)
+    'eval-set-grupal-subview': btn => {
+      const sub = btn?.dataset?.subview;
+      if (sub) {
+        evalState.grupalSubview = sub;
+        renderCapturaGrupal();
+      }
+    },
+    'eval-open-paste-modal': () => openPasteModal(),
+    'eval-close-paste-modal': () => closePasteModal(),
+    'eval-preview-paste': () => previewPaste(),
+    'eval-apply-paste': () => applyPaste(),
+    'eval-authorize-group': () => authorizeGroup(),
+    'eval-save-captura-draft': () => {
+      saveCapturaStore();
+      if (typeof toast === 'function') toast('Borrador de calificaciones guardado localmente.');
+    },
+    'eval-restore-captura': () => {
+      evalState.capturaStore = loadCapturaStore();
+      evalState.hasUnsavedCaptura = false;
+      const b = document.getElementById('evalCapturaUnsavedNotice');
+      if (b) b.style.display = 'none';
+      renderCapturaGrupal();
+      renderCapturaIndividual();
+      if (typeof toast === 'function') toast('Datos de captura restaurados desde el almacenamiento local.');
+    },
+    'eval-ind-prev-student': () => {
+      const students = getStudentsList();
+      if (!students || !students.length) return;
+      const curIdx = students.findIndex(s => String(s.id) === String(evalState.indStudentId));
+      const nextIdx = curIdx > 0 ? curIdx - 1 : students.length - 1;
+      evalState.indStudentId = students[nextIdx].id;
+      renderCapturaIndividual();
+    },
+    'eval-ind-next-student': () => {
+      const students = getStudentsList();
+      if (!students || !students.length) return;
+      const curIdx = students.findIndex(s => String(s.id) === String(evalState.indStudentId));
+      const nextIdx = (curIdx >= 0 && curIdx < students.length - 1) ? curIdx + 1 : 0;
+      evalState.indStudentId = students[nextIdx].id;
+      renderCapturaIndividual();
+    },
+    'eval-ind-next-pending': () => {
+      const students = getStudentsList();
+      if (!students || !students.length) return;
+      const curIdx = students.findIndex(s => String(s.id) === String(evalState.indStudentId));
+      let pendingFound = null;
+      for (let i = 1; i <= students.length; i++) {
+        const idx = (curIdx + i) % students.length;
+        const s = students[idx];
+        const ev = calculateStudentFullEvaluation(s.id, evalState.trimester);
+        if (ev.status === 'incompleta' || !ev.isComplete) {
+          pendingFound = s.id;
+          break;
+        }
+      }
+      if (pendingFound) {
+        evalState.indStudentId = pendingFound;
+        renderCapturaIndividual();
+      } else {
+        if (typeof toast === 'function') toast('Todos los alumnos tienen sus 4 campos formativos evaluados.');
+      }
+    },
+    'eval-ind-switch-subtab': btn => {
+      const sub = btn?.dataset?.subtab;
+      if (sub) {
+        evalState.indSubtab = sub;
+        renderCapturaIndividual();
+      }
+    },
+    'eval-authorize-subject': btn => {
+      const sId = btn?.dataset?.id;
+      const subj = btn?.dataset?.subject;
+      if (sId && subj) authorizeSubject(sId, subj);
+    },
+    'eval-authorize-student': btn => {
+      const sId = btn?.dataset?.id;
+      if (sId) authorizeStudent(sId);
+    },
+    'eval-open-individual': btn => {
+      const sId = btn?.dataset?.id;
+      if (sId) evalState.indStudentId = sId;
+      switchEvalTab('captura-individual');
     }
   });
 
@@ -2664,6 +3722,18 @@
   window.selectEvalTrimester = selectEvalTrimester;
   window.switchEvalTab = switchEvalTab;
   window.renderCalculoPreliminar = renderCalculoPreliminar;
+  window.renderCapturaGrupal = renderCapturaGrupal;
+  window.renderCapturaIndividual = renderCapturaIndividual;
+  window.openPasteModal = openPasteModal;
+  window.closePasteModal = closePasteModal;
+  window.previewPaste = previewPaste;
+  window.applyPaste = applyPaste;
+  window.authorizeSubject = authorizeSubject;
+  window.authorizeStudent = authorizeStudent;
+  window.authorizeGroup = authorizeGroup;
+  window.calculateStudentFullEvaluation = calculateStudentFullEvaluation;
+  window.getStudentFieldData = getStudentFieldData;
+  window.setStudentFieldData = setStudentFieldData;
   window.saveEvalConfig = saveConfig;
   window.saveEvalConfigDraft = saveConfigDraft;
   window.getEvalConfig = () => evalState.config;

@@ -1826,23 +1826,223 @@
           </div>
         </div>
 
-        <!-- Placeholders de sub-pestañas para etapas posteriores -->
+        <!-- Vista del Tab: Captura Grupal (Etapa 5) -->
         <div id="evalTabCapturaGrupal" class="eval-tab-content hidden-tab">
-          <article class="panel eval-placeholder-panel">
-            <div class="eval-placeholder-icon">📋</div>
-            <h3>Captura grupal de evaluaciones</h3>
-            <p class="muted">Esta funcionalidad se habilitará en la <strong>Etapa 5: Modalidades de captura</strong>. Permitirá registrar rápidamente exámenes escritos, promedios y ajustes para todo el grupo en una sola matriz.</p>
-            <button class="btn" data-action="eval-switch-tab" data-tab="seguimiento">Volver al panel de seguimiento</button>
-          </article>
+          <div class="eval-grupal-container">
+            <!-- Barra superior de herramientas y filtros de captura grupal -->
+            <article class="panel eval-grupal-toolbar-panel">
+              <div class="eval-grupal-toolbar-top">
+                <div class="eval-subview-selector" role="group" aria-label="Subvistas de captura grupal">
+                  <button class="btn small active" data-action="eval-set-grupal-subview" data-subview="examenes" title="Captura rápida de exámenes escritos de los 4 campos formativos">
+                    📝 Vista A. Exámenes escritos
+                  </button>
+                  <button class="btn small" data-action="eval-set-grupal-subview" data-subview="criterios" title="Calificaciones y criterios desglosados por campo formativo">
+                    📊 Vista B. Calificaciones por campo
+                  </button>
+                  <button class="btn small" data-action="eval-set-grupal-subview" data-subview="resumen" title="Resumen general con los 4 campos y promedio trimestral">
+                    📋 Vista C. Resumen general
+                  </button>
+                </div>
+
+                <div class="button-row" style="margin-left: auto; gap: 8px;">
+                  <button class="btn small" data-action="eval-open-paste-modal" title="Pegar calificaciones copiadas de Excel o Google Sheets">
+                    📋 Pegar calificaciones
+                  </button>
+                  <button class="btn small primary" data-action="eval-authorize-group" title="Autorizar calificaciones completas del grupo">
+                    ✓ Autorizar resultados visibles
+                  </button>
+                </div>
+              </div>
+
+              <div class="eval-grupal-toolbar-bottom">
+                <div class="eval-filter-group" id="evalGrupalSubjectFilterGroup" style="display: none;">
+                  <label for="evalGrupalSubjectSelect">Campo formativo:</label>
+                  <select id="evalGrupalSubjectSelect" class="input compact-input">
+                    <option value="Lenguajes">Lenguajes</option>
+                    <option value="Saberes y Pensamiento Científico">Saberes y Pensamiento Científico</option>
+                    <option value="Ética, Naturaleza y Sociedades">Ética, Naturaleza y Sociedades</option>
+                    <option value="De lo Humano y lo Comunitario">De lo Humano y lo Comunitario</option>
+                  </select>
+                </div>
+
+                <div class="eval-filter-group">
+                  <label for="evalGrupalModeSelect">Modalidad grupal:</label>
+                  <select id="evalGrupalModeSelect" class="input compact-input">
+                    <option value="mixta">Mixta (predeterminada)</option>
+                    <option value="asistida">Asistida (automática)</option>
+                    <option value="manual">Manual (directa)</option>
+                  </select>
+                </div>
+
+                <div class="eval-filter-group" style="flex: 2; min-width: 180px;">
+                  <label for="evalGrupalSearch">Buscar alumno:</label>
+                  <input type="text" id="evalGrupalSearch" class="input compact-input" placeholder="Nombre o número oficial de lista...">
+                </div>
+
+                <div class="eval-filter-group">
+                  <label for="evalGrupalStatusFilter">Estado:</label>
+                  <select id="evalGrupalStatusFilter" class="input compact-input">
+                    <option value="all">Todos los estados</option>
+                    <option value="pending">Con información pendiente</option>
+                    <option value="calculated">Calculados sin autorizar</option>
+                    <option value="authorized">Autorizados</option>
+                    <option value="adjusted">Con ajuste docente</option>
+                  </select>
+                </div>
+              </div>
+            </article>
+
+            <!-- Matriz de Captura Grupal -->
+            <article class="panel eval-grupal-table-panel">
+              <div class="eval-grupal-table-meta-bar">
+                <span id="evalGrupalMatrixTitle" style="font-weight: 700; color: var(--navy); font-size: 14px;">Matriz de Exámenes Escritos</span>
+                <span class="muted" style="font-size: 12px;">Usa Enter o flechas para avanzar entre alumnos. Tab para siguiente campo.</span>
+                <span id="evalGrupalStatsBadge" class="badge" style="margin-left: auto;">35 alumnos</span>
+              </div>
+
+              <div class="table-wrap eval-matrix-table-wrap" id="evalGrupalTableWrap">
+                <!-- Tabla dinámica renderizada según la subvista activa -->
+              </div>
+            </article>
+
+            <!-- Barra inferior de guardado de captura grupal -->
+            <div class="eval-config-actions-bar">
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <span id="evalCapturaUnsavedNotice" class="eval-unsaved-badge" style="display: none;">● Calificaciones modificadas sin guardar</span>
+                <span id="evalCapturaPersistStatus" class="muted" style="font-size: 13px;">✓ Cambios guardados localmente</span>
+              </div>
+              <div class="button-row">
+                <button class="btn" data-action="eval-restore-captura" title="Descartar cambios no confirmados">Descartar cambios</button>
+                <button class="btn primary" data-action="eval-save-captura-draft">Guardar borrador de captura</button>
+              </div>
+            </div>
+          </div>
         </div>
 
+        <!-- Vista del Tab: Captura Individual (Etapa 5) -->
         <div id="evalTabCapturaIndividual" class="eval-tab-content hidden-tab">
-          <article class="panel eval-placeholder-panel">
-            <div class="eval-placeholder-icon">👤</div>
-            <h3>Captura individual por alumno</h3>
-            <p class="muted">Esta funcionalidad se integrará en la <strong>Etapa 5 y Etapa 6</strong>. Permitirá desglosar los 4 campos formativos, los 23 indicadores de desempeño integral y el mensaje personalizado de hasta 245 caracteres.</p>
-            <button class="btn" data-action="eval-switch-tab" data-tab="seguimiento">Volver al panel de seguimiento</button>
-          </article>
+          <div class="eval-ind-container">
+            <!-- Barra de Navegación entre Alumnos -->
+            <article class="panel eval-ind-nav-panel">
+              <div class="eval-ind-nav-bar">
+                <button class="btn small" data-action="eval-ind-prev-student" title="Alumno anterior (Flecha izquierda)">◀ Anterior</button>
+
+                <div class="eval-ind-student-select-wrap">
+                  <label for="evalIndStudentSelect" class="sr-only">Seleccionar alumno:</label>
+                  <select id="evalIndStudentSelect" class="input">
+                    <!-- Opciones de los 35 alumnos -->
+                  </select>
+                </div>
+
+                <button class="btn small" data-action="eval-ind-next-student" title="Alumno siguiente (Flecha derecha)">Siguiente ▶</button>
+                <button class="btn small secondary" data-action="eval-ind-next-pending" title="Saltar al siguiente alumno con calificaciones pendientes">Siguiente pendiente ⏭</button>
+              </div>
+
+              <!-- Tarjeta de Perfil del Alumno Seleccionado -->
+              <div class="eval-ind-student-profile-bar" id="evalIndStudentProfileBar">
+                <!-- Renderizado dinámico del alumno -->
+              </div>
+            </article>
+
+            <!-- Pestañas internas de la evaluación individual -->
+            <div class="eval-ind-subtabs">
+              <button class="eval-ind-subtab-btn active" data-action="eval-ind-switch-subtab" data-subtab="academicas">
+                📚 1. Calificaciones académicas
+              </button>
+              <button class="eval-ind-subtab-btn" data-action="eval-ind-switch-subtab" data-subtab="desempeno">
+                ⭐ 2. Desempeño integral
+              </button>
+              <button class="eval-ind-subtab-btn" data-action="eval-ind-switch-subtab" data-subtab="mensaje">
+                💬 3. Mensaje personalizado
+              </button>
+              <button class="eval-ind-subtab-btn" data-action="eval-ind-switch-subtab" data-subtab="resumen">
+                📊 4. Resumen de evaluación
+              </button>
+            </div>
+
+            <!-- Subtab 1: Calificaciones Académicas -->
+            <div id="evalIndSubtabAcademicas" class="eval-ind-subtab-content active">
+              <div class="eval-ind-subjects-grid" id="evalIndSubjectsGrid">
+                <!-- 4 tarjetas detalladas de los campos formativos -->
+              </div>
+
+              <!-- Botones de Acción Individual -->
+              <div class="eval-ind-bottom-actions">
+                <div class="eval-ind-trimester-avg-box">
+                  <span style="font-weight: 700; color: var(--navy); font-size: 13px;">Promedio general trimestral:</span>
+                  <b id="evalIndTrimesterAvgDisplay" style="font-size: 20px; color: var(--teal); margin-left: 8px;">—</b>
+                  <span id="evalIndTrimesterAvgStatus" class="muted" style="font-size: 11px; margin-left: 6px;">(Requiere autorizar los 4 campos)</span>
+                </div>
+                <div class="button-row" style="margin-left: auto;">
+                  <button class="btn primary" data-action="eval-authorize-student" title="Autorizar todas las calificaciones académicas de este alumno">
+                    ✓ Autorizar los 4 campos del alumno
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Subtab 2: Desempeño Integral (Placeholder Etapa 6) -->
+            <div id="evalIndSubtabDesempeno" class="eval-ind-subtab-content hidden-tab">
+              <article class="panel eval-placeholder-panel">
+                <div class="eval-placeholder-icon">⭐</div>
+                <h3>2. Desempeño integral del alumno</h3>
+                <p class="muted">La captura y evaluación de los <strong>23 indicadores de desempeño integral</strong> (Autonomía, Pensamiento Crítico, Convivencia y Participación) se implementará en la <strong>Etapa 6: Desempeño integral y mensajes personalizados</strong>.</p>
+              </article>
+            </div>
+
+            <!-- Subtab 3: Mensaje Personalizado (Placeholder Etapa 6) -->
+            <div id="evalIndSubtabMensaje" class="eval-ind-subtab-content hidden-tab">
+              <article class="panel eval-placeholder-panel">
+                <div class="eval-placeholder-icon">💬</div>
+                <h3>3. Mensaje personalizado para el Portal Familiar</h3>
+                <p class="muted">El <strong>banco de recomendaciones institucionales</strong> y la redacción de mensajes personalizados de hasta <strong>245 caracteres</strong> se habilitará en la <strong>Etapa 6</strong>.</p>
+              </article>
+            </div>
+
+            <!-- Subtab 4: Resumen de Evaluación -->
+            <div id="evalIndSubtabResumen" class="eval-ind-subtab-content hidden-tab">
+              <article class="panel" id="evalIndSummaryPanel">
+                <!-- Resumen consolidado del alumno -->
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Accesible de Pegado Masivo -->
+        <div id="evalPasteModal" class="eval-modal-backdrop" style="display: none;">
+          <div class="eval-modal-dialog">
+            <div class="eval-modal-header">
+              <h3>📋 Pegado masivo de calificaciones</h3>
+              <button class="eval-modal-close" data-action="eval-close-paste-modal" aria-label="Cerrar modal">&times;</button>
+            </div>
+            <div class="eval-modal-body">
+              <p class="muted" style="font-size: 13px; margin-bottom: 12px;">
+                Copia las calificaciones desde una columna o tabla de Excel / Google Sheets y pégalas aquí. El sistema respetará el orden oficial de la lista de alumnos (01 al 35). Las celdas vacías no se convertirán en cero.
+              </p>
+
+              <div class="eval-paste-controls-row" style="margin-bottom: 10px;">
+                <label for="evalPasteFieldSelect" style="font-size: 12px; font-weight: 700;">Destino de los datos pegados:</label>
+                <select id="evalPasteFieldSelect" class="input compact-input">
+                  <option value="Lenguajes">Examen de Lenguajes</option>
+                  <option value="Saberes y Pensamiento Científico">Examen de Saberes y Pensamiento Científico</option>
+                  <option value="Ética, Naturaleza y Sociedades">Examen de Ética, Naturaleza y Sociedades</option>
+                  <option value="De lo Humano y lo Comunitario">Examen de De lo Humano y lo Comunitario</option>
+                  <option value="all-exams">Matriz completa de los 4 exámenes (4 columnas)</option>
+                </select>
+              </div>
+
+              <textarea id="evalPasteTextarea" class="input eval-paste-textarea" rows="8" placeholder="Pega aquí los valores copiados (Ctrl+V)...&#10;Ejemplo:&#10;8.5&#10;9.0&#10;10.0&#10;7.5"></textarea>
+
+              <div id="evalPastePreviewBox" class="eval-paste-preview-box" style="display: none;">
+                <!-- Vista previa de las filas validadas -->
+              </div>
+            </div>
+            <div class="eval-modal-footer">
+              <button class="btn" data-action="eval-close-paste-modal">Cancelar</button>
+              <button class="btn secondary" data-action="eval-preview-paste">Previsualizar</button>
+              <button class="btn primary" id="evalBtnApplyPaste" data-action="eval-apply-paste" disabled>Aplicar calificaciones</button>
+            </div>
+          </div>
         </div>
 
         <div id="evalTabCriterios" class="eval-tab-content hidden-tab">
