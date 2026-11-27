@@ -428,39 +428,51 @@ function syncTrimesterEvaluationBatch_(payload, sessionToken) {
         if (!EVAL_CAMPOS_FORMATIVOS[c.campoFormativo]) {
           throw new Error('Campo formativo no reconocido: ' + c.campoFormativo);
         }
-        var califId = ciclo + '_' + grupo + '_T' + t + '_' + c.alumnoId + '_' + c.campoFormativo;
-        var rec = {
-          id: califId,
-          cicloEscolar: ciclo,
-          grupo: grupo,
-          trimestre: t,
-          alumnoId: String(c.alumnoId),
-          numeroLista: c.numeroLista ? parseInt(c.numeroLista, 10) : null,
-          campoFormativo: c.campoFormativo,
-          modalidad: c.modalidad || 'asistida',
-          examenGrade: validateGradeValue_(c.examenGrade),
-          desgloseCriteriosJson: JSON.stringify(c.desgloseCriterios || {}),
-          calcGrade: validateGradeValue_(c.calcGrade),
-          manualGrade: validateGradeValue_(c.manualGrade),
-          motivoAjuste: c.motivoAjuste || '',
-          authorizedGrade: validateGradeValue_(c.authorizedGrade),
-          isAuthorized: Boolean(c.isAuthorized),
-          status: c.status || 'PENDIENTE',
-          batchId: batchId,
-          estadoConsolidacion: 'en_preparacion',
-          version: payload.version || 1,
-          actualizadoEn: now,
-          actualizadoPor: user
-        };
-        if (typeof upsertRow_ === 'function') {
-          upsertRow_('EvalCalificaciones', 'id', rec);
+        var califBatch = [];
+        payload.calificaciones.forEach(function (c) {
+          if (!c.alumnoId || !c.campoFormativo) return;
+          if (!EVAL_CAMPOS_FORMATIVOS[c.campoFormativo]) {
+            throw new Error('Campo formativo no reconocido: ' + c.campoFormativo);
+          }
+          var califId = ciclo + '_' + grupo + '_T' + t + '_' + c.alumnoId + '_' + c.campoFormativo;
+          califBatch.push({
+            id: califId,
+            cicloEscolar: ciclo,
+            grupo: grupo,
+            trimestre: t,
+            alumnoId: String(c.alumnoId),
+            numeroLista: c.numeroLista ? parseInt(c.numeroLista, 10) : null,
+            campoFormativo: c.campoFormativo,
+            modalidad: c.modalidad || 'asistida',
+            examenGrade: validateGradeValue_(c.examenGrade),
+            desgloseCriteriosJson: JSON.stringify(c.desgloseCriterios || {}),
+            calcGrade: validateGradeValue_(c.calcGrade),
+            manualGrade: validateGradeValue_(c.manualGrade),
+            motivoAjuste: c.motivoAjuste || '',
+            authorizedGrade: validateGradeValue_(c.authorizedGrade),
+            isAuthorized: Boolean(c.isAuthorized),
+            status: c.status || 'PENDIENTE',
+            batchId: batchId,
+            estadoConsolidacion: 'en_preparacion',
+            version: payload.version || 1,
+            actualizadoEn: now,
+            actualizadoPor: user
+          });
+          result.calificacionesCount++;
+        });
+
+        if (typeof upsertObjectsBatch_ === 'function') {
+          upsertObjectsBatch_('EvalCalificaciones', califBatch, 'id');
+        } else if (typeof upsertObject_ === 'function') {
+          califBatch.forEach(function (rec) { upsertObject_('EvalCalificaciones', rec, 'id'); });
+        } else if (typeof upsertRow_ === 'function') {
+          califBatch.forEach(function (rec) { upsertRow_('EvalCalificaciones', 'id', rec); });
         }
-        result.calificacionesCount++;
-      });
-    }
+      }
 
     // 3. Guardar Desempeño Integral por lotes (35 registros de alumnos, 23 indicadores validados)
     if (Array.isArray(payload.desempeno) && payload.desempeno.length > 0) {
+      var desempBatch = [];
       payload.desempeno.forEach(function (d) {
         if (!d.alumnoId) return;
         var cleanRatings = {};
@@ -478,7 +490,7 @@ function syncTrimesterEvaluationBatch_(payload, sessionToken) {
         }
 
         var desempId = ciclo + '_' + grupo + '_T' + t + '_' + d.alumnoId;
-        var desempRec = {
+        desempBatch.push({
           id: desempId,
           cicloEscolar: ciclo,
           grupo: grupo,
@@ -494,21 +506,27 @@ function syncTrimesterEvaluationBatch_(payload, sessionToken) {
           version: payload.version || 1,
           actualizadoEn: now,
           actualizadoPor: user
-        };
-        if (typeof upsertRow_ === 'function') {
-          upsertRow_('EvalDesempeno', 'id', desempRec);
-        }
+        });
         result.desempenoCount++;
       });
+
+      if (typeof upsertObjectsBatch_ === 'function') {
+        upsertObjectsBatch_('EvalDesempeno', desempBatch, 'id');
+      } else if (typeof upsertObject_ === 'function') {
+        desempBatch.forEach(function (rec) { upsertObject_('EvalDesempeno', rec, 'id'); });
+      } else if (typeof upsertRow_ === 'function') {
+        desempBatch.forEach(function (rec) { upsertRow_('EvalDesempeno', 'id', rec); });
+      }
     }
 
     // 4. Guardar Mensajes Familiares por lotes (máx 245 car)
     if (Array.isArray(payload.mensajes) && payload.mensajes.length > 0) {
+      var mensajesBatch = [];
       payload.mensajes.forEach(function (m) {
         if (!m.alumnoId) return;
         var cleanMsg = validateFamilyMessage_(m.mensaje);
         var msgId = ciclo + '_' + grupo + '_T' + t + '_' + m.alumnoId;
-        var msgRec = {
+        mensajesBatch.push({
           id: msgId,
           cicloEscolar: ciclo,
           grupo: grupo,
@@ -524,12 +542,17 @@ function syncTrimesterEvaluationBatch_(payload, sessionToken) {
           version: payload.version || 1,
           actualizadoEn: now,
           actualizadoPor: user
-        };
-        if (typeof upsertRow_ === 'function') {
-          upsertRow_('EvalMensajes', 'id', msgRec);
-        }
+        });
         result.mensajesCount++;
       });
+
+      if (typeof upsertObjectsBatch_ === 'function') {
+        upsertObjectsBatch_('EvalMensajes', mensajesBatch, 'id');
+      } else if (typeof upsertObject_ === 'function') {
+        mensajesBatch.forEach(function (rec) { upsertObject_('EvalMensajes', rec, 'id'); });
+      } else if (typeof upsertRow_ === 'function') {
+        mensajesBatch.forEach(function (rec) { upsertRow_('EvalMensajes', 'id', rec); });
+      }
     }
 
     // 5. Registrar y CONSOLIDAR versión en historial de auditoría
@@ -555,7 +578,9 @@ function syncTrimesterEvaluationBatch_(payload, sessionToken) {
       usuario: user,
       estadoConsolidacion: 'consolidado'
     };
-    if (typeof appendRow_ === 'function') {
+    if (typeof appendObjects_ === 'function') {
+      appendObjects_('EvalVersiones', [versionRec]);
+    } else if (typeof appendRow_ === 'function') {
       appendRow_('EvalVersiones', versionRec);
     }
 
@@ -583,22 +608,83 @@ IMPORTANTE: No modificar ninguna otra rama existente en Api.gs.
 */
 
 // ----------------------------------------------------------------------------
-// PARTE 6: PROCEDIMIENTO CONTROLADO DE DESPLIEGUE Y REVERSIÓN (ROLLBACK)
+// PARTE 6: FUNCIONES DE VERIFICACIÓN Y APLICACIÓN SEGURA (ESTILO 4.º A)
+// ----------------------------------------------------------------------------
+
+/**
+ * Modo de inspección previa (dry-run): 0 escrituras.
+ * Comprueba que el libro y el esquema DB estén listos para Evaluaciones Trimestrales.
+ */
+function verificarInstalacionEvaluacionesTrimestrales() {
+  var ss = typeof getSpreadsheet_ === 'function' ? getSpreadsheet_() : SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) throw new Error('No se pudo acceder al libro de cálculo.');
+  var targetSheets = ['EvalConfig', 'EvalActividades', 'EvalCalificaciones', 'EvalDesempeno', 'EvalMensajes', 'EvalBancoRecomendaciones', 'EvalVersiones'];
+  var existentes = [];
+  var pendientes = [];
+  targetSheets.forEach(function (name) {
+    if (ss.getSheetByName(name)) existentes.push(name);
+    else pendientes.push(name);
+  });
+  var r = {
+    ok: true,
+    totalHojasRequeridas: targetSheets.length,
+    hojasExistentes: existentes,
+    hojasPorCrear: pendientes,
+    escrituras: 0,
+    listoParaInstalar: true
+  };
+  console.log(JSON.stringify(r));
+  return r;
+}
+
+/**
+ * Modo de aplicación definitiva con bloqueo exclusivo DocumentLock.
+ * Crea las 7 hojas oficiales sin modificar ni tocar las hojas preexistentes.
+ */
+function aplicarInstalacionEvaluacionesTrimestrales() {
+  var lock = LockService.getDocumentLock();
+  if (!lock) throw new Error('Se requiere un proyecto vinculado a la hoja de cálculo.');
+  lock.waitLock(20000);
+  try {
+    var mig = migrateEvaluacionesTrimestralesSchema_();
+    SpreadsheetApp.flush();
+    var ver = verificarInstalacionEvaluacionesTrimestrales();
+    if (ver.hojasPorCrear.length > 0) {
+      throw new Error('Verificación posterior fallida: aún faltan hojas por inicializar.');
+    }
+    var r = {
+      ok: true,
+      mensaje: 'Instalación de Evaluaciones Trimestrales completada con éxito.',
+      hojasCreadas: mig.created,
+      hojasVerificadas: mig.verified
+    };
+    console.log(JSON.stringify(r));
+    return r;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ----------------------------------------------------------------------------
+// PARTE 7: PROCEDIMIENTO CONTROLADO DE DESPLIEGUE Y REVERSIÓN (ROLLBACK)
 // ----------------------------------------------------------------------------
 /*
 PROCEDIMIENTO DE DESPLIEGUE CONTROLADO:
 1. Respaldo: Crear una copia del Google Spreadsheet actual (Archivo > Crear una copia).
 2. Database.gs: Copiar únicamente las 7 claves del objeto DB (Parte 1).
-3. EvaluacionesTrimestrales.gs: Crear este nuevo archivo en el editor de Apps Script y pegar las Partes 2, 3 y 4.
+3. EvaluacionesTrimestrales.gs: Crear este nuevo archivo en el editor de Apps Script y pegar este contenido.
 4. Api.gs: Agregar las 2 ramas de acción al router de peticiones (Parte 5).
-5. Migración: En el editor de Apps Script, seleccionar y ejecutar la función 'migrateEvaluacionesTrimestralesSchema_()'.
-6. Verificación: Confirmar que se crearon las 7 hojas vacías y que las hojas existentes permanecen intactas.
+5. Verificación previa: Ejecutar 'verificarInstalacionEvaluacionesTrimestrales()' (modo seco, 0 escrituras).
+6. Aplicación: Ejecutar 'aplicarInstalacionEvaluacionesTrimestrales()' en el editor de Apps Script.
 7. Nueva Versión: Realizar una nueva versión de implementación (Implementar > Administrar implementaciones > Nueva versión).
 
-PROCEDIMIENTO DE REVERSIÓN INMEDIATA (ROLLBACK):
+PROCEDIMIENTO DE REVERSIÓN INMEDIATA (ROLLBACK SIN PÉRDIDA DE DATOS):
+REGLA INMUTABLE: El procedimiento de reversión conserva de manera intacta cualquier información académica almacenada.
+NO SE AUTORIZA LA ELIMINACIÓN DE HOJAS CON DATOS REALES.
+
 Si se presenta alguna incompatibilidad o anomalía:
 1. Reversión en Apps Script: En 'Administrar implementaciones', volver a apuntar la URL Web App a la versión de despliegue anterior.
-2. Reversión en Api.gs: Retirar o comentar las dos ramas añadidas en el switch de Api.gs.
-3. Reversión en Google Sheets: Eliminar las 7 hojas creadas (EvalConfig, EvalActividades, EvalCalificaciones, EvalDesempeno, EvalMensajes, EvalBancoRecomendaciones, EvalVersiones).
-Ninguna hoja preexistente (Alumnos, Clases, Evaluaciones, Asistencia, etc.) sufrirá impacto alguno.
+2. Reversión en Api.gs: Retirar o comentar las dos ramas añadidas ('getTrimesterEvaluationBundle' y 'syncTrimesterEvaluationBatch') en el switch de Api.gs.
+3. Conservación de datos en Google Sheets: CONSERVAR DE FORMA INTACTA E INMUTABLE TODAS LAS HOJAS Y REGISTROS (EvalConfig, EvalActividades, EvalCalificaciones, EvalDesempeno, EvalMensajes, EvalBancoRecomendaciones, EvalVersiones). Prohibido eliminar o vaciar hojas con datos reales.
+Cualquier información histórica o registros capturados permanecerán seguros para auditoría, consulta o reactivación futura sin riesgo de pérdida de datos.
 */
