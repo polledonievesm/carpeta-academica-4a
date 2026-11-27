@@ -146,9 +146,9 @@ async function runCDPTest() {
   await new Promise(r => setTimeout(r, 2500));
 
   // =========================================================================
-  // FASE 1: PRUEBAS FUNCIONALES EN DESKTOP (ETAPA 4 Y ETAPA 5)
+  // FASE 1: PRUEBAS FUNCIONALES EN DESKTOP (ETAPAS 4, 5 Y 6)
   // =========================================================================
-  console.log('[CDP SMOKE TEST] Ejecutando pruebas de la Etapa 4 y Etapa 5 en Desktop...');
+  console.log('[CDP SMOKE TEST] Ejecutando pruebas de la Etapa 4, Etapa 5 y Etapa 6 en Desktop...');
   const desktopEval = await sendCommand('Runtime.evaluate', {
     expression: `(function() {
       const results = {};
@@ -239,30 +239,88 @@ async function runCDPTest() {
       results.pasteAppliedSuccessfully = true;
       window.actions['eval-close-paste-modal']();
 
-      // 12. Navegación a Pestaña de Captura Individual
+      // --- VERIFICACIONES DE ETAPA 6 (DESEMPEÑO Y MENSAJES EN GRUPAL) ---
+      // 12. Subvista D: Desempeño Integral Grupal
+      window.actions['eval-set-grupal-subview']({ dataset: { subview: 'desempeno' } });
+      const desempRows = document.querySelectorAll('#evalGrupalTableBody tr');
+      results.desempGrupalRowsCount = desempRows.length;
+      results.has35StudentsInDesemp = (desempRows.length === 35);
+
+      // 13. Subvista E: Mensajes Familiares Grupal
+      window.actions['eval-set-grupal-subview']({ dataset: { subview: 'mensajes' } });
+      const msgRows = document.querySelectorAll('#evalGrupalTableBody tr');
+      results.msgGrupalRowsCount = msgRows.length;
+      results.has35StudentsInMsg = (msgRows.length === 35);
+
+      // --- VERIFICACIONES DE CAPTURA INDIVIDUAL (ETAPA 5 Y 6) ---
+      // 14. Navegación a Pestaña de Captura Individual
       window.switchEvalTab('captura-individual');
       const tabInd = document.getElementById('evalTabCapturaIndividual');
       results.tabIndActive = tabInd && !tabInd.classList.contains('hidden-tab');
 
-      // 13. Componentes de Vista Individual (Perfil de alumno, tarjetas de materia y subtabs)
+      // 15. Componentes de Vista Individual (Perfil de alumno y tarjetas de materia)
       const indStudentSelect = document.getElementById('evalIndStudentSelect');
       results.indStudentSelectPopulated = Boolean(indStudentSelect && indStudentSelect.options.length === 35);
       const subjectCards = document.querySelectorAll('.eval-ind-subject-card');
       results.indSubjectCardsCount = subjectCards.length; // 4 campos formativos
 
-      // 14. Navegación de alumno siguiente / anterior
+      // 16. Subtab 2: Desempeño Integral (23 indicadores oficiales)
+      window.actions['eval-ind-switch-subtab']({ dataset: { subtab: 'desempeno' } });
+      const indDesempenoActive = document.getElementById('evalIndSubtabDesempeno')?.classList.contains('active');
+      const indicatorCards = document.querySelectorAll('.eval-indicator-item');
+      results.desemp23IndicatorsRendered = (indicatorCards.length === 23);
+
+      // Valoración masiva rápida general a 'E'
+      window.actions['eval-ind-set-general-level']({ dataset: { level: 'E' } });
+      const progressText = document.getElementById('evalIndDesempenoProgressText')?.textContent || '';
+      results.all23ValuedGeneralE = progressText.includes('23 de 23');
+
+      // Deshacer acción masiva
+      window.actions['eval-ind-desempeno-undo']();
+      const progressUndone = document.getElementById('evalIndDesempenoProgressText')?.textContent || '';
+      results.desempUndoWorked = !progressUndone.includes('23 de 23');
+
+      // Reasignar 'E' para dejar completo
+      window.actions['eval-ind-set-general-level']({ dataset: { level: 'E' } });
+      window.actions['eval-save-desempeno-draft']();
+      results.desempDraftSaved = true;
+
+      // 17. Subtab 3: Mensaje Familiar y Banco de Recomendaciones
+      window.actions['eval-ind-switch-subtab']({ dataset: { subtab: 'mensaje' } });
+      const msgTextarea = document.getElementById('evalIndMessageTextarea');
+      const msgCounter = document.getElementById('evalIndMessageCharCount');
+      results.hasMsgTextarea = Boolean(msgTextarea && msgCounter);
+
+      // Abrir Modal de Banco de Recomendaciones
+      window.actions['eval-open-message-bank-modal']();
+      const bankModal = document.getElementById('evalMessageBankModal');
+      results.msgBankModalOpened = bankModal && !bankModal.classList.contains('hidden-control') && bankModal.style.display !== 'none';
+      const bankItems = document.querySelectorAll('.eval-bank-item');
+      results.msgBankHas20Items = (bankItems.length >= 20);
+
+      // Insertar recomendación del banco
+      const firstBankBtn = document.querySelector('.eval-bank-item button[data-action="eval-insert-banco-recommendation"]');
+      if (firstBankBtn) {
+        firstBankBtn.click();
+      }
+      results.msgInsertedFromBank = Boolean(msgTextarea && msgTextarea.value.length > 10 && msgTextarea.value.length <= 245);
+      window.actions['eval-close-message-bank-modal']();
+      window.actions['eval-save-student-message']();
+      results.msgSaved = true;
+
+      // 18. Subtab 4: Resumen y Estado Consolidado
+      window.actions['eval-ind-switch-subtab']({ dataset: { subtab: 'resumen' } });
+      const resumenPill = document.querySelector('#evalIndSummaryPanel .eval-overall-status-pill');
+      results.resumenCardRendered = Boolean(resumenPill);
+
+      // 19. Navegación de alumno siguiente / anterior
+      window.actions['eval-ind-switch-subtab']({ dataset: { subtab: 'academicas' } });
       const initialStudent = indStudentSelect?.value;
       window.actions['eval-ind-next-student']();
       const nextStudent = indStudentSelect?.value;
       results.indNextStudentNavigated = (initialStudent !== nextStudent);
 
-      // 15. Subtabs de Desempeño Integral y Mensaje (Placeholders de Etapa 6)
-      window.actions['eval-ind-switch-subtab']({ dataset: { subtab: 'desempeno' } });
-      const indDesempenoActive = document.getElementById('evalIndSubtabDesempeno')?.classList.contains('active');
-      window.actions['eval-ind-switch-subtab']({ dataset: { subtab: 'academicas' } });
-      results.indSubtabsFunctional = Boolean(indDesempenoActive);
-
-      // 16. Guardado de borrador de captura
+      // 20. Guardado de borrador de captura
       window.actions['eval-save-captura-draft']();
       results.capturaDraftSaved = true;
 
@@ -396,7 +454,7 @@ async function runCDPTest() {
   try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (e) {}
 
   console.log('\n============================================================');
-  console.log('[CDP SMOKE TEST] RESUMEN DE VERIFICACIÓN ETAPA 5');
+  console.log('[CDP SMOKE TEST] RESUMEN DE VERIFICACIÓN ETAPA 6');
   console.log('============================================================');
   console.log(`Excepciones no capturadas (exceptionThrown): ${uncaughtExceptions.length}`);
   console.log(`Errores en consola (consoleErrors): ${consoleErrors.length}`);
@@ -411,12 +469,22 @@ async function runCDPTest() {
   console.log(`Captura de examen numérico (9.25): ${d.examInputCaptured ? 'OK' : 'FALLÓ'}`);
   console.log(`Subvista B (Materias) renderizada: ${d.materiasMatrixRendered ? 'OK' : 'FALLÓ'}`);
   console.log(`Subvista C (Resumen) renderizada: ${d.resumenMatrixRendered ? 'OK' : 'FALLÓ'}`);
+  console.log(`Subvista D (Desempeño Grupal 35 alumnos): ${d.has35StudentsInDesemp ? 'OK (35 filas)' : 'FALLÓ (' + d.desempGrupalRowsCount + ')'}`);
+  console.log(`Subvista E (Mensajes Familiares 35 alumnos): ${d.has35StudentsInMsg ? 'OK (35 filas)' : 'FALLÓ (' + d.msgGrupalRowsCount + ')'}`);
   console.log(`Modal de pegado masivo (abierto y previsualizado): ${d.pasteModalOpened && d.pastePreviewWorked ? 'OK' : 'FALLÓ'}`);
   console.log(`Pegado masivo aplicado correctamente: ${d.pasteAppliedSuccessfully ? 'OK' : 'FALLÓ'}`);
   console.log(`Pestaña Captura Individual activa: ${d.tabIndActive ? 'OK' : 'FALLÓ'}`);
   console.log(`4 campos formativos en vista individual: ${d.indSubjectCardsCount === 4 ? 'OK (4 tarjetas)' : 'FALLÓ'}`);
+  console.log(`23 indicadores de desempeño renderizados: ${d.desemp23IndicatorsRendered ? 'OK (23 indicadores)' : 'FALLÓ'}`);
+  console.log(`Valoración rápida general 'E' (23 de 23): ${d.all23ValuedGeneralE ? 'OK' : 'FALLÓ'}`);
+  console.log(`Deshacer última acción masiva: ${d.desempUndoWorked ? 'OK' : 'FALLÓ'}`);
+  console.log(`Borrador de desempeño guardado: ${d.desempDraftSaved ? 'OK' : 'FALLÓ'}`);
+  console.log(`Área de mensaje familiar y contador dinámico: ${d.hasMsgTextarea ? 'OK' : 'FALLÓ'}`);
+  console.log(`Modal de banco de recomendaciones (>= 20 items): ${d.msgBankModalOpened && d.msgBankHas20Items ? 'OK' : 'FALLÓ'}`);
+  console.log(`Inserción desde banco validada (<= 245 car): ${d.msgInsertedFromBank ? 'OK' : 'FALLÓ'}`);
+  console.log(`Mensaje familiar guardado: ${d.msgSaved ? 'OK' : 'FALLÓ'}`);
+  console.log(`Tarjeta de estado consolidado renderizada: ${d.resumenCardRendered ? 'OK' : 'FALLÓ'}`);
   console.log(`Navegación de alumno (siguiente/anterior): ${d.indNextStudentNavigated ? 'OK' : 'FALLÓ'}`);
-  console.log(`Subtabs de captura individual (desempeño/académicas): ${d.indSubtabsFunctional ? 'OK' : 'FALLÓ'}`);
   console.log(`Borrador de calificaciones guardado: ${d.capturaDraftSaved ? 'OK' : 'FALLÓ'}`);
   console.log(`Navegación nativa táctil móvil (390px): ${m.tabSwitchedViaNativeTouch ? 'OK' : 'FALLÓ'}`);
   console.log(`Accesibilidad táctil móvil (Targets >= 40px): ${m.allTouchTargetsAccessible ? 'OK' : 'FALLÓ'}`);
@@ -426,5 +494,5 @@ async function runCDPTest() {
     throw new Error(`Se detectaron ${uncaughtExceptions.length} excepciones no capturadas.`);
   }
 
-  console.log('\n>>> ETAPA 5 VERIFICADA CON ÉXITO: 0 EXCEPCIONES EN CHROME HEADLESS <<<\n');
+  console.log('\n>>> ETAPA 6 VERIFICADA CON ÉXITO: 0 EXCEPCIONES EN CHROME HEADLESS <<<\n');
 }

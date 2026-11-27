@@ -1842,14 +1842,26 @@
                   <button class="btn small" data-action="eval-set-grupal-subview" data-subview="resumen" title="Resumen general con los 4 campos y promedio trimestral">
                     📋 Vista C. Resumen general
                   </button>
+                  <button class="btn small" data-action="eval-set-grupal-subview" data-subview="desempeno" title="Evaluación grupal de los 23 indicadores de desempeño integral">
+                    ⭐ Vista D. Desempeño integral
+                  </button>
+                  <button class="btn small" data-action="eval-set-grupal-subview" data-subview="mensajes" title="Captura y asignación grupal de mensajes personalizados">
+                    💬 Vista E. Mensajes familiares
+                  </button>
                 </div>
 
                 <div class="button-row" style="margin-left: auto; gap: 8px;">
-                  <button class="btn small" data-action="eval-open-paste-modal" title="Pegar calificaciones copiadas de Excel o Google Sheets">
+                  <button class="btn small" id="evalBtnGrupalPaste" data-action="eval-open-paste-modal" title="Pegar calificaciones copiadas de Excel o Google Sheets">
                     📋 Pegar calificaciones
                   </button>
-                  <button class="btn small primary" data-action="eval-authorize-group" title="Autorizar calificaciones completas del grupo">
+                  <button class="btn small primary" id="evalBtnGrupalAuth" data-action="eval-authorize-group" title="Autorizar calificaciones completas del grupo">
                     ✓ Autorizar resultados visibles
+                  </button>
+                  <button class="btn small" id="evalBtnGrupalMsgBank" data-action="eval-open-message-bank-modal" style="display: none;" title="Abrir banco de recomendaciones institucionales">
+                    📚 Banco de recomendaciones
+                  </button>
+                  <button class="btn small primary" id="evalBtnGrupalMassDesemp" data-action="eval-open-mass-desempeno-modal" style="display: none;" title="Asignar valoración masiva a alumnos visibles">
+                    ⭐ Valorar seleccionados
                   </button>
                 </div>
               </div>
@@ -1865,7 +1877,37 @@
                   </select>
                 </div>
 
-                <div class="eval-filter-group">
+                <div class="eval-filter-group" id="evalGrupalDesempenoCategoryGroup" style="display: none;">
+                  <label for="evalGrupalDesempenoCategorySelect">Categoría de desempeño:</label>
+                  <select id="evalGrupalDesempenoCategorySelect" class="input compact-input">
+                    <option value="all">Todas las categorías (23 indicadores)</option>
+                    <option value="academico">Desempeño académico (4)</option>
+                    <option value="habitos">Hábitos y responsabilidad (9)</option>
+                    <option value="conducta">Conducta y convivencia (8)</option>
+                    <option value="asistencia">Asistencia y puntualidad (2)</option>
+                  </select>
+                </div>
+
+                <div class="eval-filter-group" id="evalGrupalDesempenoIndicatorGroup" style="display: none;">
+                  <label for="evalGrupalDesempenoIndicatorSelect">Indicador específico:</label>
+                  <select id="evalGrupalDesempenoIndicatorSelect" class="input compact-input">
+                    <option value="all">Todos los indicadores</option>
+                  </select>
+                </div>
+
+                <div class="eval-filter-group" id="evalGrupalDesempenoLevelGroup" style="display: none;">
+                  <label for="evalGrupalDesempenoLevelSelect">Nivel de desempeño:</label>
+                  <select id="evalGrupalDesempenoLevelSelect" class="input compact-input">
+                    <option value="all">Todos los niveles</option>
+                    <option value="E">E · Excelente</option>
+                    <option value="B">B · Bueno</option>
+                    <option value="R">R · Regular</option>
+                    <option value="A">A · Requiere apoyo</option>
+                    <option value="pending">Sin valorar (Pendientes)</option>
+                  </select>
+                </div>
+
+                <div class="eval-filter-group" id="evalGrupalModeFilterGroup">
                   <label for="evalGrupalModeSelect">Modalidad grupal:</label>
                   <select id="evalGrupalModeSelect" class="input compact-input">
                     <option value="mixta">Mixta (predeterminada)</option>
@@ -1879,7 +1921,7 @@
                   <input type="text" id="evalGrupalSearch" class="input compact-input" placeholder="Nombre o número oficial de lista...">
                 </div>
 
-                <div class="eval-filter-group">
+                <div class="eval-filter-group" id="evalGrupalStatusFilterGroup">
                   <label for="evalGrupalStatusFilter">Estado:</label>
                   <select id="evalGrupalStatusFilter" class="input compact-input">
                     <option value="all">Todos los estados</option>
@@ -1981,28 +2023,105 @@
               </div>
             </div>
 
-            <!-- Subtab 2: Desempeño Integral (Placeholder Etapa 6) -->
+            <!-- Subtab 2: Desempeño Integral (Etapa 6) -->
             <div id="evalIndSubtabDesempeno" class="eval-ind-subtab-content hidden-tab">
-              <article class="panel eval-placeholder-panel">
-                <div class="eval-placeholder-icon">⭐</div>
-                <h3>2. Desempeño integral del alumno</h3>
-                <p class="muted">La captura y evaluación de los <strong>23 indicadores de desempeño integral</strong> (Autonomía, Pensamiento Crítico, Convivencia y Participación) se implementará en la <strong>Etapa 6: Desempeño integral y mensajes personalizados</strong>.</p>
+              <!-- Barra de herramientas y avance de desempeño -->
+              <article class="panel eval-desempeno-header-panel">
+                <div class="eval-desempeno-progress-row">
+                  <div>
+                    <h4 style="margin: 0; font-size: 15px; color: var(--navy);">Evaluación del Desempeño Integral (23 Indicadores)</h4>
+                    <span class="muted" style="font-size: 12px;" id="evalIndDesempenoProgressText">0 de 23 indicadores completados (0%)</span>
+                  </div>
+                  <div class="eval-desempeno-distribution-pills" id="evalIndDesempenoPills">
+                    <!-- Pills E, B, R, A, Sin valorar -->
+                  </div>
+                </div>
+                <div class="eval-progress-bar-bg" style="margin-top: 10px; height: 8px;">
+                  <div id="evalIndDesempenoProgressBar" class="eval-progress-bar-fill" style="width: 0%; background: var(--teal);"></div>
+                </div>
+
+                <!-- Herramientas de captura rápida y recuperación -->
+                <div class="eval-desempeno-quick-tools">
+                  <div class="eval-quick-general-box">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--navy);">Valoración general (23 indicadores):</span>
+                    <div class="button-row" style="gap: 6px;">
+                      <button class="btn small eval-lvl-btn-e" data-action="eval-ind-set-general-level" data-level="E" title="Asignar Excelente a los indicadores">E · Excelente</button>
+                      <button class="btn small eval-lvl-btn-b" data-action="eval-ind-set-general-level" data-level="B" title="Asignar Bueno a los indicadores">B · Bueno</button>
+                      <button class="btn small eval-lvl-btn-r" data-action="eval-ind-set-general-level" data-level="R" title="Asignar Regular a los indicadores">R · Regular</button>
+                      <button class="btn small eval-lvl-btn-a" data-action="eval-ind-set-general-level" data-level="A" title="Asignar Requiere apoyo a los indicadores">A · Requiere apoyo</button>
+                    </div>
+                    <label class="eval-checkbox-label" style="font-size: 11px; margin-left: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                      <input type="checkbox" id="evalIndOnlyPendingGeneralCheck"> Solo indicadores pendientes
+                    </label>
+                  </div>
+
+                  <div class="button-row" style="margin-left: auto; gap: 8px;">
+                    <button class="btn small" data-action="eval-open-copy-trimester-modal" id="evalBtnCopyTrimester" title="Copiar valoraciones del trimestre anterior como punto de partida">
+                      📋 Copiar del trimestre anterior
+                    </button>
+                    <button class="btn small secondary" data-action="eval-ind-desempeno-undo" id="evalBtnDesempenoUndo" disabled title="Deshacer la última asignación masiva de este alumno">
+                      ↩ Deshacer
+                    </button>
+                  </div>
+                </div>
               </article>
+
+              <!-- Lista clasificada de los 23 indicadores -->
+              <div id="evalIndDesempenoCategoriesWrap" class="eval-desempeno-categories-container">
+                <!-- Se renderizan dinámicamente las 4 categorías con sus respectivos indicadores -->
+              </div>
+
+              <!-- Acciones inferiores de desempeño -->
+              <div class="eval-ind-bottom-actions">
+                <span class="muted" style="font-size: 12px;" id="evalIndDesempenoSaveStatus">✓ Borrador de desempeño guardado localmente</span>
+                <div class="button-row" style="margin-left: auto;">
+                  <button class="btn primary" data-action="eval-save-desempeno-draft">Guardar borrador de desempeño</button>
+                </div>
+              </div>
             </div>
 
-            <!-- Subtab 3: Mensaje Personalizado (Placeholder Etapa 6) -->
+            <!-- Subtab 3: Mensaje Personalizado (Etapa 6) -->
             <div id="evalIndSubtabMensaje" class="eval-ind-subtab-content hidden-tab">
-              <article class="panel eval-placeholder-panel">
-                <div class="eval-placeholder-icon">💬</div>
-                <h3>3. Mensaje personalizado para el Portal Familiar</h3>
-                <p class="muted">El <strong>banco de recomendaciones institucionales</strong> y la redacción de mensajes personalizados de hasta <strong>245 caracteres</strong> se habilitará en la <strong>Etapa 6</strong>.</p>
+              <article class="panel eval-message-panel">
+                <div class="section-head" style="margin-bottom: 12px;">
+                  <div>
+                    <h3 style="margin: 0; font-size: 16px; color: var(--navy);">3. Mensaje personalizado para el Portal Familiar</h3>
+                    <p class="muted" style="font-size: 12px; margin: 4px 0 0;">
+                      Este mensaje será visible exclusivamente para la familia una vez publicada la evaluación. Máximo 245 caracteres.
+                    </p>
+                  </div>
+                  <button class="btn small primary" data-action="eval-open-message-bank-modal" title="Seleccionar una recomendación pedagógica institucional">
+                    📚 Banco de recomendaciones
+                  </button>
+                </div>
+
+                <div class="eval-message-input-wrap">
+                  <label for="evalIndMessageTextarea" class="sr-only">Mensaje personalizado para la familia:</label>
+                  <textarea id="evalIndMessageTextarea" class="input eval-message-textarea" rows="4" 
+                            placeholder="Escribe un mensaje personalizado o selecciona una recomendación del banco (máx. 245 caracteres)..."></textarea>
+                  
+                  <div class="eval-message-meta-row" style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px; flex-wrap: wrap; gap: 8px;">
+                    <span id="evalIndMessageCharCount" class="eval-char-count" style="font-weight: 700; font-size: 13px;">0 / 245 caracteres</span>
+                    <span id="evalIndMessageOverLimitAlert" class="eval-limit-alert" style="display: none; color: #dc2626; font-size: 12px; font-weight: 700;">⚠️ El mensaje supera el límite de 245 caracteres. Por favor, ajústalo antes de guardar.</span>
+                    <span id="evalIndMessageSaveStatus" class="muted" style="font-size: 12px; margin-left: auto;"></span>
+                  </div>
+                </div>
+
+                <div class="eval-ind-bottom-actions" style="margin-top: 16px;">
+                  <button class="btn small" data-action="eval-clear-student-message" title="Limpiar mensaje">Limpiar texto</button>
+                  <div class="button-row" style="margin-left: auto; gap: 8px;">
+                    <button class="btn primary" data-action="eval-save-student-message" id="evalBtnSaveMessage">
+                      💾 Guardar mensaje familiar
+                    </button>
+                  </div>
+                </div>
               </article>
             </div>
 
-            <!-- Subtab 4: Resumen de Evaluación -->
+            <!-- Subtab 4: Resumen de Evaluación (Etapa 6) -->
             <div id="evalIndSubtabResumen" class="eval-ind-subtab-content hidden-tab">
               <article class="panel" id="evalIndSummaryPanel">
-                <!-- Resumen consolidado del alumno -->
+                <!-- Resumen consolidado del alumno renderizado dinámicamente -->
               </article>
             </div>
           </div>
@@ -2041,6 +2160,142 @@
               <button class="btn" data-action="eval-close-paste-modal">Cancelar</button>
               <button class="btn secondary" data-action="eval-preview-paste">Previsualizar</button>
               <button class="btn primary" id="evalBtnApplyPaste" data-action="eval-apply-paste" disabled>Aplicar calificaciones</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal del Banco de Recomendaciones (Etapa 6) -->
+        <div id="evalMessageBankModal" class="eval-modal-backdrop" style="display: none;">
+          <div class="eval-modal-dialog" style="max-width: 680px;">
+            <div class="eval-modal-header">
+              <h3>📚 Banco de recomendaciones pedagógicas</h3>
+              <button class="eval-modal-close" data-action="eval-close-message-bank-modal" aria-label="Cerrar modal">&times;</button>
+            </div>
+            <div class="eval-modal-body">
+              <p class="muted" style="font-size: 13px; margin-bottom: 12px;">
+                Selecciona una recomendación institucional aprobada para insertarla en la evaluación del alumno. Todas respetan el límite de 245 caracteres y podrás personalizarlas libremente una vez insertadas.
+              </p>
+
+              <!-- Filtros del banco -->
+              <div class="eval-bank-filters-row" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                <input type="text" id="evalBankSearchInput" class="input compact-input" style="flex: 2; min-width: 160px;" placeholder="Buscar por palabra clave...">
+                <select id="evalBankCategorySelect" class="input compact-input" style="flex: 1; min-width: 140px;">
+                  <option value="all">Todas las categorías</option>
+                  <option value="general">Desempeño general</option>
+                  <option value="formativo">Campos formativos</option>
+                  <option value="habitos">Hábitos y responsabilidad</option>
+                  <option value="conducta">Conducta y convivencia</option>
+                  <option value="asistencia">Asistencia y puntualidad</option>
+                </select>
+                <select id="evalBankLevelSelect" class="input compact-input" style="flex: 1; min-width: 120px;">
+                  <option value="all">Todos los niveles</option>
+                  <option value="E">Excelente</option>
+                  <option value="B">Bueno</option>
+                  <option value="R">Regular</option>
+                  <option value="A">Requiere apoyo</option>
+                </select>
+              </div>
+
+              <!-- Lista de recomendaciones del banco -->
+              <div id="evalBankListContainer" class="eval-bank-list-wrap" style="max-height: 280px; overflow-y: auto;">
+                <!-- Renderizado dinámico de tarjetas de recomendación -->
+              </div>
+
+              <!-- Formulario colapsable para agregar recomendación -->
+              <details style="margin-top: 14px; border: 1px solid var(--line); border-radius: 8px; padding: 10px;">
+                <summary style="font-size: 12px; font-weight: 700; cursor: pointer; color: var(--navy);">➕ Agregar nueva recomendación institucional al banco</summary>
+                <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                  <div style="display: flex; gap: 8px;">
+                    <select id="evalNewRecCategory" class="input compact-input" style="flex: 1;">
+                      <option value="general">Desempeño general</option>
+                      <option value="formativo">Campos formativos</option>
+                      <option value="habitos">Hábitos y responsabilidad</option>
+                      <option value="conducta">Conducta y convivencia</option>
+                      <option value="asistencia">Asistencia y puntualidad</option>
+                    </select>
+                    <select id="evalNewRecLevel" class="input compact-input" style="flex: 1;">
+                      <option value="E">Excelente</option>
+                      <option value="B">Bueno</option>
+                      <option value="R">Regular</option>
+                      <option value="A">Requiere apoyo</option>
+                    </select>
+                  </div>
+                  <textarea id="evalNewRecText" class="input" rows="2" maxlength="245" placeholder="Texto de la recomendación (máximo 245 caracteres)..."></textarea>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="evalNewRecCharCount" class="muted" style="font-size: 11px;">0 / 245 caracteres</span>
+                    <button class="btn small" data-action="eval-add-banco-recommendation">Guardar en el banco</button>
+                  </div>
+                </div>
+              </details>
+            </div>
+            <div class="eval-modal-footer">
+              <button class="btn" data-action="eval-close-message-bank-modal">Cerrar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal para Copiar Desempeño de Trimestre Anterior (Etapa 6) -->
+        <div id="evalCopyTrimesterModal" class="eval-modal-backdrop" style="display: none;">
+          <div class="eval-modal-dialog" style="max-width: 480px;">
+            <div class="eval-modal-header">
+              <h3>📋 Copiar valoraciones de trimestre anterior</h3>
+              <button class="eval-modal-close" data-action="eval-close-copy-trimester-modal" aria-label="Cerrar modal">&times;</button>
+            </div>
+            <div class="eval-modal-body">
+              <p class="muted" style="font-size: 13px; margin-bottom: 12px;">
+                Puedes copiar las valoraciones del trimestre anterior como punto de partida. Los valores se copiarán como <strong>borrador pendiente de revisión</strong> y el trimestre de origen no sufrirá modificaciones.
+              </p>
+
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div>
+                  <label for="evalCopySourceTrimester" style="font-size: 12px; font-weight: 700;">Copiar desde:</label>
+                  <select id="evalCopySourceTrimester" class="input compact-input">
+                    <option value="1">1.er Trimestre</option>
+                    <option value="2">2.º Trimestre</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style="font-size: 12px; font-weight: 700;">Modo de copia:</label>
+                  <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+                    <label style="font-size: 12px; display: flex; align-items: center; gap: 6px;">
+                      <input type="radio" name="evalCopyMode" value="only-pending" checked>
+                      Copiar únicamente en indicadores pendientes (conservar los ya valorados)
+                    </label>
+                    <label style="font-size: 12px; display: flex; align-items: center; gap: 6px;">
+                      <input type="radio" name="evalCopyMode" value="all">
+                      Copiar todos los indicadores (sobrescribir valoraciones existentes)
+                    </label>
+                  </div>
+                </div>
+
+                <div id="evalCopyPreviewNotice" class="eval-validation-alert" style="margin-top: 8px;">
+                  <!-- Información calculada -->
+                </div>
+              </div>
+            </div>
+            <div class="eval-modal-footer">
+              <button class="btn" data-action="eval-close-copy-trimester-modal">Cancelar</button>
+              <button class="btn primary" data-action="eval-confirm-copy-trimester">Copiar valoraciones</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Universal de Confirmación de Acción Masiva (Etapa 6) -->
+        <div id="evalConfirmModal" class="eval-modal-backdrop" style="display: none;">
+          <div class="eval-modal-dialog" style="max-width: 440px;">
+            <div class="eval-modal-header">
+              <h3 id="evalConfirmModalTitle">⚠️ Confirmación requerida</h3>
+              <button class="eval-modal-close" data-action="eval-close-confirm-modal" aria-label="Cerrar modal">&times;</button>
+            </div>
+            <div class="eval-modal-body">
+              <p id="evalConfirmModalMessage" style="font-size: 13px; color: var(--navy); line-height: 1.5;">
+                ¿Deseas continuar con esta acción?
+              </p>
+            </div>
+            <div class="eval-modal-footer">
+              <button class="btn" data-action="eval-close-confirm-modal">Cancelar</button>
+              <button class="btn primary" id="evalBtnConfirmModalAction">Confirmar y aplicar</button>
             </div>
           </div>
         </div>

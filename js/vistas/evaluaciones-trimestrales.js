@@ -16,8 +16,89 @@
     activitySelection: 'carpeta_eval_act_selection_v3',
     activityDraft: 'carpeta_eval_act_draft_v3',
     adjustments: 'carpeta_eval_adjustments_v4',
-    captura: 'carpeta_eval_captura_v5'
+    captura: 'carpeta_eval_captura_v5',
+    desempeno: 'carpeta_eval_desempeno_v6',
+    mensajes: 'carpeta_eval_mensajes_v6',
+    bancoMensajes: 'carpeta_eval_banco_mensajes_v6'
   };
+
+  // =========================================================================
+  // CATÁLOGOS INSTITUCIONALES DE DESEMPEÑO INTEGRAL Y MENSAJES (ETAPA 6)
+  // =========================================================================
+
+  const CATEGORIAS_DESEMPENO = [
+    { id: 'academico', nombre: 'Desempeño académico', icono: '📚', total: 4 },
+    { id: 'habitos', nombre: 'Hábitos y responsabilidad escolar', icono: '📝', total: 9 },
+    { id: 'conducta', nombre: 'Conducta y convivencia', icono: '🤝', total: 8 },
+    { id: 'asistencia', nombre: 'Asistencia y puntualidad', icono: '⏰', total: 2 }
+  ];
+
+  const INDICADORES_DESEMPENO = [
+    // Desempeño académico — 4 indicadores
+    { id: 'acad_lectura', numero: 1, nombre: 'Lectura y comprensión', categoria: 'academico', categoriaNombre: 'Desempeño académico' },
+    { id: 'acad_escritura', numero: 2, nombre: 'Escritura y ortografía', categoria: 'academico', categoriaNombre: 'Desempeño académico' },
+    { id: 'acad_matematicas', numero: 3, nombre: 'Habilidades matemáticas', categoria: 'academico', categoriaNombre: 'Desempeño académico' },
+    { id: 'acad_contenidos', numero: 4, nombre: 'Comprensión de contenidos', categoria: 'academico', categoriaNombre: 'Desempeño académico' },
+
+    // Hábitos y responsabilidad escolar — 9 indicadores
+    { id: 'hab_tareas', numero: 5, nombre: 'Cumplimiento de tareas', categoria: 'habitos', categoriaNombre: 'Hábitos y responsabilidad escolar' },
+    { id: 'hab_actividades', numero: 6, nombre: 'Finalización de actividades', categoria: 'habitos', categoriaNombre: 'Hábitos y responsabilidad escolar' },
+    { id: 'hab_completos', numero: 7, nombre: 'Entrega de trabajos completos', categoria: 'habitos', categoriaNombre: 'Hábitos y responsabilidad escolar' },
+    { id: 'hab_materiales', numero: 8, nombre: 'Materiales escolares completos', categoria: 'habitos', categoriaNombre: 'Hábitos y responsabilidad escolar' },
+    { id: 'hab_limpieza', numero: 9, nombre: 'Limpieza y presentación de trabajos', categoria: 'habitos', categoriaNombre: 'Hábitos y responsabilidad escolar' },
+    { id: 'hab_indicaciones', numero: 10, nombre: 'Seguimiento de indicaciones', categoria: 'habitos', categoriaNombre: 'Hábitos y responsabilidad escolar' },
+    { id: 'hab_autonomia', numero: 11, nombre: 'Organización y autonomía', categoria: 'habitos', categoriaNombre: 'Hábitos y responsabilidad escolar' },
+    { id: 'hab_concentracion', numero: 12, nombre: 'Atención y concentración', categoria: 'habitos', categoriaNombre: 'Hábitos y responsabilidad escolar' },
+    { id: 'hab_participacion', numero: 13, nombre: 'Participación activa', categoria: 'habitos', categoriaNombre: 'Hábitos y responsabilidad escolar' },
+
+    // Conducta y convivencia — 8 indicadores
+    { id: 'cond_companeros', numero: 14, nombre: 'Respeto a sus compañeros', categoria: 'conducta', categoriaNombre: 'Conducta y convivencia' },
+    { id: 'cond_docente', numero: 15, nombre: 'Respeto al docente', categoria: 'conducta', categoriaNombre: 'Conducta y convivencia' },
+    { id: 'cond_acuerdos', numero: 16, nombre: 'Cumplimiento de acuerdos', categoria: 'conducta', categoriaNombre: 'Conducta y convivencia' },
+    { id: 'cond_autorregulacion', numero: 17, nombre: 'Autorregulación emocional y conductual', categoria: 'conducta', categoriaNombre: 'Conducta y convivencia' },
+    { id: 'cond_conflictos', numero: 18, nombre: 'Resolución pacífica de conflictos', categoria: 'conducta', categoriaNombre: 'Conducta y convivencia' },
+    { id: 'cond_colaborativo', numero: 19, nombre: 'Trabajo colaborativo', categoria: 'conducta', categoriaNombre: 'Conducta y convivencia' },
+    { id: 'cond_actitud', numero: 20, nombre: 'Actitud y disposición para aprender', categoria: 'conducta', categoriaNombre: 'Conducta y convivencia' },
+    { id: 'cond_mobiliario', numero: 21, nombre: 'Cuidado del mobiliario escolar', categoria: 'conducta', categoriaNombre: 'Conducta y convivencia' },
+
+    // Asistencia y puntualidad — 2 indicadores
+    { id: 'asis_regular', numero: 22, nombre: 'Asistencia regular', categoria: 'asistencia', categoriaNombre: 'Asistencia y puntualidad' },
+    { id: 'asis_puntualidad', numero: 23, nombre: 'Puntualidad', categoria: 'asistencia', categoriaNombre: 'Asistencia y puntualidad' }
+  ];
+
+  const NIVELES_DESEMPENO = {
+    E: { code: 'E', label: 'Excelente', color: '#1b7c4b', bg: '#e8f5e9', border: '#a5d6a7', badgeClass: 'eval-pill-e' },
+    B: { code: 'B', label: 'Bueno', color: '#b45309', bg: '#fef3c7', border: '#fcd34d', badgeClass: 'eval-pill-b' },
+    R: { code: 'R', label: 'Regular', color: '#c2410c', bg: '#ffedd5', border: '#fed7aa', badgeClass: 'eval-pill-r' },
+    A: { code: 'A', label: 'Requiere apoyo', color: '#dc2626', bg: '#fee2e2', border: '#fca5a5', badgeClass: 'eval-pill-a' }
+  };
+
+  const BANCO_MENSAJES_DEFAULT = [
+    { id: 'rec_gen_e', category: 'general', level: 'E', text: 'Demuestra un desempeño integral sobresaliente, gran compromiso con su aprendizaje y una actitud colaborativa ejemplar. ¡Felicidades!' },
+    { id: 'rec_gen_b', category: 'general', level: 'B', text: 'Muestra un buen aprovechamiento académico y responsabilidad constante. Con mayor constancia en sus hábitos alcanzará la excelencia.' },
+    { id: 'rec_gen_r', category: 'general', level: 'R', text: 'Presenta avances en sus aprendizajes, aunque requiere mayor concentración y seguimiento de hábitos escolares para consolidar sus metas.' },
+    { id: 'rec_gen_a', category: 'general', level: 'A', text: 'Requiere apoyo constante en el hogar para reforzar contenidos básicos, entrega puntual de actividades y atención en el aula escolar.' },
+
+    { id: 'rec_acad_e', category: 'formativo', level: 'E', text: 'Excelente comprensión lectora y razonamiento lógico-matemático. Expresa sus ideas con claridad y fundamenta adecuadamente su trabajo.' },
+    { id: 'rec_acad_b', category: 'formativo', level: 'B', text: 'Buen desempeño en las actividades académicas. Se sugiere reforzar la ortografía y la práctica diaria de lectura comprensiva en casa.' },
+    { id: 'rec_acad_r', category: 'formativo', level: 'R', text: 'Avanza a su propio ritmo en los contenidos escolares; es importante repasar operaciones matemáticas básicas y lectura en el hogar.' },
+    { id: 'rec_acad_a', category: 'formativo', level: 'A', text: 'Se requiere acompañamiento diario en lectura, escritura y cálculo matemático para alcanzar los aprendizajes esperados del grado escolar.' },
+
+    { id: 'rec_hab_e', category: 'habitos', level: 'E', text: 'Sus hábitos de estudio, puntualidad en tareas y esmero en la presentación de sus trabajos escolares son sumamente destacados. ¡Bravo!' },
+    { id: 'rec_hab_b', category: 'habitos', level: 'B', text: 'Cumple habitualmente con sus materiales y tareas escolares. Mantener el orden y la constancia fortalecerá aún más su autonomía escolar.' },
+    { id: 'rec_hab_r', category: 'habitos', level: 'R', text: 'Es fundamental supervisar diariamente la entrega de tareas completas y la organización de sus útiles escolares antes de salir a la escuela.' },
+    { id: 'rec_hab_a', category: 'habitos', level: 'A', text: 'Requiere apoyo prioritario en la entrega oportuna de tareas, cuidado de sus materiales escolares y seguimiento de indicaciones diarias.' },
+
+    { id: 'rec_cond_e', category: 'conducta', level: 'E', text: 'Excelente conducta, empatía y trato respetuoso hacia sus compañeros y docente. Contribuye activamente a una sana convivencia en el aula.' },
+    { id: 'rec_cond_b', category: 'conducta', level: 'B', text: 'Mantiene una convivencia pacífica y respetuosa en el aula. Continúa fomentando la resolución dialogada de desacuerdos cotidianos.' },
+    { id: 'rec_cond_r', category: 'conducta', level: 'R', text: 'Debe trabajar en la autorregulación de sus emociones e impulsos para convivir en armonía y respetar los acuerdos de convivencia escolar.' },
+    { id: 'rec_cond_a', category: 'conducta', level: 'A', text: 'Se requiere diálogo constante en familia sobre el respeto a las reglas del aula, escucha atenta y resolución pacífica de conflictos.' },
+
+    { id: 'rec_asis_e', category: 'asistencia', level: 'E', text: 'Asistencia perfecta y puntualidad intachable durante todo el trimestre. Su presencia continua favorece ampliamente su progreso escolar.' },
+    { id: 'rec_asis_b', category: 'asistencia', level: 'B', text: 'Asistencia regular y puntual. Continuar procurando no faltar a clases para no perder la secuencia didáctica de los proyectos escolares.' },
+    { id: 'rec_asis_r', category: 'asistencia', level: 'R', text: 'Registra retardos o ausencias intermitentes. Es necesario mejorar la puntualidad al inicio de la jornada escolar matutina.' },
+    { id: 'rec_asis_a', category: 'asistencia', level: 'A', text: 'Las inasistencias reiteradas afectan notablemente su ritmo de aprendizaje. Se exhorta a garantizar su asistencia diaria a la escuela.' }
+  ];
 
   // Catálogo de criterios de evaluación institucionales con su propuesta inicial
   const CRITERIOS_CATALOGO = [
@@ -114,7 +195,21 @@
     indStudentId: null,
     indSubtab: 'academicas', // 'academicas' | 'desempeno' | 'mensaje' | 'resumen'
     capturaStore: loadCapturaStore(),
-    hasUnsavedCaptura: false
+    hasUnsavedCaptura: false,
+
+    // Estado específico de la Etapa 6 (Desempeño integral y mensajes personalizados)
+    desempenoStore: loadDesempenoStore(),
+    mensajesStore: loadMensajesStore(),
+    bancoMensajesStore: loadBancoMensajesStore(),
+    hasUnsavedDesempeno: false,
+    hasUnsavedMensajes: false,
+    desempenoCategoryFilter: 'all',
+    desempenoIndicatorFilter: 'all',
+    desempenoLevelFilter: 'all',
+    bancoSearch: '',
+    bancoCategory: 'all',
+    bancoLevel: 'all',
+    lastDesempenoUndo: null
   };
 
   /**
@@ -260,6 +355,85 @@
     if (notice) notice.style.display = 'inline-flex';
     const status = document.getElementById('evalCapturaPersistStatus');
     if (status) status.textContent = '● Calificaciones modificadas sin guardar';
+  }
+
+  // =========================================================================
+  // PERSISTENCIA DE DESEMPEÑO INTEGRAL Y MENSAJES (ETAPA 6)
+  // =========================================================================
+
+  function loadDesempenoStore() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.desempeno);
+      if (raw) return JSON.parse(raw) || { 1: {}, 2: {}, 3: {} };
+    } catch (e) {}
+    return { 1: {}, 2: {}, 3: {} };
+  }
+
+  function saveDesempenoStore(store = evalState.desempenoStore) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.desempeno, JSON.stringify(store));
+      evalState.hasUnsavedDesempeno = false;
+      const status = document.getElementById('evalIndDesempenoSaveStatus');
+      if (status) status.textContent = '✓ Borrador de desempeño guardado localmente';
+      return true;
+    } catch (e) {
+      console.error('Error al guardar desempeño integral:', e);
+      return false;
+    }
+  }
+
+  function markUnsavedDesempeno() {
+    evalState.hasUnsavedDesempeno = true;
+    const status = document.getElementById('evalIndDesempenoSaveStatus');
+    if (status) status.textContent = '● Valoraciones modificadas sin guardar';
+  }
+
+  function loadMensajesStore() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.mensajes);
+      if (raw) return JSON.parse(raw) || { 1: {}, 2: {}, 3: {} };
+    } catch (e) {}
+    return { 1: {}, 2: {}, 3: {} };
+  }
+
+  function saveMensajesStore(store = evalState.mensajesStore) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.mensajes, JSON.stringify(store));
+      evalState.hasUnsavedMensajes = false;
+      const status = document.getElementById('evalIndMessageSaveStatus');
+      if (status) status.textContent = '✓ Mensaje guardado localmente';
+      return true;
+    } catch (e) {
+      console.error('Error al guardar mensajes familiares:', e);
+      return false;
+    }
+  }
+
+  function markUnsavedMensaje() {
+    evalState.hasUnsavedMensajes = true;
+    const status = document.getElementById('evalIndMessageSaveStatus');
+    if (status) status.textContent = '● Mensaje modificado sin guardar';
+  }
+
+  function loadBancoMensajesStore() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.bancoMensajes);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return JSON.parse(JSON.stringify(BANCO_MENSAJES_DEFAULT));
+  }
+
+  function saveBancoMensajesStore(bank = evalState.bancoMensajesStore) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.bancoMensajes, JSON.stringify(bank));
+      return true;
+    } catch (e) {
+      console.error('Error al guardar banco de recomendaciones:', e);
+      return false;
+    }
   }
 
   /**
@@ -577,13 +751,13 @@
 
     // Advertencia de navegación
     window.addEventListener('beforeunload', e => {
-      if (evalState.hasUnsavedChanges || evalState.hasUnsavedActivityChanges || evalState.hasUnsavedCaptura) {
+      if (evalState.hasUnsavedChanges || evalState.hasUnsavedActivityChanges || evalState.hasUnsavedCaptura || evalState.hasUnsavedDesempeno || evalState.hasUnsavedMensajes) {
         e.preventDefault();
         e.returnValue = 'Tienes cambios sin guardar en Evaluaciones Trimestrales.';
       }
     });
 
-    // Filtros y controles de Captura Grupal e Individual (Etapa 5)
+    // Filtros y controles de Captura Grupal e Individual (Etapa 5 y 6)
     const grupalSearch = document.getElementById('evalGrupalSearch');
     const grupalStatus = document.getElementById('evalGrupalStatusFilter');
     const grupalSubject = document.getElementById('evalGrupalSubjectSelect');
@@ -609,6 +783,86 @@
     indStudentSelect?.addEventListener('change', e => {
       evalState.indStudentId = e.target.value || null;
       renderCapturaIndividual();
+    });
+
+    // Controles de Desempeño Integral y Mensajes (Etapa 6)
+    const desempCatSelect = document.getElementById('evalGrupalDesempenoCategorySelect');
+    const desempIndSelect = document.getElementById('evalGrupalDesempenoIndicatorSelect');
+    const desempLvlSelect = document.getElementById('evalGrupalDesempenoLevelSelect');
+
+    desempCatSelect?.addEventListener('change', e => {
+      evalState.desempenoCategoryFilter = e.target.value || 'all';
+      // Actualizar el selector de indicadores específicos dependientes
+      if (desempIndSelect) {
+        const cat = e.target.value;
+        const available = cat === 'all' 
+          ? INDICADORES_DESEMPENO 
+          : INDICADORES_DESEMPENO.filter(i => i.categoria === cat);
+        desempIndSelect.innerHTML = '<option value="all">Todos los indicadores de la categoría</option>' +
+          available.map(i => `<option value="${i.id}">${i.numero}. ${i.nombre}</option>`).join('');
+      }
+      renderCapturaGrupal();
+    });
+
+    desempIndSelect?.addEventListener('change', e => {
+      evalState.desempenoIndicatorFilter = e.target.value || 'all';
+      renderCapturaGrupal();
+    });
+
+    desempLvlSelect?.addEventListener('change', e => {
+      evalState.desempenoLevelFilter = e.target.value || 'all';
+      renderCapturaGrupal();
+    });
+
+    // Textarea de mensaje personalizado individual (conteo reactivo y validación)
+    const msgTextarea = document.getElementById('evalIndMessageTextarea');
+    msgTextarea?.addEventListener('input', e => {
+      const text = e.target.value || '';
+      const valRes = DesempenoEngine.validateMessageText(text);
+      const countEl = document.getElementById('evalIndMessageCharCount');
+      const alertEl = document.getElementById('evalIndMessageOverLimitAlert');
+      const saveBtn = document.getElementById('evalBtnSaveMessage');
+
+      if (countEl) {
+        countEl.textContent = `${text.length} / 245 caracteres`;
+        countEl.className = 'eval-char-count' + (valRes.isOverLimit ? ' error' : (text.length > 220 ? ' warning' : ''));
+      }
+      if (alertEl) {
+        alertEl.style.display = valRes.isOverLimit ? 'inline-block' : 'none';
+      }
+      if (saveBtn) {
+        saveBtn.disabled = valRes.isOverLimit;
+      }
+
+      if (evalState.indStudentId) {
+        DesempenoEngine.setStudentMessage(evalState.indStudentId, text, evalState.trimester);
+      }
+    });
+
+    // Filtros del Banco de Recomendaciones
+    const bankSearch = document.getElementById('evalBankSearchInput');
+    const bankCat = document.getElementById('evalBankCategorySelect');
+    const bankLvl = document.getElementById('evalBankLevelSelect');
+
+    bankSearch?.addEventListener('input', e => {
+      evalState.bancoSearch = (e.target.value || '').trim().toLowerCase();
+      renderBancoMensajesModal();
+    });
+    bankCat?.addEventListener('change', e => {
+      evalState.bancoCategory = e.target.value || 'all';
+      renderBancoMensajesModal();
+    });
+    bankLvl?.addEventListener('change', e => {
+      evalState.bancoLevel = e.target.value || 'all';
+      renderBancoMensajesModal();
+    });
+
+    // Formulario de nueva recomendación
+    const newRecText = document.getElementById('evalNewRecText');
+    newRecText?.addEventListener('input', e => {
+      const len = (e.target.value || '').length;
+      const countEl = document.getElementById('evalNewRecCharCount');
+      if (countEl) countEl.textContent = `${len} / 245 caracteres`;
     });
 
     _eventsBound = true;
@@ -2223,7 +2477,7 @@
 
       for (const field of REQUIRED_FIELDS) {
         const g = subjectGrades?.[field];
-        if (g && (g.status === 'COMPLETO' || g.status === 'VALIDO_MANUAL') && g.finalGrade !== null && !isNaN(g.finalGrade)) {
+        if (g && (g.status === 'COMPLETO' || g.status === 'VALIDO_MANUAL' || g.isAuthorized) && g.finalGrade !== null && !isNaN(g.finalGrade)) {
           sum += g.finalGrade;
           completeCount++;
         } else {
@@ -2788,6 +3042,12 @@
       calcRes.manualExam = fieldData.manualExam;
       calcRes.fieldData = fieldData;
 
+      if (calcRes.isAuthorized && calcRes.authorizedGrade !== null && calcRes.authorizedGrade !== undefined) {
+        calcRes.finalGrade = calcRes.authorizedGrade;
+        calcRes.displayGrade = EvaluacionEngine.formatGrade(calcRes.authorizedGrade);
+        calcRes.status = 'COMPLETO';
+      }
+
       if (!calcRes.isAuthorized) {
         allAuthorized = false;
       }
@@ -2856,11 +3116,28 @@
       btn.classList.toggle('active', btn.dataset.subview === subview);
     });
 
-    // Mostrar/ocultar selector de materia para Vista B
+    // Mostrar/ocultar controles de la barra de herramientas según la subvista
     const subjGroup = document.getElementById('evalGrupalSubjectFilterGroup');
-    if (subjGroup) {
-      subjGroup.style.display = (subview === 'criterios') ? 'flex' : 'none';
-    }
+    const desempCatGroup = document.getElementById('evalGrupalDesempenoCategoryGroup');
+    const desempIndGroup = document.getElementById('evalGrupalDesempenoIndicatorGroup');
+    const desempLvlGroup = document.getElementById('evalGrupalDesempenoLevelGroup');
+    const modeGroup = document.getElementById('evalGrupalModeFilterGroup');
+    const statusGroup = document.getElementById('evalGrupalStatusFilterGroup');
+    const btnPaste = document.getElementById('evalBtnGrupalPaste');
+    const btnAuth = document.getElementById('evalBtnGrupalAuth');
+    const btnMsgBank = document.getElementById('evalBtnGrupalMsgBank');
+    const btnMassDesemp = document.getElementById('evalBtnGrupalMassDesemp');
+
+    if (subjGroup) subjGroup.style.display = (subview === 'criterios') ? 'flex' : 'none';
+    if (desempCatGroup) desempCatGroup.style.display = (subview === 'desempeno') ? 'flex' : 'none';
+    if (desempIndGroup) desempIndGroup.style.display = (subview === 'desempeno') ? 'flex' : 'none';
+    if (desempLvlGroup) desempLvlGroup.style.display = (subview === 'desempeno') ? 'flex' : 'none';
+    if (modeGroup) modeGroup.style.display = (subview === 'examenes' || subview === 'criterios' || subview === 'resumen') ? 'flex' : 'none';
+    if (statusGroup) statusGroup.style.display = (subview !== 'desempeno' && subview !== 'mensajes') ? 'flex' : 'none';
+    if (btnPaste) btnPaste.style.display = (subview === 'examenes' || subview === 'criterios' || subview === 'resumen') ? 'inline-flex' : 'none';
+    if (btnAuth) btnAuth.style.display = (subview === 'examenes' || subview === 'criterios' || subview === 'resumen') ? 'inline-flex' : 'none';
+    if (btnMsgBank) btnMsgBank.style.display = (subview === 'mensajes') ? 'inline-flex' : 'none';
+    if (btnMassDesemp) btnMassDesemp.style.display = (subview === 'desempeno') ? 'inline-flex' : 'none';
 
     // Actualizar título y badge de estadísticas
     const titleEl = document.getElementById('evalGrupalMatrixTitle');
@@ -2874,9 +3151,15 @@
       const subj = evalState.grupalSubject || 'Lenguajes';
       if (titleEl) titleEl.textContent = `Calificaciones y Criterios: ${subj} · Trimestre ${t}`;
       renderMatrizCriterios(tableWrap, filteredStudents, subj, t);
-    } else {
+    } else if (subview === 'resumen') {
       if (titleEl) titleEl.textContent = `Resumen General de Calificaciones · Trimestre ${t}`;
       renderMatrizResumen(tableWrap, filteredStudents, t);
+    } else if (subview === 'desempeno') {
+      if (titleEl) titleEl.textContent = `Matriz de Desempeño Integral (23 Indicadores) · Trimestre ${t}`;
+      renderMatrizDesempeno(tableWrap, filteredStudents, t);
+    } else if (subview === 'mensajes') {
+      if (titleEl) titleEl.textContent = `Captura Grupal de Mensajes para el Portal Familiar · Trimestre ${t}`;
+      renderMatrizMensajes(tableWrap, filteredStudents, t);
     }
 
     attachMatrixKeyboardNavigation(tableWrap);
@@ -3343,6 +3626,848 @@
     document.querySelectorAll('.eval-ind-subtab-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.subtab === curSubtab);
     });
+
+    // Renderizar contenidos específicos del subtab activo (Etapa 6)
+    if (curSubtab === 'desempeno') {
+      renderDesempenoIndividual(student, t);
+    } else if (curSubtab === 'mensaje') {
+      renderMensajeIndividual(student, t);
+    } else if (curSubtab === 'resumen') {
+      renderResumenIndividual(student, t);
+    }
+  }
+
+  // =========================================================================
+  // MOTOR DE DESEMPEÑO INTEGRAL Y MENSAJES PERSONALIZADOS (ETAPA 6)
+  // =========================================================================
+
+  const DesempenoEngine = {
+    INDICADORES: INDICADORES_DESEMPENO,
+    CATEGORIAS: CATEGORIAS_DESEMPENO,
+    NIVELES: NIVELES_DESEMPENO,
+
+    getStudentEvaluation(studentId, trimester = evalState.trimester) {
+      const t = trimester;
+      const sId = String(studentId);
+      const studentStore = evalState.desempenoStore?.[t]?.[sId] || { ratings: {}, source: 'manual', isReviewed: true };
+      const ratings = studentStore.ratings || {};
+
+      let completedCount = 0;
+      const pendingIndicators = [];
+      const distribution = { E: 0, B: 0, R: 0, A: 0, none: 0 };
+
+      INDICADORES_DESEMPENO.forEach(ind => {
+        const val = ratings[ind.id] || null;
+        if (val && NIVELES_DESEMPENO[val]) {
+          completedCount++;
+          distribution[val]++;
+        } else {
+          pendingIndicators.push(ind.id);
+          distribution.none++;
+        }
+      });
+
+      const isComplete = (completedCount === 23);
+
+      return {
+        ratings,
+        completedCount,
+        pendingCount: 23 - completedCount,
+        isComplete,
+        distribution,
+        pendingIndicators,
+        source: studentStore.source || 'manual',
+        isReviewed: studentStore.isReviewed !== false,
+        updatedAt: studentStore.updatedAt || null
+      };
+    },
+
+    setIndicatorRating(studentId, indicatorId, rating, trimester = evalState.trimester) {
+      const t = trimester;
+      const sId = String(studentId);
+      if (!evalState.desempenoStore[t]) evalState.desempenoStore[t] = {};
+      if (!evalState.desempenoStore[t][sId]) {
+        evalState.desempenoStore[t][sId] = { ratings: {}, source: 'manual', isReviewed: true };
+      }
+
+      if (rating === null || rating === '' || rating === 'none') {
+        delete evalState.desempenoStore[t][sId].ratings[indicatorId];
+      } else if (NIVELES_DESEMPENO[rating]) {
+        evalState.desempenoStore[t][sId].ratings[indicatorId] = rating;
+      }
+      evalState.desempenoStore[t][sId].updatedAt = new Date().toISOString();
+      markUnsavedDesempeno();
+    },
+
+    setCategoryRating(studentId, category, rating, onlyPending = false, trimester = evalState.trimester) {
+      const t = trimester;
+      const sId = String(studentId);
+      if (!evalState.desempenoStore[t]) evalState.desempenoStore[t] = {};
+      if (!evalState.desempenoStore[t][sId]) {
+        evalState.desempenoStore[t][sId] = { ratings: {}, source: 'manual', isReviewed: true };
+      }
+
+      evalState.lastDesempenoUndo = {
+        studentId: sId,
+        trimester: t,
+        ratings: { ...evalState.desempenoStore[t][sId].ratings }
+      };
+
+      const catIndicators = INDICADORES_DESEMPENO.filter(i => i.categoria === category);
+      catIndicators.forEach(ind => {
+        const cur = evalState.desempenoStore[t][sId].ratings[ind.id];
+        if (onlyPending) {
+          if (!cur) evalState.desempenoStore[t][sId].ratings[ind.id] = rating;
+        } else {
+          evalState.desempenoStore[t][sId].ratings[ind.id] = rating;
+        }
+      });
+      evalState.desempenoStore[t][sId].updatedAt = new Date().toISOString();
+      markUnsavedDesempeno();
+    },
+
+    setGeneralRating(studentId, rating, onlyPending = false, trimester = evalState.trimester) {
+      const t = trimester;
+      const sId = String(studentId);
+      if (!evalState.desempenoStore[t]) evalState.desempenoStore[t] = {};
+      if (!evalState.desempenoStore[t][sId]) {
+        evalState.desempenoStore[t][sId] = { ratings: {}, source: 'manual', isReviewed: true };
+      }
+
+      evalState.lastDesempenoUndo = {
+        studentId: sId,
+        trimester: t,
+        ratings: { ...evalState.desempenoStore[t][sId].ratings }
+      };
+
+      INDICADORES_DESEMPENO.forEach(ind => {
+        const cur = evalState.desempenoStore[t][sId].ratings[ind.id];
+        if (onlyPending) {
+          if (!cur) evalState.desempenoStore[t][sId].ratings[ind.id] = rating;
+        } else {
+          evalState.desempenoStore[t][sId].ratings[ind.id] = rating;
+        }
+      });
+      evalState.desempenoStore[t][sId].updatedAt = new Date().toISOString();
+      markUnsavedDesempeno();
+    },
+
+    setGroupIndicatorRating(studentIds, indicatorId, rating, trimester = evalState.trimester) {
+      const t = trimester;
+      studentIds.forEach(sId => {
+        this.setIndicatorRating(sId, indicatorId, rating, t);
+      });
+    },
+
+    undoLastOperation(studentId, trimester = evalState.trimester) {
+      const t = trimester;
+      const sId = String(studentId);
+      if (evalState.lastDesempenoUndo && 
+          String(evalState.lastDesempenoUndo.studentId) === sId && 
+          evalState.lastDesempenoUndo.trimester === t) {
+        if (!evalState.desempenoStore[t]) evalState.desempenoStore[t] = {};
+        if (!evalState.desempenoStore[t][sId]) evalState.desempenoStore[t][sId] = { ratings: {} };
+        evalState.desempenoStore[t][sId].ratings = { ...evalState.lastDesempenoUndo.ratings };
+        evalState.lastDesempenoUndo = null;
+        markUnsavedDesempeno();
+        return true;
+      }
+      return false;
+    },
+
+    copyFromTrimester(studentId, fromTrimester, toTrimester = evalState.trimester, onlyPending = false) {
+      const sId = String(studentId);
+      const sourceData = evalState.desempenoStore?.[fromTrimester]?.[sId]?.ratings || {};
+      const sourceKeys = Object.keys(sourceData).filter(k => Boolean(sourceData[k]));
+      if (sourceKeys.length === 0) {
+        return { success: false, copiedCount: 0, reason: 'El trimestre de origen no tiene valoraciones capturadas.' };
+      }
+
+      if (!evalState.desempenoStore[toTrimester]) evalState.desempenoStore[toTrimester] = {};
+      if (!evalState.desempenoStore[toTrimester][sId]) {
+        evalState.desempenoStore[toTrimester][sId] = { ratings: {}, source: 'manual', isReviewed: true };
+      }
+
+      let copiedCount = 0;
+      INDICADORES_DESEMPENO.forEach(ind => {
+        const srcVal = sourceData[ind.id];
+        const tgtVal = evalState.desempenoStore[toTrimester][sId].ratings[ind.id];
+        if (srcVal) {
+          if (onlyPending) {
+            if (!tgtVal) {
+              evalState.desempenoStore[toTrimester][sId].ratings[ind.id] = srcVal;
+              copiedCount++;
+            }
+          } else {
+            evalState.desempenoStore[toTrimester][sId].ratings[ind.id] = srcVal;
+            copiedCount++;
+          }
+        }
+      });
+
+      evalState.desempenoStore[toTrimester][sId].source = `copia_t${fromTrimester}`;
+      evalState.desempenoStore[toTrimester][sId].isReviewed = false;
+      evalState.desempenoStore[toTrimester][sId].updatedAt = new Date().toISOString();
+      markUnsavedDesempeno();
+
+      return { success: true, copiedCount };
+    },
+
+    validateMessageText(text) {
+      if (!text || typeof text !== 'string') {
+        return { isValid: false, charCount: 0, isOverLimit: false, isEmpty: true };
+      }
+      const trim = text.trim();
+      const count = text.length;
+      const isOver = count > 245;
+      const isEmpty = trim.length === 0;
+      return {
+        isValid: (!isEmpty && !isOver),
+        charCount: count,
+        isOverLimit: isOver,
+        isEmpty
+      };
+    },
+
+    getStudentMessage(studentId, trimester = evalState.trimester) {
+      const t = trimester;
+      const sId = String(studentId);
+      const data = evalState.mensajesStore?.[t]?.[sId] || { message: '', templateId: null, updatedAt: null };
+      const valRes = this.validateMessageText(data.message);
+      return {
+        message: data.message || '',
+        templateId: data.templateId || null,
+        charCount: valRes.charCount,
+        isValid: valRes.isValid,
+        isOverLimit: valRes.isOverLimit,
+        isEmpty: valRes.isEmpty,
+        isComplete: valRes.isValid,
+        updatedAt: data.updatedAt
+      };
+    },
+
+    setStudentMessage(studentId, message, trimester = evalState.trimester, templateId = null) {
+      const t = trimester;
+      const sId = String(studentId);
+      if (!evalState.mensajesStore[t]) evalState.mensajesStore[t] = {};
+      evalState.mensajesStore[t][sId] = {
+        message: String(message || ''),
+        templateId: templateId || null,
+        updatedAt: new Date().toISOString()
+      };
+      markUnsavedMensaje();
+    },
+
+    setGroupMessage(studentIds, message, trimester = evalState.trimester) {
+      studentIds.forEach(sId => {
+        this.setStudentMessage(sId, message, trimester);
+      });
+    },
+
+    getBancoMensajes() {
+      return evalState.bancoMensajesStore || BANCO_MENSAJES_DEFAULT;
+    },
+
+    updateBancoMessage(id, updates) {
+      const bank = this.getBancoMensajes();
+      const idx = bank.findIndex(m => m.id === id);
+      if (idx !== -1) {
+        bank[idx] = { ...bank[idx], ...updates };
+        saveBancoMensajesStore(bank);
+        return true;
+      }
+      return false;
+    },
+
+    addBancoMessage(msgObj) {
+      const bank = this.getBancoMensajes();
+      const newId = 'rec_' + Date.now();
+      const newItem = {
+        id: newId,
+        category: msgObj.category || 'general',
+        level: msgObj.level || 'E',
+        text: (msgObj.text || '').slice(0, 245),
+        active: true,
+        isCustom: true
+      };
+      bank.push(newItem);
+      saveBancoMensajesStore(bank);
+      return newItem;
+    },
+
+    saveDrafts() {
+      saveDesempenoStore();
+      saveMensajesStore();
+    },
+
+    loadDesempenoStore: () => loadDesempenoStore(),
+    loadMensajesStore: () => loadMensajesStore(),
+    hasUnsavedChanges: () => Boolean(evalState.hasUnsavedDesempeno || evalState.hasUnsavedMensajes),
+
+    getStudentOverallStatus(studentId, trimester = evalState.trimester) {
+      const t = trimester;
+      const sId = String(studentId);
+      const evalData = calculateStudentFullEvaluation(sId, t);
+      const desempeno = this.getStudentEvaluation(sId, t);
+      const msg = this.getStudentMessage(sId, t);
+
+      const isAcademicAuth = Boolean(evalData && evalData.isAllAuthorized);
+      const isDesempDone = Boolean(desempeno && desempeno.isComplete);
+      const isMsgValid = Boolean(msg && msg.isValid);
+
+      const isReadyToClose = isAcademicAuth && isDesempDone && isMsgValid;
+      const hasAnyData = (evalData && evalData.subjects && Object.values(evalData.subjects).some(s => s.finalGrade !== null)) || 
+                         desempeno.completedCount > 0 || 
+                         !msg.isEmpty;
+
+      let code = 'pendiente';
+      let label = 'Pendiente';
+      let badgeClass = 'status-pending';
+
+      if (isReadyToClose) {
+        code = 'ready_to_close';
+        label = 'Lista para cerrar';
+        badgeClass = 'status-ready';
+      } else if (hasAnyData) {
+        code = 'incompleta';
+        label = 'Incompleta';
+        badgeClass = 'status-incomplete';
+      }
+
+      return {
+        code,
+        label,
+        badgeClass,
+        isReadyToClose,
+        isAcademicAuth,
+        isDesempDone,
+        isMsgValid,
+        academicAverage: evalData.trimesterAverage?.displayAverage || '—'
+      };
+    },
+
+    calculateTrackingMetrics(trimester = evalState.trimester) {
+      const t = trimester;
+      const students = getStudentsList();
+      let academicComplete = 0;
+      let desempenoComplete = 0;
+      let messagesComplete = 0;
+      let readyToClose = 0;
+      let incomplete = 0;
+      let pending = 0;
+
+      students.forEach(s => {
+        const st = this.getStudentOverallStatus(s.id, t);
+        if (st.isAcademicAuth) academicComplete++;
+        if (st.isDesempDone) desempenoComplete++;
+        if (st.isMsgValid) messagesComplete++;
+        if (st.isReadyToClose) readyToClose++;
+        else if (st.code === 'incompleta') incomplete++;
+        else pending++;
+      });
+
+      return {
+        total: students.length,
+        academicComplete,
+        desempenoComplete,
+        messagesComplete,
+        readyToClose,
+        incomplete,
+        pending
+      };
+    }
+  };
+
+  /**
+   * Renderiza el apartado 2: Desempeño Integral Individual
+   */
+  function renderDesempenoIndividual(student, trimester) {
+    if (!student) return;
+    const t = trimester;
+    const data = DesempenoEngine.getStudentEvaluation(student.id, t);
+
+    // 1. Contador y porcentaje
+    const pct = Math.round((data.completedCount / 23) * 100);
+    const progressTxt = document.getElementById('evalIndDesempenoProgressText');
+    const progressBar = document.getElementById('evalIndDesempenoProgressBar');
+    if (progressTxt) progressTxt.textContent = `${data.completedCount} de 23 indicadores completados (${pct}%)`;
+    if (progressBar) progressBar.style.width = `${pct}%`;
+
+    // 2. Pills de distribución
+    const pillsWrap = document.getElementById('evalIndDesempenoPills');
+    if (pillsWrap) {
+      pillsWrap.innerHTML = `
+        <span class="eval-pill-e">E: ${data.distribution.E}</span>
+        <span class="eval-pill-b">B: ${data.distribution.B}</span>
+        <span class="eval-pill-r">R: ${data.distribution.R}</span>
+        <span class="eval-pill-a">A: ${data.distribution.A}</span>
+        <span class="eval-pill-none">Pendientes: ${data.pendingCount}</span>
+      `;
+    }
+
+    // 3. Botones Deshacer y Copiar
+    const undoBtn = document.getElementById('evalBtnDesempenoUndo');
+    if (undoBtn) {
+      undoBtn.disabled = !evalState.lastDesempenoUndo || String(evalState.lastDesempenoUndo.studentId) !== String(student.id);
+    }
+    const copyBtn = document.getElementById('evalBtnCopyTrimester');
+    if (copyBtn) {
+      copyBtn.style.display = t > 1 ? 'inline-flex' : 'none';
+    }
+
+    // 4. Categorías e Indicadores
+    const categoriesWrap = document.getElementById('evalIndDesempenoCategoriesWrap');
+    if (categoriesWrap) {
+      categoriesWrap.innerHTML = CATEGORIAS_DESEMPENO.map(cat => {
+        const catIndicators = INDICADORES_DESEMPENO.filter(i => i.categoria === cat.id);
+        const catDone = catIndicators.filter(i => Boolean(data.ratings[i.id])).length;
+
+        const indicatorsHtml = catIndicators.map(ind => {
+          const currentVal = data.ratings[ind.id] || null;
+
+          return `
+            <div class="eval-indicator-item" data-ind-id="${ind.id}">
+              <div class="eval-indicator-title">
+                <span style="color: var(--teal); font-weight: 800;">${ind.numero}.</span>
+                <span>${ind.nombre}</span>
+              </div>
+              <div class="eval-indicator-buttons" role="group" aria-label="Nivel para ${ind.nombre}">
+                <button type="button" class="eval-ind-lvl-btn btn-lvl-e ${currentVal === 'E' ? 'active' : ''}" 
+                        data-action="eval-ind-set-indicator-level" data-student-id="${student.id}" data-ind="${ind.id}" data-level="E" title="Excelente (E)">
+                  E
+                </button>
+                <button type="button" class="eval-ind-lvl-btn btn-lvl-b ${currentVal === 'B' ? 'active' : ''}" 
+                        data-action="eval-ind-set-indicator-level" data-student-id="${student.id}" data-ind="${ind.id}" data-level="B" title="Bueno (B)">
+                  B
+                </button>
+                <button type="button" class="eval-ind-lvl-btn btn-lvl-r ${currentVal === 'R' ? 'active' : ''}" 
+                        data-action="eval-ind-set-indicator-level" data-student-id="${student.id}" data-ind="${ind.id}" data-level="R" title="Regular (R)">
+                  R
+                </button>
+                <button type="button" class="eval-ind-lvl-btn btn-lvl-a ${currentVal === 'A' ? 'active' : ''}" 
+                        data-action="eval-ind-set-indicator-level" data-student-id="${student.id}" data-ind="${ind.id}" data-level="A" title="Requiere apoyo (A)">
+                  A
+                </button>
+                <button type="button" class="eval-ind-lvl-btn btn-lvl-clear" 
+                        data-action="eval-ind-set-indicator-level" data-student-id="${student.id}" data-ind="${ind.id}" data-level="none" title="Limpiar valoración (Sin valorar)">
+                  ✕
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="eval-desempeno-category-card">
+            <div class="eval-desempeno-category-head">
+              <div>
+                <h5>${cat.icono} ${cat.nombre}</h5>
+                <span class="muted" style="font-size: 11px;">${catDone} de ${cat.total} indicadores valorados</span>
+              </div>
+              <div class="button-row" style="gap: 4px;">
+                <span style="font-size: 11px; font-weight: 700; color: var(--muted); margin-right: 4px;">Asignar a toda la categoría:</span>
+                <button class="btn small eval-lvl-btn-e" data-action="eval-ind-set-cat-level" data-cat="${cat.id}" data-level="E" title="Asignar Excelente a la categoría">E</button>
+                <button class="btn small eval-lvl-btn-b" data-action="eval-ind-set-cat-level" data-cat="${cat.id}" data-level="B" title="Asignar Bueno a la categoría">B</button>
+                <button class="btn small eval-lvl-btn-r" data-action="eval-ind-set-cat-level" data-cat="${cat.id}" data-level="R" title="Asignar Regular a la categoría">R</button>
+                <button class="btn small eval-lvl-btn-a" data-action="eval-ind-set-cat-level" data-cat="${cat.id}" data-level="A" title="Asignar Requiere apoyo a la categoría">A</button>
+              </div>
+            </div>
+            <div class="eval-indicators-list">
+              ${indicatorsHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  /**
+   * Renderiza el apartado 3: Mensaje Personalizado Individual
+   */
+  function renderMensajeIndividual(student, trimester) {
+    if (!student) return;
+    const t = trimester;
+    const msgData = DesempenoEngine.getStudentMessage(student.id, t);
+
+    const textarea = document.getElementById('evalIndMessageTextarea');
+    const countEl = document.getElementById('evalIndMessageCharCount');
+    const alertEl = document.getElementById('evalIndMessageOverLimitAlert');
+    const saveBtn = document.getElementById('evalBtnSaveMessage');
+
+    if (textarea) textarea.value = msgData.message;
+    if (countEl) {
+      countEl.textContent = `${msgData.charCount} / 245 caracteres`;
+      countEl.className = 'eval-char-count' + (msgData.isOverLimit ? ' error' : (msgData.charCount > 220 ? ' warning' : ''));
+    }
+    if (alertEl) alertEl.style.display = msgData.isOverLimit ? 'inline-block' : 'none';
+    if (saveBtn) saveBtn.disabled = msgData.isOverLimit;
+  }
+
+  /**
+   * Renderiza el apartado 4: Resumen Consolidado Individual de Evaluación
+   */
+  function renderResumenIndividual(student, trimester) {
+    if (!student) return;
+    const t = trimester;
+    const summaryPanel = document.getElementById('evalIndSummaryPanel');
+    if (!summaryPanel) return;
+
+    const num = resolveOfficialListNumber(student);
+    const fullNameText = student.apellidos ? `${student.apellidos} ${student.nombres || ''}` : (student.nombre || 'Alumno');
+    const evalData = calculateStudentFullEvaluation(student.id, t);
+    const desemp = DesempenoEngine.getStudentEvaluation(student.id, t);
+    const msg = DesempenoEngine.getStudentMessage(student.id, t);
+    const overall = DesempenoEngine.getStudentOverallStatus(student.id, t);
+
+    summaryPanel.innerHTML = `
+      <div class="section-head" style="align-items: center;">
+        <div>
+          <h3 style="margin: 0; font-size: 17px; color: var(--navy);">Resumen Consolidado de Evaluación · Trimestre ${t}</h3>
+          <span class="muted" style="font-size: 12px;">${num < 10 ? '0' + num : num}. ${fullNameText}</span>
+        </div>
+        <span class="eval-overall-status-pill ${overall.badgeClass}">
+          ${overall.label}
+        </span>
+      </div>
+
+      <!-- 1. Calificaciones Académicas -->
+      <div style="margin-top: 16px;">
+        <h4 style="font-size: 14px; color: var(--navy); margin-bottom: 8px;">1. Calificaciones académicas por campo formativo</h4>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+          ${EVAL_FIELDS.map(f => {
+            const sub = evalData.subjects[f];
+            return `
+              <div class="eval-stat-card" style="padding: 10px;">
+                <span style="font-size: 11px;">${f}</span>
+                <b style="font-size: 20px; color: ${sub.isAuthorized ? '#1b7c4b' : 'var(--teal)'};">${sub.isAuthorized ? EvaluacionEngine.formatGrade(sub.authorizedGrade) : sub.displayGrade}</b>
+                <span class="muted" style="font-size: 10px;">${sub.isAuthorized ? '✓ Autorizada' : 'Pendiente de autorización'}</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div style="margin-top: 6px; font-size: 12px; font-weight: 700; color: var(--navy);">
+          Promedio general trimestral: <span style="color: var(--teal); font-size: 15px;">${evalData.trimesterAverage?.displayAverage || '—'}</span>
+        </div>
+      </div>
+
+      <!-- 2. Desempeño Integral -->
+      <div style="margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line);">
+        <h4 style="font-size: 14px; color: var(--navy); margin-bottom: 8px;">2. Desempeño integral (23 Indicadores)</h4>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <span class="badge" style="font-size: 13px;">${desemp.completedCount} de 23 evaluados</span>
+          <span class="eval-pill-e">E: ${desemp.distribution.E}</span>
+          <span class="eval-pill-b">B: ${desemp.distribution.B}</span>
+          <span class="eval-pill-r">R: ${desemp.distribution.R}</span>
+          <span class="eval-pill-a">A: ${desemp.distribution.A}</span>
+          ${desemp.pendingCount > 0 ? `<span class="eval-pill-none" style="color: #dc2626; border-color: #fca5a5;">Pendientes: ${desemp.pendingCount}</span>` : '<span class="eval-pill-e">✓ 23/23 Completos</span>'}
+        </div>
+      </div>
+
+      <!-- 3. Mensaje Personalizado Familiar -->
+      <div style="margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line);">
+        <h4 style="font-size: 14px; color: var(--navy); margin-bottom: 8px;">3. Mensaje personalizado para la familia</h4>
+        <div style="background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 12px;">
+          <p style="margin: 0; font-size: 13px; font-style: italic; color: var(--navy);">
+            "${msg.message || '<span class=\"muted\">(Sin mensaje familiar redactado)</span>'}"
+          </p>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11px;">
+            <span class="muted">${msg.charCount} / 245 caracteres</span>
+            <span class="${msg.isValid ? 'text-green' : 'text-yellow'}" style="font-weight: 700;">
+              ${msg.isValid ? '✓ Válido para publicación' : '⚠️ Mensaje incompleto o pendiente'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Checklist para Cierre de Evaluación -->
+      <div style="margin-top: 20px; padding: 14px; border-radius: 10px; background: #fafcfd; border: 1px solid var(--line);">
+        <h4 style="font-size: 13px; color: var(--navy); margin: 0 0 8px;">Requisitos institucionales para el cierre definitivo:</h4>
+        <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+          <div style="color: ${overall.isAcademicAuth ? '#166534' : '#dc2626'}; font-weight: 700;">
+            ${overall.isAcademicAuth ? '✓' : '✗'} 4 campos formativos autorizados con calificación definitiva.
+          </div>
+          <div style="color: ${overall.isDesempDone ? '#166534' : '#dc2626'}; font-weight: 700;">
+            ${overall.isDesempDone ? '✓' : '✗'} 23 indicadores de desempeño integral valorados y revisados.
+          </div>
+          <div style="color: ${overall.isMsgValid ? '#166534' : '#dc2626'}; font-weight: 700;">
+            ${overall.isMsgValid ? '✓' : '✗'} Mensaje familiar redactado dentro del límite de 245 caracteres.
+          </div>
+        </div>
+        <p class="muted" style="margin: 10px 0 0; font-size: 11px;">
+          ${overall.isReadyToClose 
+            ? '✓ Esta evaluación cumple con todos los requisitos institucionales y está lista para el proceso de cierre y publicación en la Etapa 7.' 
+            : '⚠️ Completa los requisitos pendientes antes del cierre institucional.'}
+        </p>
+      </div>
+    `;
+  }
+
+  /**
+   * Subvista D de Captura Grupal: Matriz de Desempeño Integral
+   */
+  function renderMatrizDesempeno(container, studentsList, trimester) {
+    const t = trimester;
+    const catFilter = evalState.desempenoCategoryFilter || 'all';
+    const indFilter = evalState.desempenoIndicatorFilter || 'all';
+    const lvlFilter = evalState.desempenoLevelFilter || 'all';
+
+    let displayIndicators = INDICADORES_DESEMPENO;
+    if (catFilter !== 'all') {
+      displayIndicators = displayIndicators.filter(i => i.categoria === catFilter);
+    }
+    if (indFilter !== 'all') {
+      displayIndicators = displayIndicators.filter(i => i.id === indFilter);
+    }
+
+    // Filtrar alumnos por nivel si está activo
+    const filteredStudents = studentsList.filter(s => {
+      if (lvlFilter === 'all') return true;
+      const des = DesempenoEngine.getStudentEvaluation(s.id, t);
+      if (lvlFilter === 'pending') return des.pendingCount > 0;
+      return Object.values(des.ratings).includes(lvlFilter);
+    });
+
+    let html = `
+      <table class="eval-tracking-table eval-matrix-table" id="evalMatrixTable">
+        <thead>
+          <tr>
+            <th class="eval-sticky-col" style="width: 50px; text-align: center;">No.</th>
+            <th class="eval-sticky-col" style="min-width: 200px;">Nombre del alumno</th>
+            <th style="text-align: center; width: 120px;">Progreso (23)</th>
+            ${displayIndicators.map(ind => `
+              <th style="text-align: center; min-width: 130px;" title="${ind.categoriaNombre}: ${ind.nombre}">
+                <div style="font-size: 11px; font-weight: 700;">${ind.numero}. ${ind.nombre.slice(0, 18)}${ind.nombre.length > 18 ? '...' : ''}</div>
+              </th>
+            `).join('')}
+          </tr>
+        </thead>
+        <tbody id="evalGrupalTableBody">
+    `;
+
+    filteredStudents.forEach(s => {
+      const num = resolveOfficialListNumber(s);
+      const name = s.apellidos ? `${s.apellidos} ${s.nombres || ''}` : (s.nombre || 'Alumno');
+      const des = DesempenoEngine.getStudentEvaluation(s.id, t);
+
+      html += `
+        <tr data-student-id="${s.id}">
+          <td class="eval-sticky-col" style="text-align: center; font-weight: 800; color: var(--navy);">${num}</td>
+          <td class="eval-sticky-col">
+            <span style="font-weight: 700; font-size: 13px;">${name}</span>
+          </td>
+          <td style="text-align: center;">
+            <span class="badge ${des.isComplete ? 'status-completed' : 'status-pending'}" style="font-size: 11px;">
+              ${des.completedCount} / 23
+            </span>
+          </td>
+          ${displayIndicators.map(ind => {
+            const currentVal = des.ratings[ind.id] || null;
+            return `
+              <td style="text-align: center;">
+                <div class="eval-indicator-buttons" style="justify-content: center; gap: 3px;">
+                  <button type="button" class="eval-ind-lvl-btn btn-lvl-e ${currentVal === 'E' ? 'active' : ''}" 
+                          style="min-width: 32px; min-height: 32px; font-size: 11px;"
+                          data-action="eval-ind-set-indicator-level" data-student-id="${s.id}" data-ind="${ind.id}" data-level="E">E</button>
+                  <button type="button" class="eval-ind-lvl-btn btn-lvl-b ${currentVal === 'B' ? 'active' : ''}" 
+                          style="min-width: 32px; min-height: 32px; font-size: 11px;"
+                          data-action="eval-ind-set-indicator-level" data-student-id="${s.id}" data-ind="${ind.id}" data-level="B">B</button>
+                  <button type="button" class="eval-ind-lvl-btn btn-lvl-r ${currentVal === 'R' ? 'active' : ''}" 
+                          style="min-width: 32px; min-height: 32px; font-size: 11px;"
+                          data-action="eval-ind-set-indicator-level" data-student-id="${s.id}" data-ind="${ind.id}" data-level="R">R</button>
+                  <button type="button" class="eval-ind-lvl-btn btn-lvl-a ${currentVal === 'A' ? 'active' : ''}" 
+                          style="min-width: 32px; min-height: 32px; font-size: 11px;"
+                          data-action="eval-ind-set-indicator-level" data-student-id="${s.id}" data-ind="${ind.id}" data-level="A">A</button>
+                </div>
+              </td>
+            `;
+          }).join('')}
+        </tr>
+      `;
+    });
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+  }
+
+  /**
+   * Subvista E de Captura Grupal: Mensajes Personalizados
+   */
+  function renderMatrizMensajes(container, studentsList, trimester) {
+    const t = trimester;
+
+    let html = `
+      <table class="eval-tracking-table eval-matrix-table" id="evalMatrixTable">
+        <thead>
+          <tr>
+            <th class="eval-sticky-col" style="width: 50px; text-align: center;">No.</th>
+            <th class="eval-sticky-col" style="min-width: 200px;">Nombre del alumno</th>
+            <th style="min-width: 320px;">Mensaje para la familia (máx. 245 caracteres)</th>
+            <th style="width: 90px; text-align: center;">Caracteres</th>
+            <th style="width: 120px; text-align: center;">Estado</th>
+            <th style="width: 140px; text-align: center;">Acción</th>
+          </tr>
+        </thead>
+        <tbody id="evalGrupalTableBody">
+    `;
+
+    studentsList.forEach(s => {
+      const num = resolveOfficialListNumber(s);
+      const name = s.apellidos ? `${s.apellidos} ${s.nombres || ''}` : (s.nombre || 'Alumno');
+      const msg = DesempenoEngine.getStudentMessage(s.id, t);
+
+      html += `
+        <tr data-student-id="${s.id}">
+          <td class="eval-sticky-col" style="text-align: center; font-weight: 800; color: var(--navy);">${num}</td>
+          <td class="eval-sticky-col">
+            <span style="font-weight: 700; font-size: 13px;">${name}</span>
+          </td>
+          <td>
+            <input type="text" class="input compact-input" style="width: 100%; box-sizing: border-box; font-size: 12px;" 
+                   value="${typeof escapeHtml === 'function' ? escapeHtml(msg.message) : msg.message}" 
+                   placeholder="Redacta mensaje o inserta una recomendación..." 
+                   data-action="eval-grupal-msg-input" 
+                   data-student-id="${s.id}">
+          </td>
+          <td style="text-align: center; font-size: 12px; font-weight: 700; color: ${msg.isOverLimit ? '#dc2626' : 'var(--teal)'};">
+            ${msg.charCount} / 245
+          </td>
+          <td style="text-align: center;">
+            <span class="eval-status-pill ${msg.isValid ? 'status-completed' : 'status-pending'}" style="font-size: 11px;">
+              ${msg.isValid ? '✓ Válido' : 'Pendiente'}
+            </span>
+          </td>
+          <td style="text-align: center;">
+            <button class="btn small" data-action="eval-open-individual" data-id="${s.id}" title="Abrir ficha detallada del alumno">
+              Abrir ficha
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+
+    // Escuchar cambios en los inputs de mensajes grupales
+    container.querySelectorAll('[data-action="eval-grupal-msg-input"]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const sId = inp.dataset.studentId;
+        const txt = inp.value.trim();
+        DesempenoEngine.setStudentMessage(sId, txt, t);
+        renderMatrizMensajes(container, studentsList, t);
+      });
+    });
+  }
+
+  /**
+   * Modal de Banco de Recomendaciones
+   */
+  function renderBancoMensajesModal() {
+    const listWrap = document.getElementById('evalBankListContainer');
+    if (!listWrap) return;
+
+    const bank = DesempenoEngine.getBancoMensajes();
+    const q = (evalState.bancoSearch || '').toLowerCase();
+    const cat = evalState.bancoCategory || 'all';
+    const lvl = evalState.bancoLevel || 'all';
+
+    const filtered = bank.filter(item => {
+      if (!item.active && item.active !== undefined) return false;
+      if (cat !== 'all' && item.category !== cat) return false;
+      if (lvl !== 'all' && item.level !== lvl) return false;
+      if (q && !item.text.toLowerCase().includes(q)) return false;
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      listWrap.innerHTML = '<p class="muted" style="text-align: center; padding: 20px;">No se encontraron recomendaciones con los filtros seleccionados.</p>';
+      return;
+    }
+
+    listWrap.innerHTML = filtered.map(item => {
+      const lvlInfo = NIVELES_DESEMPENO[item.level] || { label: item.level, badgeClass: 'eval-pill-none' };
+      const catObj = CATEGORIAS_DESEMPENO.find(c => c.id === item.category);
+      const catLabel = catObj ? catObj.nombre : item.category;
+
+      return `
+        <div class="eval-bank-item">
+          <div class="eval-bank-item-top">
+            <span class="badge" style="font-size: 11px;">${catLabel}</span>
+            <span class="${lvlInfo.badgeClass}" style="font-size: 11px;">${lvlInfo.label}</span>
+          </div>
+          <div class="eval-bank-item-text">"${item.text}"</div>
+          <div class="eval-bank-item-actions">
+            <span class="muted" style="font-size: 11px;">${item.text.length} caracteres</span>
+            <button class="btn small primary" data-action="eval-insert-banco-recommendation" data-rec-id="${item.id}" title="Insertar esta recomendación en la evaluación del alumno">
+              Insertar recomendación
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function openMessageBankModal() {
+    const modal = document.getElementById('evalMessageBankModal');
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.classList.remove('hidden-control');
+      renderBancoMensajesModal();
+    }
+  }
+
+  function closeMessageBankModal() {
+    const modal = document.getElementById('evalMessageBankModal');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.add('hidden-control');
+    }
+  }
+
+  function openCopyTrimesterModal() {
+    const modal = document.getElementById('evalCopyTrimesterModal');
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.classList.remove('hidden-control');
+      const srcSelect = document.getElementById('evalCopySourceTrimester');
+      if (srcSelect) {
+        srcSelect.value = String(Math.max(1, evalState.trimester - 1));
+      }
+      updateCopyPreviewNotice();
+    }
+  }
+
+  function closeCopyTrimesterModal() {
+    const modal = document.getElementById('evalCopyTrimesterModal');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.add('hidden-control');
+    }
+  }
+
+  function updateCopyPreviewNotice() {
+    const notice = document.getElementById('evalCopyPreviewNotice');
+    if (!notice) return;
+    const srcTrimester = Number(document.getElementById('evalCopySourceTrimester')?.value) || 1;
+    const curStudentId = evalState.indStudentId;
+    const srcData = DesempenoEngine.getStudentEvaluation(curStudentId, srcTrimester);
+    notice.textContent = `El Trimestre ${srcTrimester} tiene ${srcData.completedCount} de 23 indicadores capturados.`;
+  }
+
+  function confirmCopyTrimester() {
+    const srcTrimester = Number(document.getElementById('evalCopySourceTrimester')?.value) || 1;
+    const onlyPending = document.querySelector('input[name="evalCopyMode"]:checked')?.value === 'only-pending';
+    const curStudentId = evalState.indStudentId;
+
+    const res = DesempenoEngine.copyFromTrimester(curStudentId, srcTrimester, evalState.trimester, onlyPending);
+    closeCopyTrimesterModal();
+
+    if (res.success) {
+      renderDesempenoIndividual(getStudentsList().find(s => s.id === curStudentId), evalState.trimester);
+      if (typeof toast === 'function') toast(`Se copiaron ${res.copiedCount} valoraciones del Trimestre ${srcTrimester} como borrador.`);
+    } else {
+      if (typeof toast === 'function') toast(res.reason || 'No se pudieron copiar las valoraciones.');
+    }
   }
 
   /**
@@ -3713,17 +4838,171 @@
       const sId = btn?.dataset?.id;
       if (sId) evalState.indStudentId = sId;
       switchEvalTab('captura-individual');
+    },
+
+    // Acciones de Desempeño Integral y Mensajes (Etapa 6)
+    'eval-ind-set-general-level': btn => {
+      const lvl = btn?.dataset?.level;
+      const onlyPending = Boolean(document.getElementById('evalIndOnlyPendingGeneralCheck')?.checked);
+      if (lvl && evalState.indStudentId) {
+        DesempenoEngine.setGeneralRating(evalState.indStudentId, lvl, onlyPending, evalState.trimester);
+        renderDesempenoIndividual(getStudentsList().find(s => s.id === evalState.indStudentId), evalState.trimester);
+        if (typeof toast === 'function') toast(`Nivel ${lvl} asignado a los indicadores.`);
+      }
+    },
+    'eval-ind-set-cat-level': btn => {
+      const cat = btn?.dataset?.cat;
+      const lvl = btn?.dataset?.level;
+      if (cat && lvl && evalState.indStudentId) {
+        DesempenoEngine.setCategoryRating(evalState.indStudentId, cat, lvl, false, evalState.trimester);
+        renderDesempenoIndividual(getStudentsList().find(s => s.id === evalState.indStudentId), evalState.trimester);
+        if (typeof toast === 'function') toast(`Nivel ${lvl} asignado a la categoría.`);
+      }
+    },
+    'eval-ind-set-indicator-level': btn => {
+      const sId = btn?.dataset?.studentId || evalState.indStudentId;
+      const ind = btn?.dataset?.ind;
+      const lvl = btn?.dataset?.level;
+      if (sId && ind) {
+        const ratingVal = lvl === 'none' ? null : lvl;
+        DesempenoEngine.setIndicatorRating(sId, ind, ratingVal, evalState.trimester);
+        if (evalState.activeTab === 'captura-grupal') {
+          renderCapturaGrupal();
+        } else {
+          renderDesempenoIndividual(getStudentsList().find(s => s.id === sId), evalState.trimester);
+        }
+      }
+    },
+    'eval-ind-desempeno-undo': () => {
+      const undone = DesempenoEngine.undoLastOperation(evalState.indStudentId, evalState.trimester);
+      if (undone) {
+        renderDesempenoIndividual(getStudentsList().find(s => s.id === evalState.indStudentId), evalState.trimester);
+        if (typeof toast === 'function') toast('Última valoración masiva deshecha con éxito.');
+      }
+    },
+    'eval-open-copy-trimester-modal': () => openCopyTrimesterModal(),
+    'eval-close-copy-trimester-modal': () => closeCopyTrimesterModal(),
+    'eval-confirm-copy-trimester': () => confirmCopyTrimester(),
+    'eval-save-desempeno-draft': () => {
+      saveDesempenoStore();
+      if (typeof toast === 'function') toast('Borrador de desempeño integral guardado localmente.');
+    },
+    'eval-open-message-bank-modal': () => openMessageBankModal(),
+    'eval-close-message-bank-modal': () => closeMessageBankModal(),
+    'eval-insert-banco-recommendation': btn => {
+      const recId = btn?.dataset?.recId;
+      const rec = DesempenoEngine.getBancoMensajes().find(r => r.id === recId);
+      if (rec && evalState.indStudentId) {
+        DesempenoEngine.setStudentMessage(evalState.indStudentId, rec.text, evalState.trimester, rec.id);
+        closeMessageBankModal();
+        renderMensajeIndividual(getStudentsList().find(s => s.id === evalState.indStudentId), evalState.trimester);
+        if (typeof toast === 'function') toast('Recomendación insertada en la evaluación del alumno.');
+      }
+    },
+    'eval-add-banco-recommendation': () => {
+      const cat = document.getElementById('evalNewRecCategory')?.value || 'general';
+      const lvl = document.getElementById('evalNewRecLevel')?.value || 'E';
+      const txt = (document.getElementById('evalNewRecText')?.value || '').trim();
+      if (!txt) {
+        if (typeof toast === 'function') toast('Escribe el texto de la recomendación antes de guardar.');
+        return;
+      }
+      DesempenoEngine.addBancoMessage({ category: cat, level: lvl, text: txt });
+      const txtInput = document.getElementById('evalNewRecText');
+      if (txtInput) txtInput.value = '';
+      renderBancoMensajesModal();
+      if (typeof toast === 'function') toast('Nueva recomendación agregada al banco con éxito.');
+    },
+    'eval-save-student-message': () => {
+      saveMensajesStore();
+      if (typeof toast === 'function') toast('Mensaje familiar guardado localmente.');
+    },
+    'eval-clear-student-message': () => {
+      if (evalState.indStudentId) {
+        DesempenoEngine.setStudentMessage(evalState.indStudentId, '', evalState.trimester);
+        renderMensajeIndividual(getStudentsList().find(s => s.id === evalState.indStudentId), evalState.trimester);
+      }
+    },
+    'eval-ind-execute-jump': () => {
+      const jumpType = document.getElementById('evalIndJumpSelect')?.value || 'pending-all';
+      const students = getStudentsList();
+      if (!students || !students.length) return;
+      const curIdx = students.findIndex(s => String(s.id) === String(evalState.indStudentId));
+      let foundId = null;
+
+      for (let i = 1; i <= students.length; i++) {
+        const idx = (curIdx + i) % students.length;
+        const s = students[idx];
+        if (jumpType === 'pending-all') {
+          const st = DesempenoEngine.getStudentOverallStatus(s.id, evalState.trimester);
+          if (!st.isReadyToClose) { foundId = s.id; break; }
+        } else if (jumpType === 'pending-grades') {
+          const ev = calculateStudentFullEvaluation(s.id, evalState.trimester);
+          if (!ev.isAllAuthorized) { foundId = s.id; break; }
+        } else if (jumpType === 'pending-desempeno') {
+          const des = DesempenoEngine.getStudentEvaluation(s.id, evalState.trimester);
+          if (!des.isComplete) { foundId = s.id; break; }
+        } else if (jumpType === 'pending-message') {
+          const msg = DesempenoEngine.getStudentMessage(s.id, evalState.trimester);
+          if (!msg.isValid) { foundId = s.id; break; }
+        }
+      }
+
+      if (foundId) {
+        evalState.indStudentId = foundId;
+        renderCapturaIndividual();
+      } else {
+        if (typeof toast === 'function') toast('No hay más alumnos pendientes con el criterio seleccionado.');
+      }
+    },
+    'eval-open-mass-desempeno-modal': () => {
+      const cat = evalState.desempenoCategoryFilter;
+      const ind = evalState.desempenoIndicatorFilter;
+      const lvl = (evalState.desempenoLevelFilter !== 'all' && evalState.desempenoLevelFilter !== 'pending') 
+        ? evalState.desempenoLevelFilter 
+        : 'E';
+      const students = getStudentsList();
+
+      if (ind !== 'all') {
+        DesempenoEngine.setGroupIndicatorRating(students.map(s => s.id), ind, lvl, evalState.trimester);
+        if (typeof toast === 'function') toast(`Nivel ${lvl} asignado al grupo para el indicador.`);
+      } else {
+        students.forEach(s => {
+          if (cat === 'all') DesempenoEngine.setGeneralRating(s.id, lvl, false, evalState.trimester);
+          else DesempenoEngine.setCategoryRating(s.id, cat, lvl, false, evalState.trimester);
+        });
+        if (typeof toast === 'function') toast(`Nivel ${lvl} asignado masivamente a los alumnos.`);
+      }
+      renderCapturaGrupal();
+    },
+    'eval-close-confirm-modal': () => {
+      const m = document.getElementById('evalConfirmModal');
+      if (m) {
+        m.style.display = 'none';
+        m.classList.add('hidden-control');
+      }
     }
   });
 
   // Exportar funciones globales de la vista
+  EvaluacionEngine.calculateStudentFullEvaluation = calculateStudentFullEvaluation;
   window.EvaluacionEngine = EvaluacionEngine;
+  window.DesempenoEngine = DesempenoEngine;
   window.initEvaluacionesTrimestrales = initEvaluacionesTrimestrales;
   window.selectEvalTrimester = selectEvalTrimester;
   window.switchEvalTab = switchEvalTab;
   window.renderCalculoPreliminar = renderCalculoPreliminar;
   window.renderCapturaGrupal = renderCapturaGrupal;
   window.renderCapturaIndividual = renderCapturaIndividual;
+  window.renderDesempenoIndividual = renderDesempenoIndividual;
+  window.renderMensajeIndividual = renderMensajeIndividual;
+  window.renderResumenIndividual = renderResumenIndividual;
+  window.renderBancoMensajesModal = renderBancoMensajesModal;
+  window.openMessageBankModal = openMessageBankModal;
+  window.closeMessageBankModal = closeMessageBankModal;
+  window.openCopyTrimesterModal = openCopyTrimesterModal;
+  window.closeCopyTrimesterModal = closeCopyTrimesterModal;
+  window.confirmCopyTrimester = confirmCopyTrimester;
   window.openPasteModal = openPasteModal;
   window.closePasteModal = closePasteModal;
   window.previewPaste = previewPaste;
