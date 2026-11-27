@@ -10,45 +10,56 @@
  * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
  * 
  * ÍNDICE DE SECCIONES:
- *   1. const DB: Esquemas relacionales preexistentes (27 tablas originales).
+ *   1. const DB: Esquemas relacionales preexistentes (27 tablas originales documentadas).
  *   2. const DB_EVALUACIONES: Esquemas relacionales del módulo Evaluaciones Trimestrales (7 tablas).
- *   3. Funciones de Inicialización y Semillas: setupSystem_, seedConfig_, seedSubjects_, seedRubrics_, etc.
+ *   3. Funciones de Inicialización y Semillas: setupSystem_, seedEvaluationPeriods_, seedConfig_, etc.
  *   4. Utilidades CRUD y Persistencia: readRows_, upsertObject_, upsertObjectsBatch_, appendObjects_, etc.
  *   5. Funciones de Normalización y Utilidades Generales: newId_, now_, normalizeText_, serializeCell_, etc.
- *   6. Migraciones Estructurales Históricas: migrateLegacyStudents_, etc.
+ *   6. Migraciones Estructurales Históricas: migrateLegacyStudents_, migrateDailyDatabaseSchema_, etc.
  * 
  * FUNCIONES PRINCIPALES:
- *   setupSystem_, seedEvaluationPeriods_, migrateLegacyStudents_, seedConfig_,
- *   seedSubjects_, seedRubrics_, ensureSheet_, readRows_, appendObjects_,
- *   upsertObject_, upsertObjectsBatch_, replaceObjects_, getConfig_, setConfig_,
- *   serializeCell_, newId_, now_, normalizeText_, getSpreadsheet_.
+ *   setupSystem_, seedEvaluationPeriods_, migrateLegacyStudents_, getSpreadsheet_,
+ *   ensureSheet_, seedConfig_, seedSubjects_, seedRubrics_, readRows_, appendObjects_,
+ *   upsertObject_, upsertObjectsBatch_, clearObjectsByIdsBatch_, replaceObjects_,
+ *   saveConfigValue_, getConfig_, serializeCell_, newId_, now_, normalizeText_,
+ *   migrateDailyDatabaseSchema_, inspectSheet, applyMissing, ejecutarMigracionDiario,
+ *   migrateAlumnosRosterSchema_.
  * 
  * DEPENDENCIAS:
  *   Google Apps Script SpreadsheetApp, CacheService, Utilities, LockService.
  * 
  * HISTORIAL ACUMULATIVO DE MODIFICACIONES:
- *   - Fecha de creación no registrada: Implementación base del esquema relacional y funciones CRUD.
+ *   - Fecha de creación no registrada: Implementación base del esquema relacional y utilidades CRUD.
  *   - 27/11/2026 (Modificación funcional y documental - Etapa 7A.3):
- *     * Se incorporó el estándar obligatorio de documentación y trazabilidad (JSDoc y encabezados).
- *     * Se separaron las 7 definiciones de tablas de Evaluaciones Trimestrales en 'const DB_EVALUACIONES'
- *       para blindar 'setupSystem_' y 'ensureInstalled_', evitando la creación automática no autorizada de hojas.
+ *     * Se aplicó el estándar obligatorio de documentación JSDoc a todas las funciones del archivo.
+ *     * Se identificó el nombre y propósito oficial de cada una de las 27 tablas en 'const DB'.
+ *     * Se separaron las 7 tablas de Evaluaciones Trimestrales en 'const DB_EVALUACIONES' para blindar
+ *       'setupSystem_' y 'ensureInstalled_', impidiendo la creación automática no autorizada de hojas.
  *     * Se adaptaron 'upsertObjectsBatch_', 'upsertObject_', 'readRows_' y 'appendObjects_' para resolver
  *       encabezados consultando 'DB[sheetName] || DB_EVALUACIONES[sheetName]'.
  * ============================================================================
  */
 const DB = {
+  // 1. Parámetros globales y metadatos de la escuela, ciclo y docente
   Configuracion: ['clave', 'valor'],
+  // 2. Asignaturas curriculares oficiales del plan de estudios
   Materias: ['id', 'nombre', 'orden', 'activo'],
+  // 3. Expediente del alumno, datos biométricos, CURP y número de lista oficial
   Alumnos: ['id', 'nombreCompleto', 'apellidoPaterno', 'apellidoMaterno', 'nombres', 'fechaNacimiento', 'edad', 'tutorNombre', 'tutorParentesco', 'tutorTelefono', 'tutorUsuario', 'activo', 'creadoEn', 'actualizadoEn', 'curp', 'sexo', 'entidadNacimiento', 'estadoInscripcion', 'numeroLista'],
+  // 4. Credenciales de acceso para tutores al portal institucional
   UsuariosTutor: ['id', 'alumnoId', 'usuario', 'passwordHash', 'debeCambiarPassword', 'activo', 'creadoEn'],
+  // 5. Diagnóstico de canales de aprendizaje sensorial (Visual, Auditivo, Kinestésico)
   EstilosVAK: ['id', 'alumnoId', 'visual', 'auditivo', 'kinestesico', 'resultado', 'fechaEvaluacion'],
+  // 6. Proyectos didácticos, escenarios, metodología, propósitos y producto final
   Proyectos: ['id', 'nombre', 'campoFormativo', 'fechaInicio', 'fechaFin', 'temporalidad', 'planPeriodo', 'metodologia', 'escenario', 'ejes', 'contenidos', 'pda', 'proposito', 'productoFinal', 'sinProductoFinal', 'estado', 'creadoEn', 'actualizadoEn'],
-    Clases: [
+  // 7. Registro de clases diarias, material, instrucciones y PDA abordado
+  Clases: [
     'id', 'proyectoId', 'fecha', 'horaInicio', 'horaFin',
     'materia', 'actividad', 'material', 'creadoEn', 'instrumentoId',
     'instrumentoTipo', 'tipoActividad', 'paginas', 'instrucciones',
     'pdaTema'
   ],
+  // 8. Evaluaciones formativas diarias: trabajo, conducta, participación y plazos
   Evaluaciones: [
     'id', 'claseId', 'alumnoId', 'trabajo', 'desempeno',
     'conducta', 'participacion', 'observacionLibre', 'creadoEn',
@@ -58,31 +69,53 @@ const DB = {
     'fechaLimiteJustificada', 'reabiertoMotivo',
     'reabiertoEn', 'reabiertoFechaLimite'
   ],
+  // 9. Rúbricas institucionales para retroalimentación formativa cualitativa
   Rubricas: ['id', 'categoria', 'nivel', 'mensaje', 'activo', 'orden'],
+  // 10. Instrumentos de evaluación (listas de cotejo, escalas estimativas)
   InstrumentosEvaluacion: ['id', 'titulo', 'tipo', 'campoFormativo', 'descripcion', 'criteriosJson', 'nivelesJson', 'activo', 'version', 'origenId', 'creadoEn', 'actualizadoEn', 'area', 'contenidoId', 'contenido', 'pdaJson', 'configuracionJson', 'origenCurricular'],
+  // 11. Puntuaciones y resultados desglosados obtenidos en cada instrumento
   ResultadosInstrumento: ['id', 'claseId', 'alumnoId', 'instrumentoId', 'instrumentoVersion', 'resultadosJson', 'puntosObtenidos', 'puntosPosibles', 'calificacion', 'nivel', 'areasOportunidad', 'mensajeResultado', 'creadoEn', 'actualizadoEn'],
+  // 12. Control diario de asistencia, inasistencias y retardos
   Asistencia: ['id', 'alumnoId', 'fecha', 'estado', 'observacion'],
+  // 13. Directorio domiciliario y datos de localización de familias
   DirectorioFamilias: ['id', 'alumnoId', 'alumnoApellidoPaterno', 'alumnoApellidoMaterno', 'alumnoNombres', 'tutorApellidoPaterno', 'tutorApellidoMaterno', 'tutorNombres', 'tutorParentesco', 'tutorTelefono', 'tutorTelefonoAlterno', 'calle', 'numeroExterior', 'numeroInterior', 'entreCalles', 'colonia', 'region', 'codigoPostal', 'referencias', 'completo', 'creadoEn', 'actualizadoEn'],
+  // 14. Contactos de emergencia autorizados para recoger al alumno
   DirectorioContactos: ['id', 'alumnoId', 'orden', 'apellidoPaterno', 'apellidoMaterno', 'nombres', 'parentesco', 'telefono', 'fotoUrl', 'activo', 'creadoEn', 'actualizadoEn'],
+  // 15. Cuentas de tutor autenticadas para el Portal Familiar
   CuentasFamilia: ['id', 'alumnoId', 'correo', 'passwordHash', 'salt', 'activo', 'creadoEn', 'actualizadoEn', 'ultimoAcceso', 'usuario', 'debeCambiarPassword', 'telefonoRecuperacion', 'datosConfirmadosEn', 'primerAccesoEn', 'passwordTemporalExpiraEn', 'passwordTemporalVisible', 'accesoRevocadoEn', 'esCuentaTecnica'],
+  // 16. Tokens e invitaciones para activación inicial de tutores
   InvitacionesFamilia: ['id', 'alumnoId', 'tokenHash', 'estado', 'expiraEn', 'creadoEn', 'usadoEn'],
+  // 17. Tokens temporales para restablecimiento de contraseña de familias
   RecuperacionesFamilia: ['id', 'cuentaId', 'tokenHash', 'estado', 'expiraEn', 'creadoEn', 'usadoEn'],
+  // 18. Códigos de invitación masiva por grupo para el portal
   InvitacionesGrupo: ['id', 'tokenHash', 'estado', 'expiraEn', 'creadoEn'],
+  // 19. Periodos trimestrales oficiales (T1, T2, T3) y fechas de corte
   PeriodosEvaluacion: ['id', 'trimestre', 'nombre', 'fechaInicio', 'fechaFin', 'activo', 'actualizadoEn'],
+  // 20. Ponderaciones porcentuales de criterios por asignatura y periodo
   Ponderaciones: ['id', 'trimestre', 'campoFormativo', 'criterio', 'porcentaje', 'tipo', 'orden', 'activo', 'actualizadoEn'],
+  // 21. Calificaciones asignadas de forma manual en el esquema anterior
   CalificacionesManual: ['id', 'trimestre', 'campoFormativo', 'alumnoId', 'criterio', 'calificacion', 'actualizadoEn'],
+  // 22. Convocatorias y periodos de inscripción/reinscripción escolar
   PeriodosInscripcion: ['id', 'nombre', 'gradoGrupo', 'cicloEscolar', 'estado', 'tokenHash', 'token', 'fechaInicio', 'fechaFin', 'creadoEn', 'actualizadoEn'],
+  // 23. Cuentas de aspirantes o padres en proceso de inscripción
   CuentasInscripcion: ['id', 'correo', 'telefono', 'passwordHash', 'salt', 'activo', 'creadoEn', 'actualizadoEn', 'ultimoAcceso'],
+  // 24. Fichas de inscripción completadas con datos del aspirante
   Inscripciones: ['id', 'periodoId', 'cuentaId', 'alumnoId', 'curp', 'estado', 'pasoActual', 'porcentaje', 'datosJson', 'creadoEn', 'actualizadoEn', 'enviadoEn', 'aprobadoEn', 'observacionesRevision'],
+  // 25. Documentos y fotografías de aspirantes subidos a Drive
   FotosInscripcion: ['id', 'inscripcionId', 'tipo', 'archivoId', 'mimeType', 'nombreArchivo', 'pesoBytes', 'actualizadoEn'],
+  // 26. Bitácora de movimientos y revisiones del proceso de inscripción
   HistorialInscripcion: ['id', 'inscripcionId', 'accion', 'actor', 'detalle', 'creadoEn'],
+  // 27. Catálogo institucional de observaciones de conducta y recomendaciones
   ObservacionesBanco: ['id', 'categoria', 'tipo', 'texto', 'recomendacion', 'favorita', 'personalizada', 'activo', 'orden', 'creadoEn', 'actualizadoEn'],
+  // 28. Bitácora de incidencias y conductas observadas en la semana
   ObservacionesRegistro: ['id', 'alumnoId', 'semanaInicio', 'fecha', 'categoria', 'tipo', 'observacionId', 'texto', 'evidencia', 'ocurrenciasJson', 'estadoReporte', 'autorizada', 'creadoEn', 'actualizadoEn'],
+  // 29. Recomendaciones pedagógicas dirigidas a los padres de familia
   RecomendacionesFamilia: ['id', 'categoria', 'nivel', 'texto', 'activo', 'creadoEn', 'actualizadoEn'],
+  // 30. Resumen semanal consolidado de reportes para tutores
   ReportesSemanales: ['id', 'alumnoId', 'semanaInicio', 'version', 'estado', 'datosJson', 'creadoEn', 'actualizadoEn', 'publicadoEn'],
+  // 31. Registro de idempotencia y control de peticiones transaccionales
   SolicitudesOperacion: ['id', 'accion', 'entidadId', 'estado', 'respuestaJson', 'creadoEn', 'actualizadoEn']
 };
-
 
 // ============================================================================
 // SECCIÓN 2: ESQUEMAS RELACIONALES — EVALUACIONES TRIMESTRALES (ETAPA 7A)
@@ -139,7 +172,21 @@ const DB_EVALUACIONES = {
     'payloadHash', 'creadoEn', 'usuario', 'estadoConsolidacion'
   ]
 };
-
+/**
+ * TÍTULO: Instalación y aprovisionamiento inicial del sistema
+ * NOMBRE TÉCNICO: setupSystem_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Crea las hojas esenciales del sistema, migra alumnos antiguos y carga datos semilla.
+ * PARA QUÉ SIRVE: Garantiza que el libro escolar cuente con la estructura base para operar.
+ * POR QUÉ SE CREÓ: Para permitir la inicialización en una sola ejecución.
+ * PARÁMETROS: Ninguno.
+ * RESULTADO: {Object} Objeto con estado { ok: true, message: string, spreadsheetId: string }.
+ * DEPENDENCIAS: ensureSheet_, seedConfig_, seedSubjects_, seedRubrics_, etc.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function setupSystem_() {
   const ss = getSpreadsheet_();
   migrateLegacyStudents_(ss);
@@ -155,6 +202,21 @@ function setupSystem_() {
   return { ok: true, message: 'Sistema instalado correctamente.', spreadsheetId: ss.getId() };
 }
 
+/**
+ * TÍTULO: Inicialización de periodos trimestrales de evaluación
+ * NOMBRE TÉCNICO: seedEvaluationPeriods_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Inserta los tres trimestres por defecto en la tabla PeriodosEvaluacion si está vacía.
+ * PARA QUÉ SIRVE: Provee los periodos iniciales para calificaciones del aula.
+ * POR QUÉ SE CREÓ: Para poblar la configuración predeterminada del ciclo escolar.
+ * PARÁMETROS: Ninguno.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: readRows_, appendObjects_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function seedEvaluationPeriods_() {
   if (readRows_('PeriodosEvaluacion').length) return;
   appendObjects_('PeriodosEvaluacion', [1, 2, 3].map(function (number) {
@@ -162,6 +224,21 @@ function seedEvaluationPeriods_() {
   }));
 }
 
+/**
+ * TÍTULO: Migración de encabezados legados de alumnos
+ * NOMBRE TÉCNICO: migrateLegacyStudents_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Convierte la estructura de columnas antigua de la hoja Alumnos al formato estándar.
+ * PARA QUÉ SIRVE: Asegura compatibilidad con libros escolares previos.
+ * POR QUÉ SE CREÓ: Para actualizar esquemas antiguos sin pérdida de información de alumnos.
+ * PARÁMETROS: @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss Libro activo.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: SpreadsheetApp, DB.Alumnos.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function migrateLegacyStudents_(ss) {
   const sheet = ss.getSheetByName('Alumnos');
   if (!sheet || sheet.getLastRow() < 1) return;
@@ -196,12 +273,45 @@ function migrateLegacyStudents_(ss) {
   sheet.getRange(1, 1, 1, DB.Alumnos.length).setFontWeight('bold').setBackground('#0B315D').setFontColor('#FFFFFF');
 }
 
+/**
+ * TÍTULO: Obtención de instancia de hoja de cálculo vinculada
+ * NOMBRE TÉCNICO: getSpreadsheet_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Retorna el objeto Spreadsheet activo o lo abre mediante ID si fue configurado.
+ * PARA QUÉ SIRVE: Provee la referencia central al libro para todas las operaciones CRUD.
+ * POR QUÉ SE CREÓ: Para centralizar la conexión a la base de datos en Sheets.
+ * PARÁMETROS: Ninguno.
+ * RESULTADO: {GoogleAppsScript.Spreadsheet.Spreadsheet} Instancia del libro escolar.
+ * DEPENDENCIAS: SpreadsheetApp, PropertiesService.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function getSpreadsheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error('Este proyecto debe estar vinculado a una hoja de Google Sheets.');
   return ss;
 }
 
+/**
+ * TÍTULO: Verificación y creación idempotente de hoja con encabezados
+ * NOMBRE TÉCNICO: ensureSheet_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Crea una hoja si no existe y garantiza que la primera fila contenga los encabezados.
+ * PARA QUÉ SIRVE: Garantiza que la tabla física exista y tenga la estructura de columnas requerida.
+ * POR QUÉ SE CREÓ: Para soporte idempotente de esquemas relacionales.
+ * PARÁMETROS:
+ *   @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss Libro.
+ *   @param {string} name Nombre de la tabla/hoja.
+ *   @param {Array<string>} headers Lista de columnas oficiales.
+ * RESULTADO: {GoogleAppsScript.Spreadsheet.Sheet} Hoja verificada.
+ * DEPENDENCIAS: SpreadsheetApp.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function ensureSheet_(ss, name, headers) {
   let sheet = ss.getSheetByName(name);
   if (!sheet) sheet = ss.insertSheet(name);
@@ -232,6 +342,21 @@ function ensureSheet_(ss, name, headers) {
   return sheet;
 }
 
+/**
+ * TÍTULO: Carga de valores semilla de configuración escolar
+ * NOMBRE TÉCNICO: seedConfig_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Inserta los parámetros escolares base (escuela, CCT, docente, grado, turno).
+ * PARA QUÉ SIRVE: Inicializa los metadatos institucionales del aula de 4.º A.
+ * POR QUÉ SE CREÓ: Para proveer la identidad de la institución en reportes y vistas.
+ * PARÁMETROS: Ninguno.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: readRows_, appendObjects_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function seedConfig_() {
   const rows = readRows_('Configuracion');
   const defaults = [
@@ -248,6 +373,21 @@ function seedConfig_() {
   appendObjects_('Configuracion', defaults.filter(row => !existing.has(row.clave)));
 }
 
+/**
+ * TÍTULO: Carga de materias y campos formativos curriculares
+ * NOMBRE TÉCNICO: seedSubjects_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Inserta las asignaturas del plan de estudio si no existen previamente.
+ * PARA QUÉ SIRVE: Alimenta los selectores de materias en proyectos y planeación.
+ * POR QUÉ SE CREÓ: Para poblar el catálogo de materias escolares.
+ * PARÁMETROS: Ninguno.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: readRows_, appendObjects_, newId_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function seedSubjects_() {
   if (readRows_('Materias').length) return;
   const names = [
@@ -262,6 +402,21 @@ function seedSubjects_() {
   appendObjects_('Materias', names.map((nombre, i) => ({ id: newId_('MAT'), nombre, orden: i + 1, activo: true })));
 }
 
+/**
+ * TÍTULO: Carga de rúbricas cualitativas institucionales
+ * NOMBRE TÉCNICO: seedRubrics_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Inserta las rúbricas de retroalimentación de desempeño, trabajo, conducta y participación.
+ * PARA QUÉ SIRVE: Estandariza los mensajes automáticos de evaluación formativa diaria.
+ * POR QUÉ SE CREÓ: Para proveer retroalimentación pedagógica preconfigurada.
+ * PARÁMETROS: Ninguno.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: readRows_, appendObjects_, newId_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function seedRubrics_() {
   const data = [
     ['Escritura', 'Logrado', 'Escribe con letra legible, coloca correctamente su nombre y la fecha, respeta el espacio y comunica sus ideas con claridad.'],
@@ -299,6 +454,21 @@ function seedRubrics_() {
   appendObjects_('Rubricas', additions.map((r, i) => ({ id: newId_('RUB'), categoria: r[0], nivel: r[1], mensaje: r[2], activo: true, orden: rows.length + i + 1 })));
 }
 
+/**
+ * TÍTULO: Lectura estructurada de filas como objetos JSON
+ * NOMBRE TÉCNICO: readRows_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Lee el rango de datos de una hoja y mapea cada fila a un objeto según sus encabezados.
+ * PARA QUÉ SIRVE: Es la función universal de lectura de datos del sistema.
+ * POR QUÉ SE CREÓ: Para abstraer la manipulación de filas y columnas de Sheets a objetos JavaScript.
+ * PARÁMETROS: @param {string} sheetName Nombre de la hoja/tabla a consultar.
+ * RESULTADO: {Array<Object>} Lista de objetos con los registros de la tabla.
+ * DEPENDENCIAS: getSpreadsheet_, serializeCell_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function readRows_(sheetName) {
   const sheet = getSpreadsheet_().getSheetByName(sheetName);
   if (!sheet || sheet.getLastRow() < 2) return [];
@@ -311,6 +481,23 @@ function readRows_(sheetName) {
   });
 }
 
+/**
+ * TÍTULO: Inserción de múltiples objetos como filas en una tabla
+ * NOMBRE TÉCNICO: appendObjects_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Transforma un array de objetos a matrices de celdas y los añade al final de la hoja.
+ * PARA QUÉ SIRVE: Escritura por lotes eficiente de nuevos registros.
+ * POR QUÉ SE CREÓ: Para evitar llamadas individuales de appendRow que degradan el rendimiento.
+ * PARÁMETROS:
+ *   @param {string} sheetName Nombre de la hoja.
+ *   @param {Array<Object>} objects Lista de registros a insertar.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: getSpreadsheet_, DB, DB_EVALUACIONES.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación funcional y documental): Soporte para DB_EVALUACIONES y JSDoc.
+ */
 function appendObjects_(sheetName, objects) {
   if (!objects.length) return;
   const sheet = getSpreadsheet_().getSheetByName(sheetName);
@@ -319,6 +506,24 @@ function appendObjects_(sheetName, objects) {
   sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, headers.length).setValues(rows);
 }
 
+/**
+ * TÍTULO: Actualización o inserción individual de un registro por clave
+ * NOMBRE TÉCNICO: upsertObject_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Busca un registro por su campo clave; si existe lo actualiza, de lo contrario lo inserta.
+ * PARA QUÉ SIRVE: Garantiza que no se generen duplicados al guardar una entidad.
+ * POR QUÉ SE CREÓ: Operación atómica de actualización sobre registros individuales.
+ * PARÁMETROS:
+ *   @param {string} sheetName Nombre de la hoja.
+ *   @param {Object} object Registro a guardar.
+ *   @param {string} idField Nombre de la columna identificadora.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: getSpreadsheet_, DB, DB_EVALUACIONES.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación funcional y documental): Soporte para DB_EVALUACIONES y JSDoc.
+ */
 function upsertObject_(sheetName, object, idField) {
   const sheet = getSpreadsheet_().getSheetByName(sheetName);
   const headers = DB[sheetName] || (typeof DB_EVALUACIONES !== 'undefined' ? DB_EVALUACIONES[sheetName] : null);
@@ -332,10 +537,29 @@ function upsertObject_(sheetName, object, idField) {
   else sheet.getRange(index + 2, 1, 1, headers.length).setValues([row]);
 }
 
+/**
+ * TÍTULO: Actualización o inserción masiva y optimizada por lotes
+ * NOMBRE TÉCNICO: upsertObjectsBatch_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Agrupa registros existentes en rangos contiguos para actualizarlos en un número mínimo
+ *           de llamadas a setValues(), e inserta las nuevas filas al final.
+ * PARA QUÉ SIRVE: Operación de persistencia por lotes de alto rendimiento en Google Sheets.
+ * POR QUÉ SE CREÓ: Para resolver guardados masivos (ej. 35 alumnos) sin agotar cuotas ni timeouts.
+ * PARÁMETROS:
+ *   @param {string} sheetName Nombre de la hoja.
+ *   @param {Array<Object>} objects Lista de registros.
+ *   @param {string} idField Columna identificadora.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: getSpreadsheet_, DB, DB_EVALUACIONES.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación funcional y documental): Soporte para DB_EVALUACIONES y JSDoc.
+ */
 function upsertObjectsBatch_(sheetName, objects, idField) {
   if (!objects || !objects.length) return;
   const sheet = getSpreadsheet_().getSheetByName(sheetName);
-  const headers = DB[sheetName];
+  const headers = DB[sheetName] || (typeof DB_EVALUACIONES !== 'undefined' ? DB_EVALUACIONES[sheetName] : null);
   if (!sheet || !headers) throw new Error('No se encontró la tabla ' + sheetName + '.');
   const idColumn = headers.indexOf(idField) + 1;
   const ids = sheet.getLastRow() > 1 ? sheet.getRange(2, idColumn, sheet.getLastRow() - 1, 1).getDisplayValues().flat() : [];
@@ -360,6 +584,24 @@ function upsertObjectsBatch_(sheetName, objects, idField) {
   if (additions.length) sheet.getRange(sheet.getLastRow() + 1, 1, additions.length, headers.length).setValues(additions);
 }
 
+/**
+ * TÍTULO: Eliminación lógica o vaciado de registros por lista de IDs
+ * NOMBRE TÉCNICO: clearObjectsByIdsBatch_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Localiza y limpia los valores de filas correspondientes a identificadores dados.
+ * PARA QUÉ SIRVE: Eliminación en bloque de registros relacionados.
+ * POR QUÉ SE CREÓ: Optimización de bajas y limpieza de relaciones dependientes.
+ * PARÁMETROS:
+ *   @param {string} sheetName Nombre de la tabla.
+ *   @param {Array<string>} idsToClear Lista de IDs a limpiar.
+ *   @param {string} idField Nombre del campo identificador.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: getSpreadsheet_, DB.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function clearObjectsByIdsBatch_(sheetName, idsToClear, idField) {
   const wanted = new Set((idsToClear || []).map(String));
   if (!wanted.size) return;
@@ -375,9 +617,26 @@ function clearObjectsByIdsBatch_(sheetName, idsToClear, idField) {
   });
 }
 
+/**
+ * TÍTULO: Reemplazo integral del contenido de una tabla
+ * NOMBRE TÉCNICO: replaceObjects_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Limpia las filas de datos preservando la fila 1 de encabezados e inserta la nueva lista.
+ * PARA QUÉ SIRVE: Sobreescritura completa de tablas de configuración o catálogos sincronizados.
+ * POR QUÉ SE CREÓ: Para reordenamientos completos o restauraciones.
+ * PARÁMETROS:
+ *   @param {string} sheetName Nombre de la hoja.
+ *   @param {Array<Object>} objects Nuevos registros.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: getSpreadsheet_, DB.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function replaceObjects_(sheetName, objects) {
   const sheet = getSpreadsheet_().getSheetByName(sheetName);
-  const headers = DB[sheetName];
+  const headers = DB[sheetName] || (typeof DB_EVALUACIONES !== 'undefined' ? DB_EVALUACIONES[sheetName] : null);
   if (!sheet || !headers) throw new Error('No se encontró la tabla ' + sheetName + '.');
   const missingRows = objects.length + 1 - sheet.getMaxRows();
   if (missingRows > 0) sheet.insertRowsAfter(sheet.getMaxRows(), missingRows);
@@ -389,10 +648,42 @@ function replaceObjects_(sheetName, objects) {
   }
 }
 
+/**
+ * TÍTULO: Guardado o actualización de un parámetro en la tabla de Configuración
+ * NOMBRE TÉCNICO: saveConfigValue_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Inserta o actualiza un par clave/valor en la hoja Configuracion.
+ * PARA QUÉ SIRVE: Persistencia de ajustes escolares y banderas del sistema.
+ * POR QUÉ SE CREÓ: Para abstraer la manipulación de la tabla Configuracion.
+ * PARÁMETROS:
+ *   @param {string} key Nombre de la clave.
+ *   @param {string} value Valor a guardar.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: upsertObject_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function saveConfigValue_(key, value) {
   upsertObject_('Configuracion', { clave: String(key), valor: String(value || '') }, 'clave');
 }
 
+/**
+ * TÍTULO: Recuperación completa de parámetros de configuración como diccionario
+ * NOMBRE TÉCNICO: getConfig_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Lee todas las filas de Configuracion y retorna un objeto clave/valor.
+ * PARA QUÉ SIRVE: Provee la configuración general en las cargas de bootstrap.
+ * POR QUÉ SE CREÓ: Para consulta rápida en memoria de todos los parámetros escolares.
+ * PARÁMETROS: Ninguno.
+ * RESULTADO: {Object} Diccionario con los parámetros de configuración.
+ * DEPENDENCIAS: readRows_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function getConfig_() {
   return readRows_('Configuracion').reduce((acc, row) => {
     acc[row.clave] = row.valor;
@@ -400,6 +691,23 @@ function getConfig_() {
   }, {});
 }
 
+/**
+ * TÍTULO: Serialización y formateo de celda a tipo nativo JavaScript
+ * NOMBRE TÉCNICO: serializeCell_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Normaliza fechas, horas, números y booleanos devueltos por Google Sheets.
+ * PARA QUÉ SIRVE: Evita inconsistencias de formato en la capa de datos de la API.
+ * POR QUÉ SE CREÓ: Para estandarizar los tipos de datos devueltos a la aplicación web.
+ * PARÁMETROS:
+ *   @param {*} value Valor crudo de la celda.
+ *   @param {string} header Nombre de la columna.
+ * RESULTADO: {*} Valor normalizado (string ISO, número, booleano).
+ * DEPENDENCIAS: Utilities, Session.getScriptTimeZone.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function serializeCell_(value, header) {
   if (value instanceof Date) {
     if (header === 'horaInicio' || header === 'horaFin') {
@@ -414,14 +722,59 @@ function serializeCell_(value, header) {
   return value;
 }
 
+/**
+ * TÍTULO: Generador de identificadores únicos universales por prefijo
+ * NOMBRE TÉCNICO: newId_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Genera un ID con prefijo, marca temporal y segmento aleatorio en base 36.
+ * PARA QUÉ SIRVE: Crea claves primarias únicas para alumnos, clases, evaluaciones y proyectos.
+ * POR QUÉ SE CREÓ: Para evitar colisiones de IDs entre registros.
+ * PARÁMETROS: @param {string} [prefix] Prefijo deseado (ej. 'ALU', 'CLA', 'RUB').
+ * RESULTADO: {string} Cadena de ID única.
+ * DEPENDENCIAS: Ninguna.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function newId_(prefix) {
   return prefix + '-' + Utilities.getUuid().split('-')[0].toUpperCase();
 }
 
+/**
+ * TÍTULO: Generador de marca temporal ISO en zona horaria local
+ * NOMBRE TÉCNICO: now_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Retorna la fecha y hora actual en formato 'yyyy-MM-ddTHH:mm:ss'.
+ * PARA QUÉ SIRVE: Registra fechas de creación y actualización en registros de auditoría.
+ * POR QUÉ SE CREÓ: Para garantizar marcas de tiempo estandarizadas en la zona horaria del script.
+ * PARÁMETROS: Ninguno.
+ * RESULTADO: {string} Cadena de fecha y hora local.
+ * DEPENDENCIAS: Utilities, Session.getScriptTimeZone.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function now_() {
   return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
 }
 
+/**
+ * TÍTULO: Normalización y saneamiento básico de texto
+ * NOMBRE TÉCNICO: normalizeText_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Limpia espacios en blanco iniciales/finales y convierte nulos a cadenas vacías.
+ * PARA QUÉ SIRVE: Sanitiza cadenas antes de almacenarlas o compararlas.
+ * POR QUÉ SE CREÓ: Para prevenir errores por valores null o espacios accidentales.
+ * PARÁMETROS: @param {*} value Valor a limpiar.
+ * RESULTADO: {string} Cadena normalizada.
+ * DEPENDENCIAS: Ninguna.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function normalizeText_(value) {
   return String(value || '').trim();
 }
@@ -440,6 +793,21 @@ function normalizeText_(value) {
  * Rechaza sin escrituras ante columnas duplicadas, desordenadas o incompatibles.
  * Es idempotente: una segunda ejecución sobre el esquema correcto no produce cambios.
  */
+/**
+ * TÍTULO: Migración estructural del esquema de Registro Diario
+ * NOMBRE TÉCNICO: migrateDailyDatabaseSchema_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Inspecciona y agrega columnas faltantes en las hojas Clases y Evaluaciones.
+ * PARA QUÉ SIRVE: Mantiene actualizadas las tablas del registro diario a sus columnas oficiales.
+ * POR QUÉ SE CREÓ: Para incorporar campos curriculares avanzados (pdaTema, fechas límite).
+ * PARÁMETROS: @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [customSpreadsheet] Libro opcional.
+ * RESULTADO: {Object} Plan de migración con estado { ok: boolean, status: string, ... }.
+ * DEPENDENCIAS: getSpreadsheet_, inspectSheet, applyMissing.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function migrateDailyDatabaseSchema_(customSpreadsheet) {
   var ss = customSpreadsheet || (typeof getSpreadsheet_ === 'function' ? getSpreadsheet_() : (typeof obtenerLibro_ === 'function' ? obtenerLibro_() : SpreadsheetApp.getActiveSpreadsheet()));
   if (!ss) throw new Error('No se pudo acceder a la hoja de cálculo de Google Sheets.');
@@ -457,7 +825,26 @@ function migrateDailyDatabaseSchema_(customSpreadsheet) {
   if (!sheetClases) throw new Error('MigracionError: No se encontró la hoja "Clases" en el libro.');
   if (!sheetEvaluaciones) throw new Error('MigracionError: No se encontró la hoja "Evaluaciones" en el libro.');
 
-  function inspectSheet(sheet, sheetName, targetHeaders, minExpectedCols) {
+  /**
+ * TÍTULO: Inspección de encabezados y columnas faltantes en una hoja
+ * NOMBRE TÉCNICO: inspectSheet
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Compara los encabezados existentes con los esperados y detecta discrepancias.
+ * PARA QUÉ SIRVE: Subrutina de análisis para la migración de Registro Diario.
+ * POR QUÉ SE CREÓ: Para modularizar la detección de columnas faltantes.
+ * PARÁMETROS:
+ *   @param {GoogleAppsScript.Spreadsheet.Sheet} sheet Hoja a inspeccionar.
+ *   @param {string} sheetName Nombre de la hoja.
+ *   @param {Array<string>} targetHeaders Encabezados esperados.
+ *   @param {number} minExpectedCols Mínimo de columnas esperado.
+ * RESULTADO: {Object} Objeto de diagnóstico.
+ * DEPENDENCIAS: Ninguna.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
+function inspectSheet(sheet, sheetName, targetHeaders, minExpectedCols) {
     var lastCol = sheet.getLastColumn();
     var lastRow = sheet.getLastRow();
     if (lastCol === 0 || lastRow === 0) {
@@ -511,7 +898,22 @@ function migrateDailyDatabaseSchema_(customSpreadsheet) {
   // FASE 2: Aplicación atómica de encabezados faltantes al final
   var changesApplied = [];
 
-  function applyMissing(plan) {
+  /**
+ * TÍTULO: Aplicación física de columnas faltantes según plan de migración
+ * NOMBRE TÉCNICO: applyMissing
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Inserta físicamente los encabezados faltantes al final de la primera fila.
+ * PARA QUÉ SIRVE: Ejecuta las adiciones estructurales sin alterar columnas existentes.
+ * POR QUÉ SE CREÓ: Para aplicar cambios seguros sin reescritura destructiva de tablas.
+ * PARÁMETROS: @param {Object} plan Diagnóstico obtenido por inspectSheet.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: SpreadsheetApp.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
+function applyMissing(plan) {
     if (plan.missingHeaders.length === 0) return;
     var startCol = plan.currentCount + 1;
     var count = plan.missingHeaders.length;
@@ -544,6 +946,21 @@ function migrateDailyDatabaseSchema_(customSpreadsheet) {
   };
 }
 
+/**
+ * TÍTULO: Ejecutor interactivo de la migración de esquema de Registro Diario
+ * NOMBRE TÉCNICO: ejecutarMigracionDiario
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Ejecuta migrateDailyDatabaseSchema_ y muestra un diálogo de alerta con el resultado.
+ * PARA QUÉ SIRVE: Provee un punto de entrada ejecutable desde la interfaz de usuario de Sheets.
+ * POR QUÉ SE CREÓ: Para facilitar la ejecución manual por parte del docente.
+ * PARÁMETROS: Ninguno.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: SpreadsheetApp.getUi, migrateDailyDatabaseSchema_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function ejecutarMigracionDiario() {
   console.log(JSON.stringify(migrateDailyDatabaseSchema_()));
 }
@@ -577,6 +994,21 @@ var AUTHENTIC_MIGRATED_ALUMNOS_COLUMNS = [
  * 
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [ss] Hoja de cálculo opcional para pruebas/inyección.
  * @return {Object} Resultado con { ok: boolean, migrated?: boolean, message?: string, error?: string }
+ */
+/**
+ * TÍTULO: Migración e incorporación de la columna número oficial de lista en Alumnos
+ * NOMBRE TÉCNICO: migrateAlumnosRosterSchema_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Añade la columna 'numeroLista' en la posición 19 de la hoja Alumnos si falta.
+ * PARA QUÉ SIRVE: Soporta el número de lista oficial e independiente del orden alfabético.
+ * POR QUÉ SE CREÓ: Para cumplir con los lineamientos de acreditación escolar.
+ * PARÁMETROS: @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [ss] Libro opcional.
+ * RESULTADO: {Object} Resultado con { ok: boolean, yaMigrado: boolean, columna: number }.
+ * DEPENDENCIAS: getSpreadsheet_, AUTHENTIC_MIGRATED_ALUMNOS_COLUMNS.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
  */
 function migrateAlumnosRosterSchema_(ss) {
   var targetSs = ss || getSpreadsheet_();

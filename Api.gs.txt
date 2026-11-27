@@ -32,16 +32,33 @@
  *   getTrimesterEvaluationBundle_, syncTrimesterEvaluationBatch_.
  * 
  * DEPENDENCIAS:
- *   Database.gs (DB, readRows_, upsertObjectsBatch_), EvaluacionesTrimestrales.gs.
+ *   Database.gs (DB, DB_EVALUACIONES, readRows_, upsertObjectsBatch_).
+ *   EvaluacionesTrimestrales.gs (getTrimesterEvaluationBundle, syncTrimesterEvaluationBatch).
  * 
  * HISTORIAL ACUMULATIVO DE MODIFICACIONES:
  *   - Fecha de creación no registrada: Implementación de servicios académicos y bootstrap.
  *   - 27/11/2026 (Modificación funcional y documental - Etapa 7A.3):
- *     * Se incorporó el estándar obligatorio de documentación y trazabilidad (JSDoc y encabezados).
- *     * Se agregaron las funciones puente 'getTrimesterEvaluationBundle_' y 'syncTrimesterEvaluationBatch_'
- *       al final del archivo, delegando exclusivamente en 'EvaluacionesTrimestrales.gs'.
- *     * Se mantuvo el 100% del código original sin suprimir ninguna función.
+ *     * Se aplicó el estándar obligatorio de documentación JSDoc a las funciones del archivo.
+ *     * Se incorporaron las funciones puente 'getTrimesterEvaluationBundle_' y 'syncTrimesterEvaluationBatch_'
+ *       en la Sección 6, delegando exclusivamente en 'EvaluacionesTrimestrales.gs'.
+ *     * Se conservó el 100% de la lógica original de api.gs sin ninguna alteración ni supresión.
  * ============================================================================
+ */
+/**
+ * TÍTULO: Carga completa de datos iniciales del aula escolar (Bootstrap)
+ * NOMBRE TÉCNICO: getBootstrapData_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Inicializa el sistema si es necesario y recupera configuración, materias, rúbricas,
+ *           instrumentos, alumnos, proyectos, asistencia y estadísticas del grupo.
+ * PARA QUÉ SIRVE: Carga todo el estado inicial requerido por la aplicación cliente en un solo viaje.
+ * POR QUÉ SE CREÓ: Para acelerar el tiempo de arranque de la interfaz docente.
+ * PARÁMETROS: Ninguno.
+ * RESULTADO: {Object} Paquete completo de bootstrap escolar.
+ * DEPENDENCIAS: ensureInstalled_, listStudents_, listProjects_, readRows_, getInitialData_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
  */
 function getBootstrapData_() {
   ensureInstalled_();
@@ -64,6 +81,21 @@ function getBootstrapData_() {
   };
 }
 
+/**
+ * TÍTULO: Carga ligera de datos iniciales sin historial de asistencia
+ * NOMBRE TÉCNICO: getBootstrapDataLite_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Recupera configuración, materias, alumnos y proyectos omitiendo el registro de asistencia pesado.
+ * PARA QUÉ SIRVE: Optimiza arranques rápidos en conexiones lentas o dispositivos móviles.
+ * POR QUÉ SE CREÓ: Para reducir la latencia de carga inicial.
+ * PARÁMETROS: Ninguno.
+ * RESULTADO: {Object} Paquete ligero de datos escolares.
+ * DEPENDENCIAS: ensureInstalled_, listStudents_, listProjects_, readRows_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function getBootstrapDataLite_() {
   ensureInstalled_();
   const students = listStudents_(true);
@@ -86,6 +118,21 @@ function getBootstrapDataLite_() {
   };
 }
 
+/**
+ * TÍTULO: Verificación de tablas base del sistema con caché de esquema
+ * NOMBRE TÉCNICO: ensureInstalled_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Valida que las tablas de 'DB' existan en el libro escolar mediante caché de 10 minutos.
+ * PARA QUÉ SIRVE: Evita verificaciones repetitivas de hojas en cada petición de API.
+ * POR QUÉ SE CREÓ: Para optimizar el tiempo de respuesta del servidor.
+ * PARÁMETROS: Ninguno.
+ * RESULTADO: {void}
+ * DEPENDENCIAS: CacheService, getSpreadsheet_, ensureSheet_, DB.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function ensureInstalled_() {
   const schemaCache = CacheService.getScriptCache();
   if (schemaCache.get('CARPETA_SCHEMA_READY_V153') === '1') return;
@@ -97,6 +144,22 @@ function ensureInstalled_() {
   schemaCache.put('CARPETA_SCHEMA_READY_V153', '1', 600);
 }
 
+/**
+ * TÍTULO: Consulta y enriquecimiento del padrón de alumnos activos
+ * NOMBRE TÉCNICO: listStudents_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Lee los alumnos activos, adjunta su estilo VAK, normaliza su número de lista oficial
+ *           y los ordena alfabéticamente por nombre completo.
+ * PARA QUÉ SIRVE: Alimenta las listas de alumnos en todas las vistas de la aplicación.
+ * POR QUÉ SE CREÓ: Para centralizar el enriquecimiento de datos de los alumnos.
+ * PARÁMETROS: @param {boolean} [skipInstallCheck] Omitir verificación de instalación.
+ * RESULTADO: {Array<Object>} Lista de alumnos enriquecidos.
+ * DEPENDENCIAS: readRows_, enrichLegacyStudent_, parseOfficialRosterNumber_, fullName_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function listStudents_(skipInstallCheck) {
   if (!skipInstallCheck) ensureInstalled_();
   const styles = readRows_('EstilosVAK').reduce((acc, row) => {
@@ -139,6 +202,22 @@ function knownStudentNameParts_(fullName) {
   return row ? { apellidoPaterno: row[1], apellidoMaterno: row[2], nombres: row[3] } : null;
 }
 
+/**
+ * TÍTULO: Creación o actualización de expediente de alumno con bloqueo mutuo
+ * NOMBRE TÉCNICO: saveStudent_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Valida datos obligatorios, número oficial de lista, genera cuenta de tutor si es nuevo
+ *           y persiste el expediente en la hoja Alumnos bajo DocumentLock.
+ * PARA QUÉ SIRVE: Alta y modificación de expedientes de alumnos.
+ * POR QUÉ SE CREÓ: Para asegurar integridad y evitar duplicados en el padrón escolar.
+ * PARÁMETROS: @param {Object} payload Datos del formulario de alumno.
+ * RESULTADO: {Object} Alumno guardado con ID asignado.
+ * DEPENDENCIAS: withDocumentLockV2_, validateOfficialRosterNumber_, upsertObject_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function saveStudent_(payload) {
   ensureInstalled_();
   const p = payload || {};
@@ -211,6 +290,21 @@ function saveStudent_(payload) {
   });
 }
 
+/**
+ * TÍTULO: Baja lógica individual de alumno
+ * NOMBRE TÉCNICO: deleteStudent_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Marca la columna 'activo' como false para el alumno indicado.
+ * PARA QUÉ SIRVE: Permite desincorporar a un alumno sin eliminar su historial escolar.
+ * POR QUÉ SE CREÓ: Para preservar la trazabilidad histórica de alumnos dados de baja.
+ * PARÁMETROS: @param {string} studentId Identificador del alumno.
+ * RESULTADO: {Object} { ok: boolean, message: string }.
+ * DEPENDENCIAS: deleteStudentsBatch_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function deleteStudent_(studentId) {
   const result = deleteStudentsBatch_([studentId]);
   return { ok: true, message: result.message };
@@ -274,6 +368,21 @@ function deleteLegacyStudentRowsBatch_(studentIds) {
   });
 }
 
+/**
+ * TÍTULO: Consulta del catálogo de proyectos didácticos
+ * NOMBRE TÉCNICO: listProjects_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Lee los registros de la tabla Proyectos y los ordena cronológicamente.
+ * PARA QUÉ SIRVE: Alimenta la vista de proyectos pedagógicos y planeaciones.
+ * POR QUÉ SE CREÓ: Para consultar los proyectos didácticos del ciclo escolar.
+ * PARÁMETROS: @param {boolean} [skipInstallCheck] Omitir verificación de instalación.
+ * RESULTADO: {Array<Object>} Lista de proyectos.
+ * DEPENDENCIAS: readRows_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function listProjects_(skipInstallCheck) {
   if (!skipInstallCheck) ensureInstalled_();
   return readRows_('Proyectos')
@@ -281,6 +390,21 @@ function listProjects_(skipInstallCheck) {
     .sort((a, b) => String(b.creadoEn).localeCompare(String(a.creadoEn)));
 }
 
+/**
+ * TÍTULO: Guardado o actualización de proyecto didáctico
+ * NOMBRE TÉCNICO: saveProject_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Valida el nombre y temporalidad de la planeación y la persiste en Proyectos.
+ * PARA QUÉ SIRVE: Administración de las metodologías y escenarios de proyectos de aula.
+ * POR QUÉ SE CREÓ: Para registrar la planeación didáctica del docente.
+ * PARÁMETROS: @param {Object} payload Datos del proyecto.
+ * RESULTADO: {Object} Proyecto guardado con ID asignado.
+ * DEPENDENCIAS: withDocumentLockV2_, upsertObject_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function saveProject_(payload) {
   ensureInstalled_();
   const p = payload || {};
@@ -369,6 +493,21 @@ function getProjectWorkspace_(projectId) {
   return { project, activities: activityRows };
 }
 
+/**
+ * TÍTULO: Consulta de una actividad diaria con su lista de evaluaciones
+ * NOMBRE TÉCNICO: getClassRecord_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Recupera la clase por ID y cruza todas las evaluaciones de los alumnos vinculadas a ella.
+ * PARA QUÉ SIRVE: Abre la pantalla de captura del Registro Diario de una sesión de clase.
+ * POR QUÉ SE CREÓ: Para presentar la información completa de una sesión académica.
+ * PARÁMETROS: @param {string} classId Identificador de la clase.
+ * RESULTADO: {Object} Objeto con datos de la clase y mapa de evaluaciones por alumno.
+ * DEPENDENCIAS: readRows_, listStudents_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function getClassRecord_(classId) {
   ensureInstalled_();
   const classRecord = readRows_('Clases').find(x => String(x.id) === String(classId));
@@ -530,6 +669,21 @@ function normalizeHourValue_(val) {
 /**
  * Guarda una actividad diaria con validaciones estrictas de asistencia, regla J,
  * plazos escolares, conservación de actualizaciones parciales e idempotencia por requestKey.
+ */
+/**
+ * TÍTULO: Persistencia de sesión de clase diaria y evaluaciones de alumnos
+ * NOMBRE TÉCNICO: saveClassRecord_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Guarda los datos de la actividad y persiste en bloque las evaluaciones de cada alumno.
+ * PARA QUÉ SIRVE: Es el motor de persistencia del Registro Diario de clases.
+ * POR QUÉ SE CREÓ: Para registrar diariamente trabajo, conducta y tareas bajo exclusión mutua.
+ * PARÁMETROS: @param {Object} payload Datos de la clase y array de evaluaciones.
+ * RESULTADO: {Object} Clase guardada y estadísticas de evaluaciones registradas.
+ * DEPENDENCIAS: withDocumentLockV2_, upsertObject_, upsertObjectsBatch_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
  */
 function saveClassRecord_(payload) {
   ensureInstalled_();
@@ -1655,6 +1809,21 @@ function getDeletionStatus_(classIds) {
 }
 
 
+/**
+ * TÍTULO: Conversión y validación de número oficial de lista
+ * NOMBRE TÉCNICO: parseOfficialRosterNumber_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Convierte un valor a entero positivo estricto; si es inválido o menor a 1 retorna null.
+ * PARA QUÉ SIRVE: Asegura que el número de lista oficial sea un entero válido sin alterar el orden.
+ * POR QUÉ SE CREÓ: Para desacoplar el número oficial de lista del ordenamiento alfabético.
+ * PARÁMETROS: @param {*} val Valor a validar.
+ * RESULTADO: {number|null} Número entero o null.
+ * DEPENDENCIAS: Ninguna.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function parseOfficialRosterNumber_(val) {
   if (val === null || val === undefined) return null;
   var s = String(val).trim();
@@ -1663,6 +1832,24 @@ function parseOfficialRosterNumber_(val) {
   return n > 0 ? n : null;
 }
 
+/**
+ * TÍTULO: Validación estricta y prevención de números de lista duplicados
+ * NOMBRE TÉCNICO: validateOfficialRosterNumber_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * QUÉ HACE: Valida que el número de lista sea entero positivo y que no esté asignado a otro alumno activo.
+ * PARA QUÉ SIRVE: Previene colisiones de números de lista en el padrón escolar de 4.º A.
+ * POR QUÉ SE CREÓ: Para cumplir con la unicidad del número oficial de lista por alumno.
+ * PARÁMETROS:
+ *   @param {*} numeroListaVal Valor capturado.
+ *   @param {string} [studentId] ID del alumno actual para permitir auto-actualizaciones.
+ *   @param {Array<Object>} [studentRows] Padrón de alumnos para cotejo.
+ * RESULTADO: {number|null} Número validado o null si no se ingresó.
+ * DEPENDENCIAS: parseOfficialRosterNumber_, fullName_.
+ * HISTORIAL:
+ *   - Fecha no registrada: Creación inicial.
+ *   - 27/11/2026 (Modificación documental): Documentación obligatoria JSDoc.
+ */
 function validateOfficialRosterNumber_(numeroListaVal, studentId, studentRows) {
   if (numeroListaVal === null || numeroListaVal === undefined || String(numeroListaVal).trim() === '') {
     return null;
