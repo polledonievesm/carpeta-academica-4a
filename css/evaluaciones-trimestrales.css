@@ -1,0 +1,489 @@
+/* ==========================================================================
+   MÓDULO DE VISTA: EVALUACIONES TRIMESTRALES
+   Estilos institucionales para panel administrativo, selector y seguimiento
+   ========================================================================== */
+
+/* Selector de Periodo y Trimestres */
+.eval-period-selector-panel {
+  margin-bottom: 16px;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+}
+
+.eval-period-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.eval-period-label {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+  margin-bottom: 4px;
+}
+
+.eval-period-title {
+  margin: 0 0 4px 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.eval-period-badge-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Pills de estado del periodo */
+.eval-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.eval-status-pill::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-in-progress {
+  background: #eef8f8;
+  color: #0d8389;
+  border: 1px solid #b7e3e5;
+}
+
+.status-pending {
+  background: #f1f4f7;
+  color: #5d7182;
+  border: 1px solid #d2dbe2;
+}
+
+.status-review {
+  background: #fff8e6;
+  color: #a46d00;
+  border: 1px solid #fae19d;
+}
+
+.status-completed {
+  background: #edf8f1;
+  color: #1b7c4b;
+  border: 1px solid #b8e5cb;
+}
+
+.status-published {
+  background: #f0edff;
+  color: #5a38b5;
+  border: 1px solid #d4c8fa;
+}
+
+/* Selector interactivo de trimestres (3 botones) */
+.eval-trimester-pills {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.eval-trimester-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: #fbfdfe;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.eval-trimester-btn:hover {
+  background: #f2f7fa;
+  border-color: #b7ccd9;
+}
+
+.eval-trimester-btn.active {
+  border-color: var(--teal);
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(16, 169, 176, 0.16);
+}
+
+.eval-trim-name {
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--navy);
+  margin-bottom: 2px;
+}
+
+.eval-trim-dates {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.eval-trim-status {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+/* Pestañas del módulo (Tabs) */
+.eval-module-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 2px solid var(--line);
+  padding-bottom: 8px;
+  overflow-x: auto;
+}
+
+.eval-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.eval-tab-btn:hover {
+  color: var(--navy);
+  background: #eaeff4;
+}
+
+.eval-tab-btn.active {
+  color: #ffffff;
+  background: var(--navy);
+}
+
+.eval-tab-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.eval-tab-content {
+  display: block;
+}
+
+.eval-tab-content.hidden-tab {
+  display: none !important;
+}
+
+/* Tarjetas KPI de Resumen */
+.eval-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.eval-stat-card {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+}
+
+.eval-stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  line-height: 1.2;
+}
+
+.eval-stat-num {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.eval-stat-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.text-teal { color: var(--teal) !important; }
+.text-yellow { color: #d08c00 !important; }
+.text-blue { color: #1e70bf !important; }
+.text-green { color: #288f55 !important; }
+
+/* Barra de progreso global */
+.eval-progress-panel {
+  margin-bottom: 16px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 20px;
+}
+
+.eval-progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.eval-progress-info strong {
+  font-size: 14px;
+  color: var(--navy);
+}
+
+.eval-progress-info p {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.eval-progress-pct {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--teal);
+}
+
+.eval-progress-bar-bg {
+  width: 100%;
+  height: 10px;
+  background: #e7eff5;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.eval-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--teal), #3ec8cf);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+/* Tabla de seguimiento */
+.eval-students-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+}
+
+.eval-table-head {
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.eval-filter-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.compact-input {
+  max-width: 240px;
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+.eval-tracking-table th {
+  background: #f7fafc;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 12px 14px;
+  white-space: nowrap;
+}
+
+.eval-tracking-table td {
+  padding: 12px 14px;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.eval-tracking-table tr:hover {
+  background: #f9fbfd;
+}
+
+.eval-student-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.eval-student-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e7f5f5;
+  color: var(--teal);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.eval-student-name {
+  font-weight: 700;
+  color: var(--navy);
+  line-height: 1.2;
+}
+
+.eval-student-id {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Mini badges de campos formativos */
+.eval-fields-pills {
+  display: flex;
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.eval-field-pill {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  background: #f0f4f8;
+  color: #7b8f9e;
+  border: 1px solid #d4dee6;
+  cursor: help;
+}
+
+.eval-field-pill.completed {
+  background: #e5f7ed;
+  color: #1b7c4b;
+  border-color: #b3e6c7;
+}
+
+.eval-field-pill.partial {
+  background: #fff8e6;
+  color: #a46d00;
+  border-color: #fae19d;
+}
+
+/* Indicador de 23 criterios */
+.eval-indicators-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: #f1f4f7;
+  color: var(--muted);
+}
+
+.eval-indicators-count.complete {
+  background: #e5f7ed;
+  color: #1b7c4b;
+}
+
+.eval-msg-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.eval-msg-status.done {
+  color: #1b7c4b;
+  font-weight: 700;
+}
+
+/* Placeholders para etapas posteriores */
+.eval-placeholder-panel {
+  text-align: center;
+  padding: 48px 24px;
+  background: #ffffff;
+  border: 2px dashed #cfdce6;
+  border-radius: 16px;
+  margin-top: 10px;
+}
+
+.eval-placeholder-icon {
+  font-size: 44px;
+  margin-bottom: 12px;
+}
+
+.eval-placeholder-panel h3 {
+  font-size: 19px;
+  color: var(--navy);
+  margin: 0 0 8px;
+}
+
+.eval-placeholder-panel p {
+  max-width: 520px;
+  margin: 0 auto 20px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .eval-stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .eval-trimester-pills {
+    grid-template-columns: 1fr;
+  }
+  .eval-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .compact-input {
+    max-width: 100%;
+    width: 100%;
+  }
+  .eval-filter-toolbar {
+    width: 100%;
+  }
+}
+
+@media (max-width: 540px) {
+  .eval-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

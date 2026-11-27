@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="css/modales.css">
   <link rel="stylesheet" href="css/expediente.css">
   <link rel="stylesheet" href="css/asistencia.css">
+  <link rel="stylesheet" href="css/evaluaciones-trimestrales.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&display=swap" rel="stylesheet">
@@ -127,6 +128,10 @@
             <span>Evaluación</span>
           </summary>
           <div>
+            <button class="nav-item" data-view="evaluaciones-trimestrales" data-tooltip="Evaluaciones trimestrales">
+              <svg class="nav-sub-icon icon-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              <span>Evaluaciones trimestrales</span>
+            </button>
             <button class="nav-item" data-view="grades" data-tooltip="Calificaciones">
               <svg class="nav-sub-icon icon-yellow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
               <span>Calificaciones</span>
@@ -1336,6 +1341,195 @@
           <button class="btn primary" data-action="generate-selected-family-access">Generar o regenerar</button><button class="btn" data-action="print-selected-family-access">Imprimir credenciales</button><button class="btn danger" data-action="revoke-selected-family-access">Revocar accesos</button><button class="btn delete-students-button" data-action="delete-selected-students">Eliminar alumnos seleccionados</button></article>
         <article class="panel table-wrap family-access-table-panel"><table class="family-access-table"><thead><tr><th><span class="sr-only">Seleccionar</span></th><th>Alumno</th><th>Usuario y contraseña</th><th>Recuperación</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr></thead><tbody id="familyAccessTable"></tbody></table></article>
       </section>
+      <!-- ========================================================
+           MÓDULO: EVALUACIONES TRIMESTRALES
+           ======================================================== -->
+      <section id="evaluaciones-trimestrales" class="view">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">EVALUACIONES Y RESULTADOS</p>
+            <h1>Evaluaciones Trimestrales</h1>
+            <p class="muted">Gestión de calificaciones ponderadas, desempeño integral y publicación oficial para el ciclo escolar.</p>
+          </div>
+          <div class="button-row">
+            <button class="btn" data-action="eval-refresh">Actualizar</button>
+            <button class="btn primary" data-action="eval-save-draft">Guardar borrador</button>
+          </div>
+        </div>
+
+        <!-- Selector de Trimestres y Estado del Periodo -->
+        <article class="panel eval-period-selector-panel">
+          <div class="eval-period-header">
+            <div>
+              <span class="eval-period-label">Periodo de evaluación</span>
+              <h2 id="evalCurrentPeriodTitle" class="eval-period-title">Primer Trimestre (En curso)</h2>
+              <p id="evalCurrentPeriodDates" class="muted">26 Ago 2026 – 27 Nov 2026 · Cierre independiente de publicaciones</p>
+            </div>
+            <div class="eval-period-badge-container">
+              <span id="evalPeriodStatusBadge" class="eval-status-pill status-in-progress">En curso</span>
+              <span id="evalOfficialCurrentBadge" class="badge">Trimestre escolar actual</span>
+            </div>
+          </div>
+          <div class="eval-trimester-pills" role="tablist" aria-label="Trimestres escolares">
+            <button class="eval-trimester-btn active" data-action="eval-select-trimester" data-trimester="1" role="tab" aria-selected="true">
+              <span class="eval-trim-name">1.er Trimestre</span>
+              <span class="eval-trim-dates">Ago – Nov</span>
+              <span class="eval-trim-status status-in-progress">En curso</span>
+            </button>
+            <button class="eval-trimester-btn" data-action="eval-select-trimester" data-trimester="2" role="tab" aria-selected="false">
+              <span class="eval-trim-name">2.º Trimestre</span>
+              <span class="eval-trim-dates">Dic – Mar</span>
+              <span class="eval-trim-status status-pending">Pendiente</span>
+            </button>
+            <button class="eval-trimester-btn" data-action="eval-select-trimester" data-trimester="3" role="tab" aria-selected="false">
+              <span class="eval-trim-name">3.er Trimestre</span>
+              <span class="eval-trim-dates">Abr – Jul</span>
+              <span class="eval-trim-status status-pending">Pendiente</span>
+            </button>
+          </div>
+        </article>
+
+        <!-- Pestañas internas del módulo (Tabs) -->
+        <div class="eval-module-tabs" role="tablist">
+          <button class="eval-tab-btn active" data-action="eval-switch-tab" data-tab="seguimiento" role="tab" aria-selected="true">
+            <svg class="eval-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+            Panel de seguimiento
+          </button>
+          <button class="eval-tab-btn" data-action="eval-switch-tab" data-tab="captura-grupal" role="tab" aria-selected="false">
+            <svg class="eval-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Captura grupal
+          </button>
+          <button class="eval-tab-btn" data-action="eval-switch-tab" data-tab="captura-individual" role="tab" aria-selected="false">
+            <svg class="eval-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Captura individual
+          </button>
+          <button class="eval-tab-btn" data-action="eval-switch-tab" data-tab="criterios" role="tab" aria-selected="false">
+            <svg class="eval-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Criterios y periodos
+          </button>
+        </div>
+
+        <!-- Vista del Tab 1: Panel de Seguimiento Grupal -->
+        <div id="evalTabSeguimiento" class="eval-tab-content active">
+          <!-- Tarjetas KPI de Resumen -->
+          <div class="eval-stats-grid">
+            <div class="eval-stat-card">
+              <span class="eval-stat-label">Total de alumnos</span>
+              <b id="evalStatTotal" class="eval-stat-num">0</b>
+              <span class="eval-stat-sub">Grupo 4.º A</span>
+            </div>
+            <div class="eval-stat-card">
+              <span class="eval-stat-label">Evaluados</span>
+              <b id="evalStatEvaluados" class="eval-stat-num text-teal">0</b>
+              <span id="evalStatEvaluadosPct" class="eval-stat-sub">0% del grupo</span>
+            </div>
+            <div class="eval-stat-card">
+              <span class="eval-stat-label">Pendientes</span>
+              <b id="evalStatPendientes" class="eval-stat-num text-muted">0</b>
+              <span class="eval-stat-sub">Sin captura iniciada</span>
+            </div>
+            <div class="eval-stat-card">
+              <span class="eval-stat-label">En borrador / incompletas</span>
+              <b id="evalStatIncompletas" class="eval-stat-num text-yellow">0</b>
+              <span class="eval-stat-sub">Criterios parciales</span>
+            </div>
+            <div class="eval-stat-card">
+              <span class="eval-stat-label">Listas para cerrar</span>
+              <b id="evalStatListas" class="eval-stat-num text-blue">0</b>
+              <span class="eval-stat-sub">4 campos y 23 ind.</span>
+            </div>
+            <div class="eval-stat-card">
+              <span class="eval-stat-label">Publicadas en portal</span>
+              <b id="evalStatPublicadas" class="eval-stat-num text-green">0</b>
+              <span class="eval-stat-sub">Visibles para familias</span>
+            </div>
+          </div>
+
+          <!-- Barra de avance grupal -->
+          <article class="panel eval-progress-panel">
+            <div class="eval-progress-info">
+              <div>
+                <strong>Progreso global del trimestre</strong>
+                <p class="muted">Porcentaje de alumnos con evaluación cerrada o publicada para este periodo.</p>
+              </div>
+              <span id="evalProgressText" class="eval-progress-pct">0%</span>
+            </div>
+            <div class="eval-progress-bar-bg">
+              <div id="evalProgressBarFill" class="eval-progress-bar-fill" style="width: 0%;"></div>
+            </div>
+          </article>
+
+          <!-- Tabla de Seguimiento de Alumnos -->
+          <article class="panel eval-students-panel">
+            <div class="section-head eval-table-head">
+              <div>
+                <h2>Lista de seguimiento grupal</h2>
+                <p class="muted">Avance individual por campos formativos, desempeño integral y mensaje a la familia.</p>
+              </div>
+              <div class="eval-filter-toolbar">
+                <input id="evalStudentSearch" class="input compact-input" placeholder="Buscar alumno por nombre...">
+                <select id="evalStatusFilter" class="input compact-input">
+                  <option value="">Todos los estados</option>
+                  <option value="pendiente">Pendientes</option>
+                  <option value="borrador">En borrador</option>
+                  <option value="lista">Listas para cerrar</option>
+                  <option value="cerrada">Cerradas</option>
+                  <option value="publicada">Publicadas</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="eval-tracking-table">
+                <thead>
+                  <tr>
+                    <th style="width: 44px;">N.°</th>
+                    <th>Alumno</th>
+                    <th>Modalidad</th>
+                    <th>Campos formativos (4)</th>
+                    <th>Desempeño integral</th>
+                    <th>Mensaje familiar</th>
+                    <th>Estado</th>
+                    <th style="text-align: right;">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="evalStudentsTableBody">
+                  <!-- Filas dinámicas generadas por renderTrackingTable() -->
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+
+        <!-- Placeholders de sub-pestañas para etapas posteriores -->
+        <div id="evalTabCapturaGrupal" class="eval-tab-content hidden-tab">
+          <article class="panel eval-placeholder-panel">
+            <div class="eval-placeholder-icon">📋</div>
+            <h3>Captura grupal de evaluaciones</h3>
+            <p class="muted">Esta funcionalidad se habilitará en la <strong>Etapa 5: Modalidades de captura</strong>. Permitirá registrar rápidamente exámenes escritos, promedios y ajustes para todo el grupo en una sola matriz.</p>
+            <button class="btn" data-action="eval-switch-tab" data-tab="seguimiento">Volver al panel de seguimiento</button>
+          </article>
+        </div>
+
+        <div id="evalTabCapturaIndividual" class="eval-tab-content hidden-tab">
+          <article class="panel eval-placeholder-panel">
+            <div class="eval-placeholder-icon">👤</div>
+            <h3>Captura individual por alumno</h3>
+            <p class="muted">Esta funcionalidad se integrará en la <strong>Etapa 5 y Etapa 6</strong>. Permitirá desglosar los 4 campos formativos, los 23 indicadores de desempeño integral y el mensaje personalizado de hasta 245 caracteres.</p>
+            <button class="btn" data-action="eval-switch-tab" data-tab="seguimiento">Volver al panel de seguimiento</button>
+          </article>
+        </div>
+
+        <div id="evalTabCriterios" class="eval-tab-content hidden-tab">
+          <article class="panel eval-placeholder-panel">
+            <div class="eval-placeholder-icon">⚙️</div>
+            <h3>Criterios de evaluación y fechas del periodo</h3>
+            <p class="muted">Esta configuración se implementará en la <strong>Etapa 2: Almacenamiento y configuración</strong>. Permitirá ajustar fechas trimestrales, ponderaciones (tareas, actividades, examen, conducta, participación, asistencia, puntualidad) y valores iniciales.</p>
+            <button class="btn" data-action="eval-switch-tab" data-tab="seguimiento">Volver al panel de seguimiento</button>
+          </article>
+        </div>
+      </section>
+
       <section id="grades" class="view">
         <div class="page-head"><div><p class="eyebrow">EVALUACIÓN TRIMESTRAL</p><h1>Calificaciones</h1><p class="muted">Configura ponderaciones, captura criterios manuales y genera reportes legibles.</p></div><button class="btn" data-action="grades-refresh">Actualizar</button></div>
         <article class="panel grade-controls"><div class="form-grid two"><label>Trimestre<select id="gradeTrimester"><option value="1">Trimestre 1</option><option value="2">Trimestre 2</option><option value="3">Trimestre 3</option></select></label><label>Campo formativo<select id="gradeSubject"></select></label></div><div class="button-row"><button class="btn" data-action="load-grade-weights">Configurar ponderaciones</button><button class="btn primary" data-action="generate-grade-report">Generar reporte del campo</button><button class="btn" data-action="generate-consolidated-report">Reporte general trimestral</button></div></article>
@@ -2178,6 +2372,7 @@
   <script src="js/vistas/familias.js" defer></script>
   <script src="js/vistas/pagos.js" defer></script>
   <script src="js/vistas/calificaciones.js" defer></script>
+  <script src="js/vistas/evaluaciones-trimestrales.js" defer></script>
   <script src="enrollment.js" defer></script>
   <script src="enhancements.js" defer></script>
   <script src="academic-v2.js" defer></script>
