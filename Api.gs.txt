@@ -184,6 +184,35 @@ function listStudents_(skipInstallCheck) {
     .sort((a, b) => fullName_(a).localeCompare(fullName_(b), 'es'));
 }
 
+/**
+ * TÍTULO: Enriquecimiento de datos para alumnos con estructura de nombres legacy
+ * NOMBRE TÉCNICO: enrichLegacyStudent_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * 
+ * QUÉ HACE:
+ *   Inspecciona el objeto de alumno y, en caso de carecer de apellidos o nombres
+ *   desglosados, consulta el catálogo canónico conocido para descomponer su nombre completo.
+ * 
+ * PARA QUÉ SIRVE:
+ *   Garantiza la interoperabilidad y el orden alfabético correcto en vistas y reportes escolares.
+ * 
+ * POR QUÉ SE CREÓ:
+ *   Para normalizar registros históricos que únicamente almacenaban el nombre completo en una sola cadena.
+ * 
+ * PARÁMETROS:
+ *   @param {Object} student Objeto con datos de alumno (puede contener nombreCompleto sin desglose).
+ * 
+ * RESULTADO:
+ *   @return {Object} Copia del objeto de alumno con apellidoPaterno, apellidoMaterno y nombres completados.
+ * 
+ * DEPENDENCIAS:
+ *   normalizeText_, knownStudentNameParts_.
+ * 
+ * HISTORIAL DE MODIFICACIONES:
+ *   - Fecha no registrada: Creación de la función de enriquecimiento legacy.
+ *   - 27/11/2026 (Modificación exclusivamente documental - Etapa 7A.3): JSDoc exhaustivo conforme a GEMINI.md Sección 6.
+ */
 function enrichLegacyStudent_(student) {
   const copy = Object.assign({}, student);
   if (normalizeText_(copy.apellidoPaterno) && normalizeText_(copy.nombres)) return copy;
@@ -195,6 +224,35 @@ function enrichLegacyStudent_(student) {
   return copy;
 }
 
+/**
+ * TÍTULO: Catálogo canónico de desglose de nombres de alumnos conocidos
+ * NOMBRE TÉCNICO: knownStudentNameParts_
+ * FECHA DE CREACIÓN: Fecha de creación no registrada
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * 
+ * QUÉ HACE:
+ *   Compara un nombre completo contra el catálogo maestro de 35 alumnos del grupo escolar 4.° A
+ *   y devuelve el desglose oficial de apellido paterno, apellido materno y nombres.
+ * 
+ * PARA QUÉ SIRVE:
+ *   Permite resolver desgloses de nombres compuestos y apellidos con partículas sin errores heurísticos.
+ * 
+ * POR QUÉ SE CREÓ:
+ *   Para evitar ambigüedades en apellidos como 'De la Cruz', 'De Dios' o 'Castillo Kauil'.
+ * 
+ * PARÁMETROS:
+ *   @param {string} fullName Cadena con el nombre completo del alumno.
+ * 
+ * RESULTADO:
+ *   @return {Object|null} Objeto con { apellidoPaterno, apellidoMaterno, nombres } o null si no se encuentra.
+ * 
+ * DEPENDENCIAS:
+ *   normalizeName_.
+ * 
+ * HISTORIAL DE MODIFICACIONES:
+ *   - Fecha no registrada: Catálogo canónico de los 35 alumnos del aula.
+ *   - 27/11/2026 (Modificación exclusivamente documental - Etapa 7A.3): JSDoc exhaustivo conforme a GEMINI.md Sección 6.
+ */
 function knownStudentNameParts_(fullName) {
   const rows = [];
   const key = normalizePersonName_(fullName);

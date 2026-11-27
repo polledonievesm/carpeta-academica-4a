@@ -44,7 +44,7 @@
  *   - 27/11/2026 (Modificación funcional y documental - Etapa 7A.3):
  *     * Se incorporó el estándar obligatorio de documentación y trazabilidad (JSDoc y encabezados).
  *     * Autenticación: Se eliminó la selección especulativa de nombres de funciones, vinculando
- *       explícitamente 'validarSesionDocenteAutentica_' y manteniendo RECHAZO POR DEFECTO.
+ *       explícitamente 'validarSesion_' y manteniendo RECHAZO POR DEFECTO.
  *     * Trazabilidad de usuario: La identidad responsable se obtiene DIRECTAMENTE de la sesión
  *       autenticada por el servidor ('session.usuario'), rechazando valores no confiables del cliente.
  *     * Concurrencia: Reemplazo de getDocumentLock por evalWithScriptLock_ (ScriptLock), garantizando
@@ -141,11 +141,11 @@ var EVAL_CAMPOS_FORMATIVOS = {
  *   @throws {Error} Si el validador no está disponible o la sesión es inválida.
  * 
  * DEPENDENCIAS:
- *   validarSesionDocenteAutentica_ (Función auténtica provista por el docente).
+ *   validarSesion_ (Función auténtica provista por el docente).
  * 
  * HISTORIAL DE MODIFICACIONES:
  *   - 27/11/2026 (Modificación funcional - Etapa 7A.3): Eliminadas las conjeturas de funciones;
- *     se vinculó exclusivamente 'validarSesionDocenteAutentica_' con rechazo por defecto estricto.
+ *     se vinculó exclusivamente 'validarSesion_' con rechazo por defecto estricto.
  */
 /**
  * TÍTULO: Adaptador de autenticación docente
@@ -153,10 +153,125 @@ var EVAL_CAMPOS_FORMATIVOS = {
  * PROPÓSITO Y MOTIVO: Reutiliza validarSesion_ y limita el ámbito al grupo y ciclo configurados; devuelve identidad del servidor.
  * HISTORIAL: 27/11/2026 — integración focalizada 7A.3.
  */
+/**
+ * TÍTULO: Normalización canónica del identificador de grupo escolar
+ * NOMBRE TÉCNICO: evalNormalizeGroup_
+ * FECHA DE CREACIÓN: 27/11/2026
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * 
+ * QUÉ HACE:
+ *   Elimina espacios, caracteres de grado (°, º) y convierte a mayúsculas.
+ * 
+ * PARA QUÉ SIRVE:
+ *   Garantiza que '4°A', '4° A', '4A' y '4 A' se resuelvan de forma idéntica ('4A').
+ * 
+ * PARÁMETROS:
+ *   @param {string} g Cadena con el identificador del grupo.
+ * 
+ * RESULTADO:
+ *   @return {string} Identificador normalizado en mayúsculas (ej. '4A').
+ */
+function evalNormalizeGroup_(g) {
+  return String(g || '').replace(/[°º\s]/g, '').toUpperCase();
+}
+
+/**
+ * TÍTULO: Validación estricta del número de trimestre escolar
+ * NOMBRE TÉCNICO: evalValidateTrimester_
+ * FECHA DE CREACIÓN: 27/11/2026
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * 
+ * QUÉ HACE:
+ *   Verifica que el trimestre sea un número entero y pertenezca exclusivamente al conjunto {1, 2, 3}.
+ * 
+ * PARA QUÉ SIRVE:
+ *   Impide la inserción o consulta de períodos inexistentes o malformados.
+ * 
+ * PARÁMETROS:
+ *   @param {*} trimestre Valor del trimestre recibido.
+ * 
+ * RESULTADO:
+ *   @return {number} Número entero validado (1, 2 o 3).
+ *   @throws {Error} Si el trimestre no es 1, 2 o 3.
+ */
+function evalValidateTrimester_(trimestre) {
+  var t = parseInt(trimestre, 10);
+  if (![1, 2, 3].includes(t)) {
+    throw new Error('TRIMESTRE_INVALIDO: El trimestre debe ser exclusivamente 1, 2 o 3 (recibido: ' + trimestre + ').');
+  }
+  return t;
+}
+
+/**
+ * TÍTULO: Obtención del padrón escolar autorizado de alumnos
+ * NOMBRE TÉCNICO: evalGetAuthorizedStudentsMap_
+ * FECHA DE CREACIÓN: 27/11/2026
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * 
+ * QUÉ HACE:
+ *   Consulta la tabla oficial 'Alumnos' y construye un diccionario de alumnos activos indexado por id.
+ * 
+ * PARA QUÉ SIRVE:
+ *   Valida que los registros de evaluación pertenezcan a alumnos oficialmente inscritos en el aula.
+ * 
+ * PARÁMETROS:
+ *   @param {string} normalizedGroup Identificador normalizado del grupo.
+ * 
+ * RESULTADO:
+ *   @return {Object} Diccionario { [alumnoId]: studentObject }.
+ */
+function evalGetAuthorizedStudentsMap_(normalizedGroup) {
+  var map = {};
+  var students = (typeof readRows_ === 'function') ? readRows_('Alumnos') : [];
+  if (Array.isArray(students)) {
+    students.forEach(function (s) {
+      if (s && s.id && s.activo !== false && String(s.activo).toLowerCase() !== 'false') {
+        map[String(s.id)] = s;
+      }
+    });
+  }
+  return map;
+}
+
+/**
+ * TÍTULO: Validación de pertenencia de alumno al padrón autorizado
+ * NOMBRE TÉCNICO: evalValidateStudentId_
+ * FECHA DE CREACIÓN: 27/11/2026
+ * FECHA DE ÚLTIMA MODIFICACIÓN: 27/11/2026
+ * 
+ * QUÉ HACE:
+ *   Verifica que el alumnoId exista y esté activo en el padrón escolar del aula.
+ * 
+ * PARA QUÉ SIRVE:
+ *   Bloquea la inserción de identificadores de alumnos inexistentes o no autorizados.
+ * 
+ * PARÁMETROS:
+ *   @param {*} alumnoId Identificador del alumno a validar.
+ *   @param {Object} authorizedMap Diccionario del padrón autorizado.
+ *   @param {string} normalizedGroup Grupo escolar normalizado.
+ * 
+ * RESULTADO:
+ *   @throws {Error} Si el alumno no pertenece al padrón oficial activo.
+ */
+function evalValidateStudentId_(alumnoId, authorizedMap, normalizedGroup) {
+  var idStr = String(alumnoId || '').trim();
+  if (!idStr) {
+    throw new Error('ALUMNO_INVALIDO: Falta el identificador de alumno.');
+  }
+  if (authorizedMap && Object.keys(authorizedMap).length > 0) {
+    if (!authorizedMap[idStr]) {
+      throw new Error('ALUMNO_NO_AUTORIZADO: El alumno "' + idStr + '" no pertenece al padrón escolar autorizado del grupo ' + normalizedGroup + '.');
+    }
+  }
+}
+
 function validateTeacherAuth_(sessionToken, targetGroup, ciclo) {
   var session = validarSesion_(sessionToken);
-  var normalize = function (v) { return String(v || '').replace(/[°º\s]/g, '').toUpperCase(); };
-  if (!session || !session.ok || !session.usuario || normalize(session.grupo) !== normalize(targetGroup) || String(session.cicloEscolar) !== String(ciclo)) throw new Error('AUTH_ERROR: ámbito no autorizado.');
+  var gExpected = evalNormalizeGroup_(targetGroup);
+  var gSession = evalNormalizeGroup_(session ? session.grupo : '');
+  if (!session || !session.ok || !session.usuario || gSession !== gExpected || String(session.cicloEscolar) !== String(ciclo)) {
+    throw new Error('AUTH_ERROR: ámbito no autorizado para el grupo escolar ' + targetGroup + ' y ciclo ' + ciclo + '.');
+  }
   return session;
 }
 
@@ -366,17 +481,17 @@ function computeBundleIntegrityHash_(payload) {
  */
 function getTrimesterEvaluationBundle(payload, sessionToken) {
   var p = payload || {};
-  var ciclo = p.cicloEscolar || '2026-2027';
-  var grupo = p.grupo || '4A';
-  var t = parseInt(p.trimestre || 1, 10);
+  var ciclo = String(p.cicloEscolar || '2026-2027').trim();
+  var grupo = evalNormalizeGroup_(p.grupo || '4A');
+  var t = evalValidateTrimester_(p.trimestre || 1);
 
   // Validación de seguridad Zero-Trust
   validateTeacherAuth_(sessionToken, grupo, ciclo);
 
   // 1. Obtener última versión consolidada en EvalVersiones aislada por ciclo, grupo y trimestre
   var versiones = (typeof readRows_ === 'function' ? readRows_('EvalVersiones') : []).filter(function (v) {
-    return String(v.cicloEscolar) === String(ciclo) &&
-           String(v.grupo) === String(grupo) &&
+    return String(v.cicloEscolar) === ciclo &&
+           evalNormalizeGroup_(v.grupo) === grupo &&
            parseInt(v.trimestre, 10) === t &&
            v.estadoConsolidacion === 'consolidado';
   });
@@ -396,55 +511,56 @@ function getTrimesterEvaluationBundle(payload, sessionToken) {
 
   // 3. Cargar Configuración trimestral vinculada a la versión consolidada
   var configRows = (typeof readRows_ === 'function' ? readRows_('EvalConfig') : []).filter(function (c) {
-    return String(c.cicloEscolar) === String(ciclo) &&
-           String(c.grupo) === String(grupo) &&
-           parseInt(c.trimestre, 10) === t;
+    return String(c.cicloEscolar) === ciclo &&
+           evalNormalizeGroup_(c.grupo) === grupo &&
+           parseInt(c.trimestre, 10) === t &&
+           (!latestBatchId || c.batchId === latestBatchId);
   });
-  // Si existe batch consolidado, buscar su config; de lo contrario la última disponible
-  var activeConfig = null;
-  if (latestBatchId) activeConfig = configRows.find(function (c) { return c.batchId === latestBatchId; }) || null;
+  var configTrimestral = configRows.length > 0 ? configRows[configRows.length - 1] : null;
 
-  // 4. Cargar Actividades seleccionadas vinculadas
-  var actividades = (typeof readRows_ === 'function' ? readRows_('EvalActividades') : []).filter(function (a) {
-    return String(a.cicloEscolar) === String(ciclo) &&
-           String(a.grupo) === String(grupo) &&
+  // 4. Cargar Actividades seleccionadas de la versión consolidada
+  var actividadesTrimestre = (typeof readRows_ === 'function' ? readRows_('EvalActividades') : []).filter(function (a) {
+    return String(a.cicloEscolar) === ciclo &&
+           evalNormalizeGroup_(a.grupo) === grupo &&
            parseInt(a.trimestre, 10) === t &&
-           (latestBatchId && a.batchId === latestBatchId);
+           (!latestBatchId || a.batchId === latestBatchId);
   });
 
-  // 5. Si no existe versión consolidada, retornar estructura vacía con catálogo de recomendaciones
-  if (!latestBatchId) {
-    return {
-      ok: true,
-      data: {
-        cicloEscolar: ciclo,
-        grupo: grupo,
-        trimestre: t,
-        version: 0,
-        batchId: null,
-        estadoConsolidacion: 'sin_consolidar',
-        config: activeConfig,
-        actividades: actividades,
-        calificaciones: [],
-        desempeno: [],
-        mensajes: [],
-        bancoRecomendaciones: bancoRecomendaciones
-      }
-    };
+  // 5. Cargar Calificaciones consolidadas del lote vigente
+  var calificacionesTrimestre = [];
+  if (latestBatchId) {
+    calificacionesTrimestre = (typeof readRows_ === 'function' ? readRows_('EvalCalificaciones') : []).filter(function (c) {
+      return String(c.cicloEscolar) === ciclo &&
+             evalNormalizeGroup_(c.grupo) === grupo &&
+             parseInt(c.trimestre, 10) === t &&
+             c.batchId === latestBatchId &&
+             (c.estadoConsolidacion === 'consolidado' || !c.estadoConsolidacion);
+    });
   }
 
-  // 6. Cargar registros correspondientes al último batchId consolidado
-  var calificaciones = (typeof readRows_ === 'function' ? readRows_('EvalCalificaciones') : []).filter(function (c) {
-    return c.batchId === latestBatchId;
-  });
+  // 6. Cargar Desempeño Integral consolidado del lote vigente
+  var desempenoTrimestre = [];
+  if (latestBatchId) {
+    desempenoTrimestre = (typeof readRows_ === 'function' ? readRows_('EvalDesempeno') : []).filter(function (d) {
+      return String(d.cicloEscolar) === ciclo &&
+             evalNormalizeGroup_(d.grupo) === grupo &&
+             parseInt(d.trimestre, 10) === t &&
+             d.batchId === latestBatchId &&
+             (d.estadoConsolidacion === 'consolidado' || !d.estadoConsolidacion);
+    });
+  }
 
-  var desempeno = (typeof readRows_ === 'function' ? readRows_('EvalDesempeno') : []).filter(function (d) {
-    return d.batchId === latestBatchId;
-  });
-
-  var mensajes = (typeof readRows_ === 'function' ? readRows_('EvalMensajes') : []).filter(function (m) {
-    return m.batchId === latestBatchId;
-  });
+  // 7. Cargar Mensajes Familiares consolidados del lote vigente
+  var mensajesTrimestre = [];
+  if (latestBatchId) {
+    mensajesTrimestre = (typeof readRows_ === 'function' ? readRows_('EvalMensajes') : []).filter(function (m) {
+      return String(m.cicloEscolar) === ciclo &&
+             evalNormalizeGroup_(m.grupo) === grupo &&
+             parseInt(m.trimestre, 10) === t &&
+             m.batchId === latestBatchId &&
+             (m.estadoConsolidacion === 'consolidado' || !m.estadoConsolidacion);
+    });
+  }
 
   return {
     ok: true,
@@ -452,14 +568,13 @@ function getTrimesterEvaluationBundle(payload, sessionToken) {
       cicloEscolar: ciclo,
       grupo: grupo,
       trimestre: t,
-      version: latestVersionNum,
-      batchId: latestBatchId,
-      estadoConsolidacion: 'consolidado',
-      config: activeConfig,
-      actividades: actividades,
-      calificaciones: calificaciones,
-      desempeno: desempeno,
-      mensajes: mensajes,
+      versionVigente: latestVersionNum,
+      batchIdVigente: latestBatchId,
+      config: configTrimestral,
+      actividades: actividadesTrimestre,
+      calificaciones: calificacionesTrimestre,
+      desempeno: desempenoTrimestre,
+      mensajes: mensajesTrimestre,
       bancoRecomendaciones: bancoRecomendaciones
     }
   };
@@ -496,9 +611,9 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
     throw new Error('Payload inválido para sincronización de evaluación trimestral.');
   }
 
-  var ciclo = payload.cicloEscolar || '2026-2027';
-  var grupo = payload.grupo || '4A';
-  var t = parseInt(payload.trimestre || 1, 10);
+  var ciclo = String(payload.cicloEscolar || '2026-2027').trim();
+  var grupo = evalNormalizeGroup_(payload.grupo || '4A');
+  var t = evalValidateTrimester_(payload.trimestre || 1);
   var batchId = payload.batchId;
 
   if (!batchId) {
@@ -515,10 +630,13 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
     // Cálculo exclusivo de hash de integridad en el servidor (abarcando todos los componentes)
     var serverHash = computeBundleIntegrityHash_(payload);
 
+    // Obtener padrón escolar autorizado del aula para validación estricta de pertenencia
+    var authorizedStudentsMap = evalGetAuthorizedStudentsMap_(grupo);
+
     // 3. Verificar si este batchId ya fue consolidado previamente (Idempotencia)
     var versionesExistentes = (typeof readRows_ === 'function' ? readRows_('EvalVersiones') : []).filter(function (v) {
-      return String(v.cicloEscolar) === String(ciclo) &&
-             String(v.grupo) === String(grupo) &&
+      return String(v.cicloEscolar) === ciclo &&
+             evalNormalizeGroup_(v.grupo) === grupo &&
              parseInt(v.trimestre, 10) === t;
     });
 
@@ -566,7 +684,7 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
     var newVersionNumber = latestConsolidatedVer + 1;
 
     // 5. Mecanismo de FUSIÓN (Merge) para capturas parciales o individuales:
-    // Cargar registros de la versión consolidada anterior para no perder evaluaciones de otros alumnos
+    // Cargar registros de la versión consolidada anterior aislados por ciclo, grupo y trimestre
     var prevCalificacionesMap = {};
     var prevDesempenoMap = {};
     var prevMensajesMap = {};
@@ -575,33 +693,48 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
 
     if (latestConsolidatedBatchId) {
       var prevCalifs = (typeof readRows_ === 'function' ? readRows_('EvalCalificaciones') : []).filter(function (c) {
-        return c.batchId === latestConsolidatedBatchId;
+        return String(c.cicloEscolar) === ciclo &&
+               evalNormalizeGroup_(c.grupo) === grupo &&
+               parseInt(c.trimestre, 10) === t &&
+               c.batchId === latestConsolidatedBatchId;
       });
       prevCalifs.forEach(function (c) {
         prevCalificacionesMap[c.alumnoId + '_' + c.campoFormativo] = c;
       });
 
       var prevDesemps = (typeof readRows_ === 'function' ? readRows_('EvalDesempeno') : []).filter(function (d) {
-        return d.batchId === latestConsolidatedBatchId;
+        return String(d.cicloEscolar) === ciclo &&
+               evalNormalizeGroup_(d.grupo) === grupo &&
+               parseInt(d.trimestre, 10) === t &&
+               d.batchId === latestConsolidatedBatchId;
       });
       prevDesemps.forEach(function (d) {
         prevDesempenoMap[d.alumnoId] = d;
       });
 
       var prevMsgs = (typeof readRows_ === 'function' ? readRows_('EvalMensajes') : []).filter(function (m) {
-        return m.batchId === latestConsolidatedBatchId;
+        return String(m.cicloEscolar) === ciclo &&
+               evalNormalizeGroup_(m.grupo) === grupo &&
+               parseInt(m.trimestre, 10) === t &&
+               m.batchId === latestConsolidatedBatchId;
       });
       prevMsgs.forEach(function (m) {
         prevMensajesMap[m.alumnoId] = m;
       });
 
       var prevConfigs = (typeof readRows_ === 'function' ? readRows_('EvalConfig') : []).filter(function (c) {
-        return c.batchId === latestConsolidatedBatchId;
+        return String(c.cicloEscolar) === ciclo &&
+               evalNormalizeGroup_(c.grupo) === grupo &&
+               parseInt(c.trimestre, 10) === t &&
+               c.batchId === latestConsolidatedBatchId;
       });
       if (prevConfigs.length > 0) prevConfig = prevConfigs[prevConfigs.length - 1];
 
       var prevActs = (typeof readRows_ === 'function' ? readRows_('EvalActividades') : []).filter(function (a) {
-        return a.batchId === latestConsolidatedBatchId;
+        return String(a.cicloEscolar) === ciclo &&
+               evalNormalizeGroup_(a.grupo) === grupo &&
+               parseInt(a.trimestre, 10) === t &&
+               a.batchId === latestConsolidatedBatchId;
       });
       prevActs.forEach(function (a) {
         prevActividadesMap[a.campoFormativo + '_' + a.criterio + '_' + a.actividadId] = a;
@@ -626,6 +759,9 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
         batchId: batchId,
         estadoConsolidacion: 'en_preparacion',
         version: newVersionNumber,
+        // Conservar autoría y fecha originales de registros que no hayan cambiado
+        authorizedPor: prev.authorizedPor || '',
+        authorizedAt: prev.authorizedAt || '',
         actualizadoEn: now,
         actualizadoPor: user
       });
@@ -634,18 +770,43 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
     if (Array.isArray(payload.calificaciones)) {
       payload.calificaciones.forEach(function (c) {
         if (!c.alumnoId || !c.campoFormativo) return;
+        evalValidateStudentId_(c.alumnoId, authorizedStudentsMap, grupo);
+
         if (!EVAL_CAMPOS_FORMATIVOS[c.campoFormativo]) {
           throw new Error('Campo formativo no reconocido: ' + c.campoFormativo);
         }
         var califKey = c.alumnoId + '_' + c.campoFormativo;
+        var prevRecord = prevCalificacionesMap[califKey];
         var califId = ciclo + '_' + grupo + '_T' + t + '_' + batchId + '_' + califKey;
+
+        var authGrade = validateGradeValue_(c.authorizedGrade);
+        var status = c.status || 'PENDIENTE';
+
+        // Generar authorizedPor y authorizedAt desde el servidor cuando esté autorizada
+        var authAt = '';
+        var authPor = '';
+
+        if (status === 'AUTORIZADA' || (authGrade !== null && authGrade !== undefined)) {
+          // Si el registro previo ya estaba autorizado y no cambió de calificación/estado, conservar autoría y fecha originales
+          if (prevRecord && prevRecord.status === 'AUTORIZADA' &&
+              String(prevRecord.authorizedGrade) === String(authGrade) &&
+              prevRecord.authorizedAt && prevRecord.authorizedPor) {
+            authAt = prevRecord.authorizedAt;
+            authPor = prevRecord.authorizedPor;
+          } else {
+            // Nueva autorización o cambio en calificación autorizada: generar en el servidor
+            authAt = now;
+            authPor = user;
+          }
+        }
+
         califBatchMap[califKey] = {
           id: califId,
           cicloEscolar: ciclo,
           grupo: grupo,
           trimestre: t,
           alumnoId: String(c.alumnoId),
-          numeroLista: c.numeroLista ? parseInt(c.numeroLista, 10) : null,
+          numeroLista: c.numeroLista ? parseInt(c.numeroLista, 10) : (authorizedStudentsMap[c.alumnoId] ? authorizedStudentsMap[c.alumnoId].numeroLista : null),
           campoFormativo: c.campoFormativo,
           modalidad: c.modalidad || 'asistida',
           desgloseAutoJson: JSON.stringify(c.desgloseAuto || {}),
@@ -657,10 +818,10 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
           calcGradePreliminar: validateGradeValue_(c.calcGradePreliminar),
           ajusteManual: validateGradeValue_(c.ajusteManual),
           motivoAjuste: c.motivoAjuste || '',
-          authorizedGrade: validateGradeValue_(c.authorizedGrade),
-          status: c.status || 'PENDIENTE',
-          authorizedAt: c.authorizedAt || '',
-          authorizedPor: c.authorizedPor || '',
+          authorizedGrade: authGrade,
+          status: status,
+          authorizedAt: authAt,
+          authorizedPor: authPor,
           batchId: batchId,
           estadoConsolidacion: 'en_preparacion',
           version: newVersionNumber,
@@ -681,7 +842,7 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
       }
     }
 
-    // 7. Preparación de Desempeño Integral (Fusión con alumnos existentes)
+    // 7. Preparación de Desempeño Integral (Fusión por alumno e indicador)
     var desempBatchMap = {};
     for (var dKey in prevDesempenoMap) {
       var prevD = prevDesempenoMap[dKey];
@@ -699,11 +860,43 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
     if (Array.isArray(payload.desempeno)) {
       payload.desempeno.forEach(function (d) {
         if (!d.alumnoId) return;
-        var cleanRatings = d.ratings || {};
-        for (var indKey in cleanRatings) {
-          if (!EVAL_INDICADORES_VALIDOS[indKey]) delete cleanRatings[indKey];
-          else if (!EVAL_NIVELES_VALIDOS[cleanRatings[indKey]]) delete cleanRatings[indKey];
+        evalValidateStudentId_(d.alumnoId, authorizedStudentsMap, grupo);
+
+        // Si ya existía un registro consolidado previo del mismo alumno, recuperar sus valoraciones previas
+        var prevRatings = {};
+        if (prevDesempenoMap[d.alumnoId] && prevDesempenoMap[d.alumnoId].valoracion) {
+          try {
+            prevRatings = JSON.parse(prevDesempenoMap[d.alumnoId].valoracion) || {};
+          } catch (e) {
+            prevRatings = {};
+          }
         }
+
+        var incomingRatings = d.ratings || {};
+        // RECHAZAR indicadores y valoraciones inválidos en lugar de eliminarlos silenciosamente
+        for (var indKey in incomingRatings) {
+          if (!EVAL_INDICADORES_VALIDOS[indKey]) {
+            throw new Error('INDICADOR_INVALIDO: El indicador "' + indKey + '" no existe en el catálogo oficial de 23 indicadores.');
+          }
+          var val = incomingRatings[indKey];
+          if (!EVAL_NIVELES_VALIDOS[val]) {
+            throw new Error('VALORACION_INVALIDA: La valoración "' + val + '" para el indicador "' + indKey + '" no es válida (esperado: E, B, R, A).');
+          }
+        }
+
+        // Fusionar valoraciones: las valoraciones previas se conservan; las nuevas las actualizan/complementan
+        var mergedRatings = Object.assign({}, prevRatings, incomingRatings);
+
+        // Considerar revisado ÚNICAMENTE cuando exista una confirmación expresa Y estén completos los 23 indicadores válidos
+        var explicitReviewed = (d.isReviewed === true || d.estadoRevision === 'revisado');
+        var validIndicatorsCount = 0;
+        for (var validKey in EVAL_INDICADORES_VALIDOS) {
+          if (mergedRatings[validKey] && EVAL_NIVELES_VALIDOS[mergedRatings[validKey]]) {
+            validIndicatorsCount++;
+          }
+        }
+        var isFullyComplete = (validIndicatorsCount === 23);
+        var finalEstadoRevision = (explicitReviewed && isFullyComplete) ? 'revisado' : 'pendiente';
 
         var desempId = ciclo + '_' + grupo + '_T' + t + '_' + batchId + '_' + d.alumnoId;
         desempBatchMap[d.alumnoId] = {
@@ -712,11 +905,11 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
           grupo: grupo,
           trimestre: t,
           alumnoId: String(d.alumnoId),
-          numeroLista: d.numeroLista ? parseInt(d.numeroLista, 10) : null,
+          numeroLista: d.numeroLista ? parseInt(d.numeroLista, 10) : (authorizedStudentsMap[d.alumnoId] ? authorizedStudentsMap[d.alumnoId].numeroLista : null),
           indicadorId: '23_INDICADORES_COMPLETOS',
-          valoracion: JSON.stringify(cleanRatings),
+          valoracion: JSON.stringify(mergedRatings),
           catalogoVersion: '2026_V1_23IND',
-          estadoRevision: d.isReviewed !== false ? 'revisado' : 'pendiente',
+          estadoRevision: finalEstadoRevision,
           origen: d.source || 'manual',
           trimestreOrigen: t,
           batchId: batchId,
@@ -757,6 +950,8 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
     if (Array.isArray(payload.mensajes)) {
       payload.mensajes.forEach(function (m) {
         if (!m.alumnoId) return;
+        evalValidateStudentId_(m.alumnoId, authorizedStudentsMap, grupo);
+
         var cleanMsg = validateFamilyMessage_(m.mensaje);
         var msgId = ciclo + '_' + grupo + '_T' + t + '_' + batchId + '_' + m.alumnoId;
         msgBatchMap[m.alumnoId] = {
@@ -765,7 +960,7 @@ function syncTrimesterEvaluationBatch(payload, sessionToken) {
           grupo: grupo,
           trimestre: t,
           alumnoId: String(m.alumnoId),
-          numeroLista: m.numeroLista ? parseInt(m.numeroLista, 10) : null,
+          numeroLista: m.numeroLista ? parseInt(m.numeroLista, 10) : (authorizedStudentsMap[m.alumnoId] ? authorizedStudentsMap[m.alumnoId].numeroLista : null),
           mensaje: cleanMsg,
           caracteres: cleanMsg.length,
           templateId: m.templateId || '',
@@ -1016,26 +1211,100 @@ function verificarInstalacionEvaluacionesTrimestrales() {
   var ss = typeof getSpreadsheet_ === 'function' ? getSpreadsheet_() : SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error('No se pudo acceder al libro de cálculo.');
 
-  var targetSheets = [
+  var schema = typeof DB_EVALUACIONES !== 'undefined' ? DB_EVALUACIONES : null;
+  var targetSheets = schema ? Object.keys(schema) : [
     'EvalConfig', 'EvalActividades', 'EvalCalificaciones',
     'EvalDesempeno', 'EvalMensajes', 'EvalBancoRecomendaciones', 'EvalVersiones'
   ];
 
   var existentes = [];
   var faltantes = [];
+  var erroresEsquema = [];
+  var encabezadosCompatibles = true;
 
   targetSheets.forEach(function (name) {
-    if (ss.getSheetByName(name)) existentes.push(name);
-    else faltantes.push(name);
+    var sheet = ss.getSheetByName(name);
+    if (sheet) {
+      existentes.push(name);
+      // Validar encabezados exactos si la hoja ya existe físicamente
+      if (schema && schema[name]) {
+        var expectedHeaders = schema[name];
+        var lastCol = sheet.getLastColumn();
+        if (lastCol < expectedHeaders.length) {
+          erroresEsquema.push({
+            hoja: name,
+            error: 'Columnas insuficientes: esperado ' + expectedHeaders.length + ', encontrado ' + lastCol
+          });
+          encabezadosCompatibles = false;
+        } else {
+          var actualHeaders = sheet.getRange(1, 1, 1, expectedHeaders.length).getValues()[0] || [];
+          for (var i = 0; i < expectedHeaders.length; i++) {
+            if (String(actualHeaders[i] || '').trim() !== String(expectedHeaders[i]).trim()) {
+              erroresEsquema.push({
+                hoja: name,
+                columna: i + 1,
+                esperado: expectedHeaders[i],
+                encontrado: actualHeaders[i]
+              });
+              encabezadosCompatibles = false;
+            }
+          }
+        }
+      }
+    } else {
+      faltantes.push(name);
+    }
   });
 
+  // Validar dependencias necesarias del entorno
+  var dependenciasFaltantes = [];
+  if (typeof SpreadsheetApp === 'undefined') dependenciasFaltantes.push('SpreadsheetApp');
+  if (typeof LockService === 'undefined') dependenciasFaltantes.push('LockService');
+  if (typeof Utilities === 'undefined') dependenciasFaltantes.push('Utilities');
+  if (typeof DB_EVALUACIONES === 'undefined' && typeof DB === 'undefined') dependenciasFaltantes.push('DB_EVALUACIONES');
+
+  // Validar disponibilidad del validador de sesión auténtico
+  var validadorDisponible = (typeof validarSesion_ === 'function');
+
+  // Comprobar si existen bloqueos pendientes
+  var bloqueoPendiente = false;
+  if (typeof LockService !== 'undefined' && LockService.getScriptLock) {
+    var testLock = LockService.getScriptLock();
+    var acquired = false;
+    try {
+      acquired = testLock.tryLock(500);
+      if (!acquired) {
+        bloqueoPendiente = true;
+      }
+    } catch (e) {
+      bloqueoPendiente = true;
+    } finally {
+      if (acquired) {
+        try { testLock.releaseLock(); } catch (e) {}
+      }
+    }
+  }
+
+  // NO devolver listoParaCrearHojas: true de manera incondicional
+  var listoParaCrearHojas = (
+    dependenciasFaltantes.length === 0 &&
+    validadorDisponible === true &&
+    bloqueoPendiente === false &&
+    encabezadosCompatibles === true
+  );
+
   var r = {
-    ok: true,
+    ok: listoParaCrearHojas,
     totalHojasRequeridas: targetSheets.length,
     hojasExistentes: existentes,
     hojasPorCrear: faltantes,
+    erroresEsquema: erroresEsquema,
+    encabezadosCompatibles: encabezadosCompatibles,
+    dependenciasFaltantes: dependenciasFaltantes,
+    validadorDisponible: validadorDisponible,
+    bloqueoPendiente: bloqueoPendiente,
     escrituras: 0,
-    listoParaCrearHojas: true
+    listoParaCrearHojas: listoParaCrearHojas
   };
 
   console.log(JSON.stringify(r));
