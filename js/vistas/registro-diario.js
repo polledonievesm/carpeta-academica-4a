@@ -2366,6 +2366,9 @@ async function openGradingView(classId) {
 
   window.dailyState.gradingEvaluations = evalMap;
   window.dailyState.initialGradingEvaluations = JSON.parse(JSON.stringify(evalMap));
+  window.dailyState.gradingSearchQuery = '';
+  window.dailyState.gradingSelectedStudentId = null;
+  window.dailyState.gradingSearchToken = 0;
   if (typeof setLoading === 'function') setLoading(false);
 
   // Renderizar cabecera de la actividad
@@ -2389,12 +2392,441 @@ async function openGradingView(classId) {
 }
 window.openGradingView = openGradingView;
 
+// ==========================================================================
+// 9.1 AUXILIARES CANÓNICOS: NÚMERO OFICIAL DE LISTA Y EVALUACIÓN INDIVIDUAL
+// ==========================================================================
+
+function getStudentOfficialNumber(student) {
+  if (!student) return null;
+  // 1. Propiedad canónica oficial en el frontend (originada en confirmBatchStudentImport en js/vistas/importar-alumnos.js)
+  const raw = student.numeroLista !== undefined && student.numeroLista !== null && String(student.numeroLista).trim() !== ''
+    ? student.numeroLista
+    : null;
+  if (raw !== null) {
+    const s = String(raw).trim();
+    if (/^\d+$/.test(s)) {
+      const parsed = parseInt(s, 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+  }
+  // 2. Directorio escolar auténtico (state.directory)
+  const gs = getGlobalState();
+  if (gs.directory && Array.isArray(gs.directory.rows)) {
+    const row = gs.directory.rows.find(r => String(r.student?.id) === String(student.id));
+    if (row && row.student) {
+      const dNum = row.student.numeroLista;
+      if (dNum !== undefined && dNum !== null && String(dNum).trim() !== '') {
+        const s = String(dNum).trim();
+        if (/^\d+$/.test(s)) {
+          const parsed = parseInt(s, 10);
+          if (!isNaN(parsed) && parsed > 0) return parsed;
+        }
+      }
+    }
+  }
+  return null;
+}
+window.getStudentOfficialNumber = getStudentOfficialNumber;
+
+function findStudentByOfficialNumber(students, numberQuery) {
+  const q = String(numberQuery || '').trim();
+  if (!/^\d+$/.test(q)) return null;
+  const targetNum = parseInt(q, 10);
+  if (isNaN(targetNum) || targetNum <= 0) return null;
+  const matches = (students || []).filter(s => getStudentOfficialNumber(s) === targetNum);
+  if (matches.length === 1) return matches[0];
+  // Si no hay coincidencias o si hay duplicados, rechazar y retornar null para evitar selección arbitraria
+  return null;
+}
+window.findStudentByOfficialNumber = findStudentByOfficialNumber;
+
+/**
+ * Prepara una propuesta revisable de numeración oficial cuando cambie el grupo.
+ * NO renumera automáticamente al cargar alumnos, ordenar pantalla ni detectar bajas.
+ * Requiere confirmación expresa del docente antes de aplicarse.
+ */
+function prepareRosterNumberingProposal(currentStudents, incomingOrModifiedStudents = null) {
+  const currentList = Array.isArray(currentStudents) ? currentStudents : [];
+  const targetList = Array.isArray(incomingOrModifiedStudents) ? incomingOrModifiedStudents : currentList;
+
+  // Mapear números anteriores por ID permanente
+  const prevNumMap = new Map();
+  currentList.forEach(s => {
+    if (s && s.id) {
+      prevNumMap.set(String(s.id), getStudentOfficialNumber(s));
+    }
+  });
+
+  const activeStudents = targetList.filter(s => s && s.activo !== false && !s.baja);
+  const inactiveStudents = targetList.filter(s => s && (s.activo === false || s.baja));
+
+  const sortedActive = [...activeStudents].sort((a, b) => {
+    const nameA = String(a.name || a.nombreCompleto || a.nombre || a.id).toUpperCase();
+    const nameB = String(b.name || b.nombreCompleto || b.nombre || b.id).toUpperCase();
+    return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+  });
+
+  const proposal = [];
+  let assignedCounter = 1;
+
+  sortedActive.forEach(s => {
+    const sid = String(s.id);
+    const prevNum = prevNumMap.has(sid) ? prevNumMap.get(sid) : getStudentOfficialNumber(s);
+    const proposedNum = assignedCounter++;
+    let motivo = 'Sin cambios';
+
+    if (prevNum === null) {
+      motivo = 'Nuevo ingreso (sin número oficial previo)';
+    } else if (prevNum !== proposedNum) {
+      motivo = `Reordenamiento alfabético propuesto (anterior: ${prevNum} -> propuesto: ${proposedNum})`;
+    }
+
+    proposal.push({
+      alumnoId: sid,
+      nombre: s.name || s.nombreCompleto || s.nombre || sid,
+      numeroAnterior: prevNum,
+      numeroPropuesto: proposedNum,
+      motivoCambio: motivo
+    });
+  });
+
+  inactiveStudents.forEach(s => {
+    const sid = String(s.id);
+    const prevNum = prevNumMap.has(sid) ? prevNumMap.get(sid) : getStudentOfficialNumber(s);
+    proposal.push({
+      alumnoId: sid,
+      nombre: s.name || s.nombreCompleto || s.nombre || sid,
+      numeroAnterior: prevNum,
+      numeroPropuesto: null,
+      motivoCambio: 'Baja de alumno (se conserva historial e ID permanente sin reasignación automática)'
+    });
+  });
+
+  const changedCount = proposal.filter(p => p.numeroAnterior !== p.numeroPropuesto).length;
+
+  return {
+    requiresConfirmation: true,
+    status: 'pending_confirmation',
+    totalAlumnos: proposal.length,
+    conCambios: changedCount,
+    proposal: proposal
+  };
+}
+window.prepareRosterNumberingProposal = prepareRosterNumberingProposal;
+
+/**
+ * Revalida la selección individual activa tras una actualización del padrón.
+ * Comprueba contra el padrón vigente: ID seleccionado, número consultado,
+ * correspondencia única del número con ese ID, y alumno activo/elegible.
+ * Si dejó de corresponder, limpia la selección, muestra aviso y solicita buscar nuevamente,
+ * conservando las capturas pendientes bajo sus IDs originales.
+ */
+function revalidateGradingSelection(updatedStudents) {
+  const currentSid = window.dailyState?.gradingSelectedStudentId;
+  const searchInput = document.getElementById('gradingStudentSearchInput');
+  const queryStr = searchInput ? searchInput.value.trim() : '';
+  const currentNum = /^\d+$/.test(queryStr) ? parseInt(queryStr, 10) : window.dailyState?.gradingSelectedOfficialNumber;
+
+  if (!currentSid && !currentNum) return { valid: true, cleared: false };
+
+  if (!currentSid || !currentNum) {
+    return { valid: false, cleared: false, reason: 'No hay alumno seleccionado o número consultado válido.' };
+  }
+
+  const studentsList = updatedStudents || (window.getGlobalState ? window.getGlobalState().students : []) || [];
+  const currentStudent = studentsList.find(s => String(s.id) === String(currentSid));
+
+  // 1. Alumno activo y no dado de baja
+  const isStudentActive = Boolean(currentStudent && currentStudent.activo !== false && !currentStudent.baja);
+
+  // 2. Número vigente del alumno
+  const studentNum = currentStudent ? getStudentOfficialNumber(currentStudent) : null;
+  const matchesCurrentNum = isStudentActive && (studentNum === currentNum);
+
+  // 3. Correspondencia única del número con ese ID en el padrón activo
+  const matchingStudents = studentsList.filter(s => s && s.activo !== false && !s.baja && getStudentOfficialNumber(s) === currentNum);
+  const isUniqueMatch = matchingStudents.length === 1 && String(matchingStudents[0].id) === String(currentSid);
+
+  // 4. Elegibilidad según asistencia y restricciones académicas
+  const getAtt = window.dailyState?.getGradingAttendanceStatus;
+  const attStatus = (typeof getAtt === 'function') ? getAtt(currentSid) : 'A';
+  const isEligible = (attStatus === 'A' || attStatus === 'R');
+
+  const stillMatches = isStudentActive && matchesCurrentNum && isUniqueMatch && isEligible;
+
+  if (!stillMatches) {
+    window.dailyState.gradingSelectedStudentId = null;
+    window.dailyState.gradingSelectedOfficialNumber = null;
+
+    const resContainer = document.getElementById('gradingIndividualResultContainer');
+    if (resContainer) {
+      resContainer.innerHTML = `
+        <div class="panel" style="padding:16px 20px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;color:#92400e;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:1.4rem;">⚠️</span>
+            <div>
+              <strong style="font-size:0.95rem;">Padrón escolar actualizado: selección desincronizada</strong>
+              <p style="margin:3px 0 0;font-size:0.85rem;color:#78350f;line-height:1.4;">
+                El padrón escolar ha sido actualizado y la asignación del número oficial ha cambiado.
+                El alumno previamente seleccionado ya no corresponde al número consultado (${currentNum}).
+                Se ha limpiado la selección por seguridad. Todas las calificaciones capturadas se conservan intactas bajo el ID permanente del alumno.
+                Por favor, escribe nuevamente el número oficial vigente en el buscador.
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    return {
+      valid: false,
+      cleared: true,
+      preservedStudentId: currentSid,
+      reason: 'El padrón escolar cambió y la selección dejó de corresponder al número consultado.'
+    };
+  }
+
+  return { valid: true, cleared: false, studentId: currentSid, officialNumber: currentNum };
+}
+window.revalidateGradingSelection = revalidateGradingSelection;
+
+function evaluateGradingStudentSearch(query, activeStudents, getStatus, classRecord) {
+  const q = String(query || '').trim();
+  if (!q) {
+    return {
+      status: 'empty',
+      student: null,
+      message: 'Escribe el número oficial de lista para calificar a un alumno. Ningún alumno seleccionado.'
+    };
+  }
+
+  if (!/^\d+$/.test(q) || parseInt(q, 10) <= 0) {
+    return {
+      status: 'invalid',
+      student: null,
+      message: `El valor "${q}" no es un número de lista válido. Ingresa únicamente dígitos enteros positivos (ej. 5).`
+    };
+  }
+
+  const targetNum = parseInt(q, 10);
+  const matchingStudents = (activeStudents || []).filter(s => getStudentOfficialNumber(s) === targetNum);
+
+  if (matchingStudents.length === 0) {
+    return {
+      status: 'not_found',
+      student: null,
+      message: `No existe ningún alumno con el número oficial de lista ${targetNum}.`
+    };
+  }
+
+  if (matchingStudents.length > 1) {
+    const names = matchingStudents.map(s => `${s.name || s.nombreCompleto || s.id} (ID: ${s.id})`).join(', ');
+    return {
+      status: 'duplicate',
+      student: null,
+      message: `Conflicto de padrón: Existen ${matchingStudents.length} alumnos con el número oficial de lista ${targetNum} (${names}). No es posible calificar hasta resolver la duplicidad en el directorio.`
+    };
+  }
+
+  const student = matchingStudents[0];
+  const sid = String(student.id);
+  const attStatus = getStatus(sid);
+  const studentName = student.name || student.nombreCompleto || student.nombre || sid;
+
+  if (attStatus === 'A' || attStatus === 'R') {
+    return {
+      status: 'allowed',
+      student: student,
+      attStatus: attStatus,
+      officialNumber: targetNum,
+      studentName: studentName
+    };
+  }
+
+  if (attStatus === 'F') {
+    return {
+      status: 'unexcused_absent',
+      student: student,
+      attStatus: attStatus,
+      officialNumber: targetNum,
+      studentName: studentName,
+      message: `El alumno No. ${targetNum} (${studentName}) tiene falta injustificada en esta fecha (${classRecord.fecha || ''}) y no es evaluable ordinariamente.`
+    };
+  }
+
+  if (attStatus === 'J') {
+    return {
+      status: 'justified',
+      student: student,
+      attStatus: attStatus,
+      officialNumber: targetNum,
+      studentName: studentName,
+      message: `El alumno No. ${targetNum} (${studentName}) tiene ausencia justificada (J). Su entrega se gestiona en la sección de Entregas por falta justificada.`
+    };
+  }
+
+  return {
+    status: 'no_attendance',
+    student: student,
+    attStatus: attStatus,
+    officialNumber: targetNum,
+    studentName: studentName,
+    message: `El alumno No. ${targetNum} (${studentName}) no cuenta con registro de asistencia para la fecha ${classRecord.fecha || ''}.`
+  };
+}
+window.evaluateGradingStudentSearch = evaluateGradingStudentSearch;
+
+function renderSingleStudentGradingCard(s, ev, attStatus, currentInstrument, isIndividualView = false, defaultFecha = '') {
+  const sid = String(s.id);
+  const officialNum = getStudentOfficialNumber(s);
+  const studentName = s.name || s.nombreCompleto || s.nombre || sid;
+  const defaultEntrega = ev.fechaEntrega || defaultFecha || '';
+
+  // Instrumento de evaluación si está activo
+  let instrumentHtml = '';
+  if (currentInstrument) {
+    const results = ev.instrumentResults || {};
+    const tipo = currentInstrument.tipo || 'RUBRICA';
+    if (tipo === 'EXAMEN') {
+      const gradeVal = results.__grade !== undefined ? results.__grade : (ev.calificacionInstrumento !== undefined ? ev.calificacionInstrumento : '');
+      instrumentHtml = `
+        <div style="margin-top:10px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;">
+          <div style="font-weight:600;font-size:0.9rem;color:#166534;margin-bottom:6px;">
+            📝 Examen: ${escapeHtml(currentInstrument.titulo || currentInstrument.nombre || 'Evaluación')}
+          </div>
+          <label style="font-size:0.85rem;color:#166534;">Calificación obtenida (0 a 10):
+            <input type="number" step="0.1" min="0" max="10" class="grading-field instrument-criterion-field" data-student="${sid}" data-criterion="__grade" value="${gradeVal !== '' ? gradeVal : ''}" placeholder="Pendiente de calificar" style="width:160px;margin-left:8px;">
+          </label>
+          ${gradeVal !== '' ? `<span class="badge" style="margin-left:10px;background:#166534;color:#fff;">Nota: ${gradeVal}</span>` : '<span class="badge badge-neutral" style="margin-left:10px;">Pendiente</span>'}
+        </div>
+      `;
+    } else {
+      const criterios = currentInstrument.criterios || [];
+      const niveles = currentInstrument.niveles || [
+        { code: 'NE', label: 'Nivel esperado' },
+        { code: 'EN', label: 'En desarrollo' },
+        { code: 'RA', label: 'Requiere apoyo' }
+      ];
+
+      const answeredCriteriaCount = criterios.filter(c => results[c.id] && String(results[c.id]).trim() !== '').length;
+      const isCriteriaComplete = criterios.length > 0 && answeredCriteriaCount === criterios.length;
+
+      const critRows = criterios.map(c => {
+        const sel = results[c.id] || '';
+        return `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:0.85rem;color:#1e293b;flex:1;min-width:200px;">${escapeHtml(c.texto || c.nombre || c.id)}:</span>
+            <select class="grading-field instrument-criterion-field" data-student="${sid}" data-criterion="${escapeHtml(c.id)}" style="font-size:0.85rem;padding:3px 6px;">
+              <option value="" ${!sel ? 'selected' : ''}>-- Sin calificar --</option>
+              ${niveles.map(n => `<option value="${escapeHtml(n.code)}" ${sel === n.code ? 'selected' : ''}>${escapeHtml(n.code)}: ${escapeHtml(n.label || n.etiqueta || n.code)}</option>`).join('')}
+            </select>
+          </div>
+        `;
+      }).join('');
+
+      let badgeInst = '';
+      if (isCriteriaComplete && ev.calificacionInstrumento !== undefined && ev.calificacionInstrumento !== '') {
+        badgeInst = `<span class="badge" style="background:#166534;color:#fff;font-size:0.8rem;">Nota: ${ev.calificacionInstrumento} (${escapeHtml(ev.nivelInstrumento || '')})</span>`;
+      } else if (answeredCriteriaCount > 0) {
+        badgeInst = `<span class="badge badge-warning" style="font-size:0.8rem;">⚠️ Criterios pendientes (${answeredCriteriaCount} de ${criterios.length})</span>`;
+      } else {
+        badgeInst = `<span class="badge badge-neutral" style="font-size:0.8rem;">Sin calificar</span>`;
+      }
+
+      instrumentHtml = `
+        <div style="margin-top:10px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-weight:600;font-size:0.9rem;color:#166534;">
+              📋 ${escapeHtml(currentInstrument.titulo || currentInstrument.nombre || 'Instrumento de evaluación')}
+            </div>
+            ${badgeInst}
+          </div>
+          <div style="margin-top:6px;">${critRows}</div>
+          ${ev.mensajeInstrumento ? `<div style="margin-top:6px;font-size:0.8rem;color:#15803d;"><em>${escapeHtml(ev.mensajeInstrumento)}</em></div>` : ''}
+        </div>
+      `;
+    }
+  }
+
+  const individualActionsHtml = isIndividualView ? `
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px dashed #e2e8f0;justify-content:flex-end;">
+      <button type="button" class="btn primary small" id="btnSaveIndividualStudent" data-student="${sid}">💾 Guardar calificación</button>
+    </div>
+  ` : '';
+
+  return `
+    <article class="panel grading-student-card ${isIndividualView ? 'grading-individual-focused' : ''}" data-student="${sid}" data-official-number="${officialNum !== null ? officialNum : ''}" style="margin-bottom:14px;padding:14px 18px;border-left:4px solid #0284c7;${isIndividualView ? 'background:#fff;border:1px solid #bae6fd;border-left:5px solid #0284c7;box-shadow:0 4px 12px rgba(2,132,199,0.08);' : ''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <div style="font-size:1.05rem;font-weight:700;color:#0b315d;display:flex;align-items:center;gap:8px;">
+          <span style="display:inline-block;padding:2px 8px;background:#e0f2fe;color:#0369a1;border-radius:6px;font-size:0.85rem;font-weight:800;">No. ${officialNum !== null ? officialNum : '—'}</span>
+          <span>${escapeHtml(studentName)}</span>
+          ${isIndividualView ? `<span class="muted" style="font-size:0.75rem;font-weight:400;">(ID: ${sid})</span>` : ''}
+        </div>
+        <div>
+          <span class="badge ${attStatus === 'A' ? 'badge-neutral' : 'badge-warning'}" style="font-size:0.75rem;">
+            Asistencia: ${attStatus === 'A' ? 'A (Presente)' : 'R (Retardo)'}
+          </span>
+        </div>
+      </div>
+
+      ${instrumentHtml}
+
+      <div class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:10px;margin-top:10px;">
+        <label>Entrega / Trabajo
+          <select class="grading-field" data-student="${sid}" data-field="trabajo">
+            <option value="" ${!ev.trabajo ? 'selected' : ''}>-- Sin registrar --</option>
+            <option value="Completo" ${ev.trabajo === 'Completo' ? 'selected' : ''}>Entregada</option>
+            <option value="Incompleto" ${ev.trabajo === 'Incompleto' ? 'selected' : ''}>Incompleta</option>
+            <option value="No trabajó" ${ev.trabajo === 'No trabajó' ? 'selected' : ''}>No entregó</option>
+            <option value="Entregada tarde" ${ev.trabajo === 'Entregada tarde' ? 'selected' : ''}>Entregada tarde</option>
+            <option value="Pendiente" ${ev.trabajo === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
+          </select>
+        </label>
+
+        <label>Fecha de entrega (Alumno)
+          <input type="date" class="grading-field" data-student="${sid}" data-field="fechaEntrega" value="${defaultEntrega}">
+        </label>
+
+        <label>Desempeño docente
+          <input type="text" class="grading-field" data-student="${sid}" data-field="desempeno" value="${escapeHtml(ev.desempeno || '')}" placeholder="Logrado, En proceso...">
+        </label>
+
+        <label>Conducta
+          <select class="grading-field" data-student="${sid}" data-field="conducta">
+            <option value="" ${!ev.conducta ? 'selected' : ''}>-- Sin registrar --</option>
+            <option value="Excelente" ${ev.conducta === 'Excelente' ? 'selected' : ''}>Excelente</option>
+            <option value="Adecuada" ${ev.conducta === 'Adecuada' ? 'selected' : ''}>Adecuada</option>
+            <option value="Requiere apoyo" ${ev.conducta === 'Requiere apoyo' ? 'selected' : ''}>Requiere apoyo</option>
+          </select>
+        </label>
+
+        <label>Participación
+          <select class="grading-field" data-student="${sid}" data-field="participacion">
+            <option value="" ${!ev.participacion ? 'selected' : ''}>-- Sin registrar --</option>
+            <option value="Alta" ${ev.participacion === 'Alta' ? 'selected' : ''}>Alta</option>
+            <option value="Media" ${ev.participacion === 'Media' ? 'selected' : ''}>Media</option>
+            <option value="Nula" ${ev.participacion === 'Nula' ? 'selected' : ''}>Nula</option>
+          </select>
+        </label>
+      </div>
+
+      <div style="margin-top:8px;">
+        <label style="display:block;font-size:0.85rem;color:#475569;">Observaciones
+          <input type="text" class="grading-field" data-student="${sid}" data-field="observacionLibre" value="${escapeHtml(ev.observacionLibre || '')}" placeholder="Opcional" style="width:100%;">
+        </label>
+      </div>
+
+      ${individualActionsHtml}
+    </article>
+  `;
+}
+window.renderSingleStudentGradingCard = renderSingleStudentGradingCard;
+
 function renderGradingStudentsList(students, classRecord, attExisting = {}) {
   const container = document.getElementById('gradingStudentsList');
   if (!container) return;
 
   const todayIso = getTodayIsoCancun();
-  const evalMap = window.dailyState.gradingEvaluations;
+  const evalMap = window.dailyState.gradingEvaluations || {};
   const activeStudents = (students || []).filter(s => s.activo !== false);
 
   const btnSaveTop = document.getElementById('btnSaveGradingTop');
@@ -2438,6 +2870,7 @@ function renderGradingStudentsList(students, classRecord, attExisting = {}) {
     const item = attExisting[sId] || attExisting[String(sId)];
     return String(typeof item === 'object' ? item?.status : item || '').toUpperCase();
   };
+  window.dailyState.getGradingAttendanceStatus = getStatus;
 
   // Clasificación estricta de alumnos conforme a asistencia:
   // - A / R: Lista ordinaria de calificación
@@ -2496,7 +2929,29 @@ function renderGradingStudentsList(students, classRecord, attExisting = {}) {
     </section>
   `;
 
-  // 1. LISTA ORDINARIA: ÚNICAMENTE alumnos con estado A o R
+  // 1. PANEL DE BÚSQUEDA Y CAPTURA INDIVIDUAL POR NÚMERO OFICIAL DE LISTA
+  const currentSearchQuery = String(window.dailyState.gradingSearchQuery || '');
+  const individualSearchPanelHtml = `
+    <section class="panel" style="margin-bottom:16px;padding:16px 20px;background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #e2e8f0;">
+        <div>
+          <h3 style="margin:0;color:#0b315d;font-size:1.05rem;display:flex;align-items:center;gap:8px;">
+            <span>🔍 Calificar por número de lista</span>
+          </h3>
+          <p class="muted" style="margin:3px 0 0;font-size:0.82rem;">
+            Escribe el número oficial de lista del alumno para calificar su actividad individualmente.
+          </p>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:240px;max-width:320px;flex:1;">
+          <input type="search" id="gradingStudentSearchInput" class="input" placeholder="No. de lista (ej. 5)" autocomplete="off" inputmode="numeric" style="font-size:1rem;font-weight:700;padding:7px 12px;text-align:center;" value="${escapeHtml(currentSearchQuery)}">
+          <button type="button" class="btn small" id="btnClearGradingSearch" style="padding:7px 12px;" ${currentSearchQuery ? '' : 'disabled'}>Limpiar</button>
+        </div>
+      </div>
+      <div id="gradingIndividualResultContainer"></div>
+    </section>
+  `;
+
+  // 2. LISTA ORDINARIA: Alumnos con estado A o R (con número oficial auténtico, sin reenumeración falsa)
   let ordinaryListHtml = '';
   if (!presentStudents.length) {
     ordinaryListHtml = `
@@ -2505,149 +2960,22 @@ function renderGradingStudentsList(students, classRecord, attExisting = {}) {
       </div>
     `;
   } else {
-    ordinaryListHtml = presentStudents.map((s, index) => {
+    ordinaryListHtml = presentStudents.map(s => {
       const sid = String(s.id);
       const ev = evalMap[sid] || {};
       const attStatus = getStatus(s.id);
-
-      // Instrumento de evaluación si está activo
-      let instrumentHtml = '';
-      if (currentInstrument) {
-        const results = ev.instrumentResults || {};
-        const tipo = currentInstrument.tipo || 'RUBRICA';
-        if (tipo === 'EXAMEN') {
-          const gradeVal = results.__grade !== undefined ? results.__grade : (ev.calificacionInstrumento !== undefined ? ev.calificacionInstrumento : '');
-          instrumentHtml = `
-            <div style="margin-top:10px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;">
-              <div style="font-weight:600;font-size:0.9rem;color:#166534;margin-bottom:6px;">
-                📝 Examen: ${escapeHtml(currentInstrument.titulo || currentInstrument.nombre || 'Evaluación')}
-              </div>
-              <label style="font-size:0.85rem;color:#166534;">Calificación obtenida (0 a 10):
-                <input type="number" step="0.1" min="0" max="10" class="grading-field instrument-criterion-field" data-student="${sid}" data-criterion="__grade" value="${gradeVal !== '' ? gradeVal : ''}" placeholder="Pendiente de calificar" style="width:160px;margin-left:8px;">
-              </label>
-              ${gradeVal !== '' ? `<span class="badge" style="margin-left:10px;background:#166534;color:#fff;">Nota: ${gradeVal}</span>` : '<span class="badge badge-neutral" style="margin-left:10px;">Pendiente</span>'}
-            </div>
-          `;
-        } else {
-          const criterios = currentInstrument.criterios || [];
-          const niveles = currentInstrument.niveles || [
-            { code: 'NE', label: 'Nivel esperado' },
-            { code: 'EN', label: 'En desarrollo' },
-            { code: 'RA', label: 'Requiere apoyo' }
-          ];
-
-          const answeredCriteriaCount = criterios.filter(c => results[c.id] && String(results[c.id]).trim() !== '').length;
-          const isCriteriaComplete = criterios.length > 0 && answeredCriteriaCount === criterios.length;
-
-          const critRows = criterios.map(c => {
-            const sel = results[c.id] || '';
-            return `
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:10px;flex-wrap:wrap;">
-                <span style="font-size:0.85rem;color:#1e293b;flex:1;min-width:200px;">${escapeHtml(c.texto || c.nombre || c.id)}:</span>
-                <select class="grading-field instrument-criterion-field" data-student="${sid}" data-criterion="${escapeHtml(c.id)}" style="font-size:0.85rem;padding:3px 6px;">
-                  <option value="" ${!sel ? 'selected' : ''}>-- Sin calificar --</option>
-                  ${niveles.map(n => `<option value="${escapeHtml(n.code)}" ${sel === n.code ? 'selected' : ''}>${escapeHtml(n.code)}: ${escapeHtml(n.label || n.etiqueta || n.code)}</option>`).join('')}
-                </select>
-              </div>
-            `;
-          }).join('');
-
-          let badgeInst = '';
-          if (isCriteriaComplete && ev.calificacionInstrumento !== undefined && ev.calificacionInstrumento !== '') {
-            badgeInst = `<span class="badge" style="background:#166534;color:#fff;font-size:0.8rem;">Nota: ${ev.calificacionInstrumento} (${escapeHtml(ev.nivelInstrumento || '')})</span>`;
-          } else if (answeredCriteriaCount > 0) {
-            badgeInst = `<span class="badge badge-warning" style="font-size:0.8rem;">⚠️ Criterios pendientes (${answeredCriteriaCount} de ${criterios.length})</span>`;
-          } else {
-            badgeInst = `<span class="badge badge-neutral" style="font-size:0.8rem;">Sin calificar</span>`;
-          }
-
-          instrumentHtml = `
-            <div style="margin-top:10px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div style="font-weight:600;font-size:0.9rem;color:#166534;">
-                  📋 ${escapeHtml(currentInstrument.titulo || currentInstrument.nombre || 'Instrumento de evaluación')}
-                </div>
-                ${badgeInst}
-              </div>
-              <div style="margin-top:6px;">${critRows}</div>
-              ${ev.mensajeInstrumento ? `<div style="margin-top:6px;font-size:0.8rem;color:#15803d;"><em>${escapeHtml(ev.mensajeInstrumento)}</em></div>` : ''}
-            </div>
-          `;
-        }
-      }
-
-      // Para alumnos sin evaluación previa, la fecha de entrega comienza VACÍA (sin fechas inventadas ni supuestas)
-      const defaultEntrega = ev.fechaEntrega || '';
-
-      return `
-        <article class="panel grading-student-card" data-student="${sid}" style="margin-bottom:14px;padding:14px 18px;border-left:4px solid #0284c7;">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-            <div style="font-size:1.05rem;font-weight:700;color:#0b315d;">
-              <span>${index + 1}. </span>${escapeHtml(s.name || s.nombreCompleto || s.nombre || sid)}
-            </div>
-            <div>
-              <span class="badge badge-neutral" style="font-size:0.75rem;">Asistencia: ${attStatus === 'A' ? 'A (Presente)' : 'R (Retardo)'}</span>
-            </div>
-          </div>
-
-          ${instrumentHtml}
-
-          <div class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:10px;margin-top:10px;">
-            <label>Entrega / Trabajo
-              <select class="grading-field" data-student="${sid}" data-field="trabajo">
-                <option value="" ${!ev.trabajo ? 'selected' : ''}>-- Sin registrar --</option>
-                <option value="Completo" ${ev.trabajo === 'Completo' ? 'selected' : ''}>Entregada</option>
-                <option value="Incompleto" ${ev.trabajo === 'Incompleto' ? 'selected' : ''}>Incompleta</option>
-                <option value="No trabajó" ${ev.trabajo === 'No trabajó' ? 'selected' : ''}>No entregó</option>
-                <option value="Entregada tarde" ${ev.trabajo === 'Entregada tarde' ? 'selected' : ''}>Entregada tarde</option>
-                <option value="Pendiente" ${ev.trabajo === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
-              </select>
-            </label>
-
-            <label>Fecha de entrega (Alumno)
-              <input type="date" class="grading-field" data-student="${sid}" data-field="fechaEntrega" value="${defaultEntrega}">
-            </label>
-
-            <label>Desempeño docente
-              <input type="text" class="grading-field" data-student="${sid}" data-field="desempeno" value="${escapeHtml(ev.desempeno || '')}" placeholder="Logrado, En proceso...">
-            </label>
-
-            <label>Conducta
-              <select class="grading-field" data-student="${sid}" data-field="conducta">
-                <option value="" ${!ev.conducta ? 'selected' : ''}>-- Sin registrar --</option>
-                <option value="Excelente" ${ev.conducta === 'Excelente' ? 'selected' : ''}>Excelente</option>
-                <option value="Adecuada" ${ev.conducta === 'Adecuada' ? 'selected' : ''}>Adecuada</option>
-                <option value="Requiere apoyo" ${ev.conducta === 'Requiere apoyo' ? 'selected' : ''}>Requiere apoyo</option>
-              </select>
-            </label>
-
-            <label>Participación
-              <select class="grading-field" data-student="${sid}" data-field="participacion">
-                <option value="" ${!ev.participacion ? 'selected' : ''}>-- Sin registrar --</option>
-                <option value="Alta" ${ev.participacion === 'Alta' ? 'selected' : ''}>Alta</option>
-                <option value="Media" ${ev.participacion === 'Media' ? 'selected' : ''}>Media</option>
-                <option value="Nula" ${ev.participacion === 'Nula' ? 'selected' : ''}>Nula</option>
-              </select>
-            </label>
-          </div>
-
-          <div style="margin-top:8px;">
-            <label style="display:block;font-size:0.85rem;color:#475569;">Observaciones
-              <input type="text" class="grading-field" data-student="${sid}" data-field="observacionLibre" value="${escapeHtml(ev.observacionLibre || '')}" placeholder="Opcional" style="width:100%;">
-            </label>
-          </div>
-        </article>
-      `;
+      return renderSingleStudentGradingCard(s, ev, attStatus, currentInstrument, false, classRecord.fecha);
     }).join('');
   }
 
-  // 2. APARTADO SEPARADO: ENTREGAS POR FALTA JUSTIFICADA (alumnos con J)
+  // 3. APARTADO SEPARADO: ENTREGAS POR FALTA JUSTIFICADA (alumnos con J)
   let justifiedSectionHtml = '';
   if (justifiedStudents.length > 0) {
     const justifiedCards = justifiedStudents.map((s, idx) => {
       const sid = String(s.id);
       const ev = evalMap[sid] || {};
       const isReopened = Boolean(String(ev.reabiertoMotivo || '').trim());
+      const officialNum = getStudentOfficialNumber(s);
 
       // Buscar reincorporación sugerida en historial de asistencia
       const reincorporacionSugerida = ev.fechaInicioPlazo || findReincorporationDateFromHistory(sid, classRecord.fecha);
@@ -2664,8 +2992,9 @@ function renderGradingStudentsList(students, classRecord, attExisting = {}) {
       return `
         <article class="panel grading-justified-card" data-student="${sid}" style="margin-bottom:14px;padding:14px 18px;border-left:4px solid #eab308;background:#fffdfa;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-            <div style="font-size:1.05rem;font-weight:700;color:#713f12;">
-              <span>${idx + 1}. </span>${escapeHtml(s.name || s.nombreCompleto || sid)}
+            <div style="font-size:1.05rem;font-weight:700;color:#713f12;display:flex;align-items:center;gap:8px;">
+              <span style="display:inline-block;padding:2px 8px;background:#fef08a;color:#854d0e;border-radius:6px;font-size:0.85rem;font-weight:800;">No. ${officialNum !== null ? officialNum : '—'}</span>
+              <span>${escapeHtml(s.name || s.nombreCompleto || sid)}</span>
             </div>
             <div>
               <span class="badge ${justState.cssClass}" style="font-size:0.8rem;">${justState.estado}</span>
@@ -2759,29 +3088,186 @@ function renderGradingStudentsList(students, classRecord, attExisting = {}) {
     `;
   }
 
-  // 3. NOTA INFORMATIVA: ALUMNOS CON FALTA INJUSTIFICADA (F)
+  // 4. NOTA INFORMATIVA: ALUMNOS CON FALTA INJUSTIFICADA (F)
   const absentSectionHtml = `
     <aside class="unexcused-absences-notice" style="margin-top:20px;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:0.85rem;color:#475569;">
-      ℹ️ <strong>Alumnos con falta injustificada (${absentStudents.length}):</strong> ${absentStudents.map(s => escapeHtml(s.name || s.nombreCompleto || s.nombre || s.id)).join(', ') || 'Ninguno'}.<br>
+      ℹ️ <strong>Alumnos con falta injustificada (${absentStudents.length}):</strong> ${absentStudents.map(s => {
+        const onum = getStudentOfficialNumber(s);
+        const onumStr = onum !== null ? `No. ${onum} · ` : '';
+        return escapeHtml(`${onumStr}${s.name || s.nombreCompleto || s.nombre || s.id}`);
+      }).join(', ') || 'Ninguno'}.<br>
       <em>Conforme a la normativa académica, los alumnos con falta injustificada no aparecen en la lista ordinaria y no son evaluables para esta fecha.</em>
     </aside>
   `;
 
+  // Inyección global de la interfaz
   container.innerHTML = `
     ${instrumentToggleHtml}
+    ${individualSearchPanelHtml}
     <section>
-      <h3 style="color:#0b315d;margin:0 0 12px 0;display:flex;align-items:center;gap:8px;">
-        <span>📝 Evaluación ordinaria</span>
-        <span class="badge badge-neutral" style="font-size:0.85rem;">${presentStudents.length} alumnos asistentes</span>
-      </h3>
-      ${ordinaryListHtml}
+      <details style="margin-top:16px;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;background:#f8fafc;">
+        <summary style="font-weight:700;color:#0b315d;cursor:pointer;font-size:0.95rem;user-select:none;">
+          <span>👥 Ver lista completa de alumnos asistentes (${presentStudents.length})</span>
+        </summary>
+        <div style="margin-top:14px;">
+          ${ordinaryListHtml}
+        </div>
+      </details>
     </section>
     ${justifiedSectionHtml}
     ${absentSectionHtml}
   `;
 
-  // Listeners de campos de calificación
-  container.querySelectorAll('.grading-field').forEach(input => {
+  // FUNCIÓN LOCAL DE ACTUALIZACIÓN DEL CONTENEDOR INDIVIDUAL (REACTIVO Y AISLADO)
+  function updateIndividualGradingView(query, token) {
+    if (token !== window.dailyState.gradingSearchToken) return;
+
+    const resContainer = document.getElementById('gradingIndividualResultContainer');
+    if (!resContainer) return;
+
+    const clearBtn = document.getElementById('btnClearGradingSearch');
+    if (clearBtn) clearBtn.disabled = !String(query || '').trim();
+
+    const currentActiveStudents = (getGlobalState().students || activeStudents || []).filter(s => s && s.activo !== false);
+    const evalState = evaluateGradingStudentSearch(query, currentActiveStudents, getStatus, classRecord);
+
+    if (evalState.status === 'empty') {
+      window.dailyState.gradingSelectedStudentId = null;
+      window.dailyState.gradingSelectedOfficialNumber = null;
+      resContainer.innerHTML = `
+        <div class="panel" style="padding:22px 16px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;text-align:center;color:#64748b;">
+          <div style="font-size:1.8rem;margin-bottom:6px;">📋</div>
+          <strong style="display:block;font-size:0.95rem;color:#334155;">Buscador vacío</strong>
+          <p style="margin:4px 0 0;font-size:0.85rem;">Escribe el número oficial de lista de un alumno para abrir su evaluación individual. Ningún alumno seleccionado.</p>
+        </div>
+      `;
+      return;
+    }
+
+    if (evalState.status === 'allowed') {
+      const student = evalState.student;
+      const sid = String(student.id);
+
+      // Comprobar si la selección previa dejó de corresponder al número consultado tras actualización de padrón
+      const prevSid = window.dailyState.gradingSelectedStudentId;
+      const prevNum = window.dailyState.gradingSelectedOfficialNumber;
+      if (prevSid && prevNum && String(prevNum) === String(evalState.officialNumber) && String(prevSid) !== sid) {
+        window.dailyState.gradingSelectedStudentId = null;
+        window.dailyState.gradingSelectedOfficialNumber = null;
+        resContainer.innerHTML = `
+          <div class="panel" style="padding:16px 20px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;color:#92400e;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <span style="font-size:1.4rem;">⚠️</span>
+              <div>
+                <strong style="font-size:0.95rem;">Padrón escolar actualizado: selección desincronizada</strong>
+                <p style="margin:3px 0 0;font-size:0.85rem;color:#78350f;line-height:1.4;">
+                  El padrón escolar ha sido actualizado y la asignación del número oficial ${evalState.officialNumber} ha cambiado.
+                  La selección previa ya no corresponde al número consultado. Se ha limpiado la selección por seguridad.
+                  Todas las calificaciones capturadas se conservan intactas bajo el ID permanente del alumno.
+                  Por favor, busca nuevamente al alumno por su número oficial vigente.
+                </p>
+              </div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      window.dailyState.gradingSelectedStudentId = sid;
+      window.dailyState.gradingSelectedOfficialNumber = evalState.officialNumber;
+      const ev = evalMap[sid] || {};
+
+      resContainer.innerHTML = renderSingleStudentGradingCard(student, ev, evalState.attStatus, currentInstrument, true, classRecord.fecha);
+      attachIndividualGradingCardListeners(resContainer, sid, student);
+      return;
+    }
+
+    // Coincidencia no habilitada (Falta injustificada, duplicado, inexistente, falta justificada o inválido)
+    window.dailyState.gradingSelectedStudentId = null;
+    window.dailyState.gradingSelectedOfficialNumber = null;
+    const isWarning = evalState.status === 'justified';
+    const isDuplicate = evalState.status === 'duplicate';
+    resContainer.innerHTML = `
+      <div class="panel" style="padding:16px 20px;background:${isWarning ? '#fffbeb' : '#fff5f5'};border:1px solid ${isWarning ? '#fde68a' : '#fecaca'};border-radius:8px;color:${isWarning ? '#92400e' : '#991b1b'};">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:1.4rem;">${isWarning ? 'ℹ️' : (isDuplicate ? '⛔' : '⚠️')}</span>
+          <div>
+            <strong style="font-size:0.95rem;">${isWarning ? 'Falta justificada' : (isDuplicate ? 'Conflicto por número duplicado' : 'No hay coincidencia habilitada')}</strong>
+            <p style="margin:3px 0 0;font-size:0.85rem;color:${isWarning ? '#78350f' : '#b91c1c'};line-height:1.4;">
+              ${escapeHtml(evalState.message)}
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ATAR LISTENERS DE LA TARJETA INDIVIDUAL
+  function attachIndividualGradingCardListeners(cardContainer, sid, student) {
+    cardContainer.querySelectorAll('.grading-field').forEach(input => {
+      const syncField = e => {
+        const f = e.target.dataset.field;
+        if (f && evalMap[sid]) {
+          evalMap[sid][f] = e.target.value;
+          // Actualizar también campo gemelo en la lista si existe
+          const peerInput = container.querySelector(`details .grading-field[data-student="${sid}"][data-field="${f}"]`);
+          if (peerInput && peerInput.value !== e.target.value) {
+            peerInput.value = e.target.value;
+          }
+        }
+      };
+      input.addEventListener('input', syncField);
+      input.addEventListener('change', syncField);
+    });
+
+    cardContainer.querySelectorAll('.instrument-criterion-field').forEach(input => {
+      input.addEventListener('change', e => {
+        const crit = e.target.dataset.criterion;
+        if (crit && evalMap[sid]) {
+          evalMap[sid].instrumentResults = evalMap[sid].instrumentResults || {};
+          if (e.target.value === '') {
+            delete evalMap[sid].instrumentResults[crit];
+          } else {
+            evalMap[sid].instrumentResults[crit] = e.target.value;
+          }
+          const peerInput = container.querySelector(`details .instrument-criterion-field[data-student="${sid}"][data-criterion="${crit}"]`);
+          if (peerInput && peerInput.value !== e.target.value) {
+            peerInput.value = e.target.value;
+          }
+        }
+      });
+    });
+
+    cardContainer.querySelector('#btnSaveIndividualStudent')?.addEventListener('click', () => {
+      saveStudentGrading(sid);
+    });
+  }
+
+  // Inicializar estado del panel individual
+  const initialToken = ++window.dailyState.gradingSearchToken;
+  updateIndividualGradingView(currentSearchQuery, initialToken);
+
+  // Listeners del buscador por número oficial
+  const searchInput = document.getElementById('gradingStudentSearchInput');
+  const btnClear = document.getElementById('btnClearGradingSearch');
+
+  searchInput?.addEventListener('input', e => {
+    const query = e.target.value;
+    window.dailyState.gradingSearchQuery = query;
+    const token = ++window.dailyState.gradingSearchToken;
+    updateIndividualGradingView(query, token);
+  });
+
+  btnClear?.addEventListener('click', () => {
+    if (searchInput) searchInput.value = '';
+    window.dailyState.gradingSearchQuery = '';
+    const token = ++window.dailyState.gradingSearchToken;
+    updateIndividualGradingView('', token);
+    if (searchInput) searchInput.focus();
+  });
+
+  // Listeners de campos de calificación de la lista general
+  container.querySelectorAll('details .grading-field, .justified-deliveries-section .grading-field').forEach(input => {
     input.addEventListener('change', e => {
       const sid = e.target.dataset.student;
       const field = e.target.dataset.field;
@@ -2799,8 +3285,8 @@ function renderGradingStudentsList(students, classRecord, attExisting = {}) {
     });
   });
 
-  // Listeners de criterios de instrumento
-  container.querySelectorAll('.instrument-criterion-field').forEach(input => {
+  // Listeners de criterios de instrumento de la lista general
+  container.querySelectorAll('details .instrument-criterion-field').forEach(input => {
     input.addEventListener('change', e => {
       const sid = e.target.dataset.student;
       const crit = e.target.dataset.criterion;
@@ -2834,7 +3320,7 @@ function renderGradingStudentsList(students, classRecord, attExisting = {}) {
     renderGradingStudentsList(students, classRecord, attExisting);
   });
 
-  // Botones de atajo rápido: aplican ÚNICAMENTE a alumnos de la lista ordinaria (presentes A/R)
+  // Botones de atajo rápido: aplican a alumnos de la lista ordinaria (presentes A/R)
   document.getElementById('btnGradingAllComplete')?.addEventListener('click', () => {
     presentStudents.forEach(s => {
       const sid = String(s.id);
@@ -2859,10 +3345,47 @@ function renderGradingStudentsList(students, classRecord, attExisting = {}) {
 }
 window.renderGradingStudentsList = renderGradingStudentsList;
 
-// DEFECTO 5: REFERENCIA claseId: classId CORREGIDA + PERSISTENCIA Y REGRESO
-async function saveGradingActivity() {
+// AUXILIAR DE GUARDADO ESPECÍFICO POR ALUMNO
+async function saveStudentGrading(studentId) {
+  if (_isSavingGrading) return;
+  const sid = String(studentId);
+
+  // REVALIDACIÓN AUTOMÁTICA Y OBLIGATORIA CONTRA EL PADRÓN VIGENTE ANTES DE INICIAR EL GUARDADO
+  const reval = revalidateGradingSelection();
+  if (!reval.valid || window.dailyState?.gradingSelectedStudentId === null || String(window.dailyState?.gradingSelectedStudentId) !== sid) {
+    const msg = 'La selección ha dejado de corresponder al número consultado debido a una actualización del padrón. Se ha limpiado la selección por seguridad; por favor busca nuevamente por el número oficial vigente antes de guardar.';
+    if (typeof toast === 'function') toast(msg, true);
+    if (typeof alert === 'function') alert(msg);
+    return;
+  }
+
+  const evalMap = window.dailyState.gradingEvaluations || {};
+  const ev = evalMap[sid];
+  if (!ev) {
+    if (typeof toast === 'function') toast('No hay datos de este alumno para guardar.', true);
+    return;
+  }
+  return saveGradingActivity(sid, false);
+}
+window.saveStudentGrading = saveStudentGrading;
+
+// DEFECTO 5: REFERENCIA claseId: classId CORREGIDA + PERSISTENCIA INDIVIDUAL Y POR LOTE
+async function saveGradingActivity(onlyStudentId = null, returnToList = true) {
   if (_isSavingGrading) return;
   _isSavingGrading = true;
+
+  if (onlyStudentId) {
+    const sid = String(onlyStudentId);
+    const reval = revalidateGradingSelection();
+    if (!reval.valid || window.dailyState?.gradingSelectedStudentId === null || String(window.dailyState?.gradingSelectedStudentId) !== sid) {
+      _isSavingGrading = false;
+      if (typeof setLoading === 'function') setLoading(false);
+      const msg = 'La selección ha dejado de corresponder al número consultado debido a una actualización del padrón. Se ha limpiado la selección por seguridad; por favor busca nuevamente por el número oficial vigente antes de guardar.';
+      if (typeof toast === 'function') toast(msg, true);
+      if (typeof alert === 'function') alert(msg);
+      return;
+    }
+  }
 
   const classId = window.dailyState.gradingActivityId;
   if (!classId) {
@@ -2890,83 +3413,201 @@ async function saveGradingActivity() {
     return;
   }
 
-  const evalMap = window.dailyState.gradingEvaluations || {};
-  const initMap = window.dailyState.initialGradingEvaluations || {};
-  const evaluationsList = Object.values(evalMap);
+  const deepClone = obj => (obj === undefined ? undefined : JSON.parse(JSON.stringify(obj)));
 
-  // Mapear evaluaciones asegurando marca temporal evaluadoEn para calificaciones asignadas
-  const timestamp = new Date().toISOString();
-  const attExisting = getAttendanceMapForDate(classRecord.fecha);
+  // 1. Identificar si existe una operación incierta previa en el registro multicontexto
+  const currentReg = (typeof findInActivityRegistry === 'function' ? findInActivityRegistry({ id: String(classId) }) : null) || {};
+  const pendingStudentOps = Object.assign({}, currentReg.pendingStudentOperations || {});
 
-  // Filtrar ÚNICAMENTE alumnos que fueron modificados o capturados respecto al estado inicial
-  const rows = evaluationsList.filter(ev => {
-    const sid = String(ev.alumnoId);
-    return isStudentEvaluationModified(ev, initMap[sid]);
-  }).map(ev => {
-    const hasInstrumentAnswers = ev.instrumentResults && Object.keys(ev.instrumentResults).length > 0;
-    return Object.assign({}, ev, {
-      claseId: classId,
-      evaluadoEn: ev.evaluadoEn || (ev.desempeno || hasInstrumentAnswers ? timestamp : '')
-    });
-  });
+  // REGLA CRÍTICA: Si existe una operación incierta previa que ya incluye al alumno solicitado,
+  // se debe resolver primero su resultado antes de enviar una actualización nueva que se solape,
+  // garantizando que la clave y el payload de la operación incierta permanezcan 100% INMUTABLES
+  // y evitando que un reintento antiguo sobrescriba la nota nueva.
+  if (onlyStudentId && currentReg.pendingOperation && (currentReg.pendingOperation.status === 'uncertain' || currentReg.pendingOperation.status === 'in_flight')) {
+    const priorEvals = Array.isArray(currentReg.pendingOperation.payload?.evaluaciones) ? currentReg.pendingOperation.payload.evaluaciones : [];
+    const includesStudent = priorEvals.some(e => String(e.alumnoId) === String(onlyStudentId));
 
-  // Clave estable
-  let existingOp = null;
-  if (typeof findInActivityRegistry === 'function') {
-    const regEntry = findInActivityRegistry({ id: String(classId) });
-    if (regEntry && regEntry.pendingOperation && (regEntry.pendingOperation.status === 'uncertain' || regEntry.pendingOperation.status === 'in_flight')) {
-      existingOp = regEntry.pendingOperation;
+    if (includesStudent) {
+      if (typeof setLoading === 'function') setLoading(true, 'Resolviendo operación pendiente previa...');
+      try {
+        // Enviar la operación previa con su payload y clave original e inmutable
+        const priorPayload = deepClone(currentReg.pendingOperation.payload);
+        const priorResp = await server('saveClassRecord', priorPayload);
+        if (priorResp && priorResp.ok) {
+          // Confirmar en gs.evaluations y en initialGradingEvaluations únicamente lo que viajó en priorPayload
+          const priorConfirmedEvals = priorPayload.evaluaciones || [];
+          const priorConfirmedSids = new Set(priorConfirmedEvals.map(e => String(e.alumnoId)));
+
+          gs.evaluations = gs.evaluations || [];
+          gs.evaluations = gs.evaluations.filter(e => !(String(e.claseId) === String(classId) && priorConfirmedSids.has(String(e.alumnoId))));
+          priorConfirmedEvals.forEach(e => gs.evaluations.push(deepClone(e)));
+
+          if (window.dailyState.initialGradingEvaluations) {
+            priorConfirmedEvals.forEach(e => {
+              const sid = String(e.alumnoId);
+              window.dailyState.initialGradingEvaluations[sid] = deepClone(e);
+            });
+          }
+
+          // La operación incierta previa ha sido resuelta en su totalidad; liberar pendingOperation
+          currentReg.pendingOperation = null;
+          if (typeof saveActivityToRegistry === 'function') {
+            saveActivityToRegistry(classId, {
+              id: classId,
+              status: 'Guardado',
+              pendingOperation: null,
+              pendingStudentOperations: pendingStudentOps
+            });
+          }
+        } else {
+          _isSavingGrading = false;
+          if (typeof setLoading === 'function') setLoading(false);
+          alert(`Existe una operación anterior pendiente que no se pudo resolver: ${priorResp?.error || 'Error'}`);
+          return;
+        }
+      } catch (errPrior) {
+        _isSavingGrading = false;
+        if (typeof setLoading === 'function') setLoading(false);
+        alert(`No es posible guardar porque existe una operación previa pendiente sin resolver: ${errPrior.message}`);
+        return;
+      }
     }
   }
 
-  const requestKey = existingOp ? existingOp.requestKey : `REQ-GRADE-${classId}-${Date.now()}`;
+  // Verificar si hay una operación incierta específica para el alumno en pendingStudentOps
+  let existingOp = null;
+  if (onlyStudentId) {
+    const targetSid = String(onlyStudentId);
+    if (pendingStudentOps[targetSid] && (pendingStudentOps[targetSid].status === 'uncertain' || pendingStudentOps[targetSid].status === 'in_flight')) {
+      existingOp = pendingStudentOps[targetSid];
+    }
+  } else {
+    // Si es guardado por lote
+    if (currentReg.pendingOperation && (currentReg.pendingOperation.status === 'uncertain' || currentReg.pendingOperation.status === 'in_flight')) {
+      existingOp = currentReg.pendingOperation;
+    }
+  }
 
-  const payload = existingOp ? existingOp.payload : {
-    id: classId,
-    requestKey,
-    protocolVersion: 'RD-03',
-    fecha: classRecord.fecha || '',
-    horaInicio: hIni,
-    horaFin: hFin,
-    materia: classRecord.materia || 'Lenguajes',
-    pdaTema: classRecord.pdaTema || '',
-    actividad: classRecord.actividad || 'Actividad',
-    material: classRecord.material || 'Cuaderno',
-    proyectoId: classRecord.proyectoId || '',
-    tipoActividad: classRecord.tipoActividad || 'Clase',
-    paginas: classRecord.paginas || '',
-    instrucciones: classRecord.instrucciones || '',
-    instrumentoId: classRecord.instrumentoId || '',
-    instrumentoTipo: classRecord.instrumentoTipo || (classRecord.instrumentoId ? 'INSTRUMENTO' : 'SIMPLE'),
-    evaluaciones: rows
-  };
-  window.dailyState.lastGradingPayload = payload;
+  let requestKey;
+  let payload;
+
+  if (existingOp) {
+    // Reintento: conservar clave y payload original inmutables
+    requestKey = existingOp.requestKey;
+    payload = deepClone(existingOp.payload);
+  } else {
+    // Nueva operación
+    const evalMap = window.dailyState.gradingEvaluations || {};
+    const initMap = window.dailyState.initialGradingEvaluations || {};
+    const evaluationsList = Object.values(evalMap);
+
+    let candidateList = evaluationsList;
+    if (onlyStudentId && typeof onlyStudentId === 'string') {
+      candidateList = evaluationsList.filter(ev => String(ev.alumnoId) === String(onlyStudentId));
+    }
+
+    const timestamp = new Date().toISOString();
+    const rows = candidateList.filter(ev => {
+      const sid = String(ev.alumnoId);
+      return isStudentEvaluationModified(ev, initMap[sid]);
+    }).map(ev => {
+      const hasInstrumentAnswers = ev.instrumentResults && Object.keys(ev.instrumentResults).length > 0;
+      // Clon profundo de cada fila y de sus respuestas de instrumento para evitar referencias compartidas
+      const cloned = deepClone(ev);
+      cloned.claseId = classId;
+      cloned.evaluadoEn = cloned.evaluadoEn || (cloned.desempeno || hasInstrumentAnswers ? timestamp : '');
+      return cloned;
+    });
+
+    if (rows.length === 0) {
+      _isSavingGrading = false;
+      if (typeof setLoading === 'function') setLoading(false);
+      if (typeof toast === 'function') toast('No hay cambios pendientes por guardar.');
+      return;
+    }
+
+    requestKey = onlyStudentId
+      ? `REQ-GRADE-${classId}-${onlyStudentId}-${Date.now()}`
+      : `REQ-GRADE-${classId}-${Date.now()}`;
+
+    payload = {
+      id: classId,
+      requestKey,
+      protocolVersion: 'RD-03',
+      fecha: classRecord.fecha || '',
+      horaInicio: hIni,
+      horaFin: hFin,
+      materia: classRecord.materia || 'Lenguajes',
+      pdaTema: classRecord.pdaTema || '',
+      actividad: classRecord.actividad || 'Actividad',
+      material: classRecord.material || 'Cuaderno',
+      proyectoId: classRecord.proyectoId || '',
+      tipoActividad: classRecord.tipoActividad || 'Clase',
+      paginas: classRecord.paginas || '',
+      instrucciones: classRecord.instrucciones || '',
+      instrumentoId: classRecord.instrumentoId || '',
+      instrumentoTipo: classRecord.instrumentoTipo || (classRecord.instrumentoId ? 'INSTRUMENTO' : 'SIMPLE'),
+      evaluaciones: rows
+    };
+  }
+
+  // Clon profundo del payload para aislarlo de cualquier mutación local posterior
+  payload = deepClone(payload);
+  window.dailyState.lastGradingPayload = deepClone(payload);
+
+  const payloadEvaluations = Array.isArray(payload.evaluaciones) ? payload.evaluaciones : [];
+  const inFlightOp = { requestKey, payload: deepClone(payload), status: 'in_flight' };
 
   if (typeof setLoading === 'function') setLoading(true, 'Guardando calificaciones...');
   if (typeof saveActivityToRegistry === 'function') {
+    if (onlyStudentId) {
+      pendingStudentOps[String(onlyStudentId)] = inFlightOp;
+    }
     saveActivityToRegistry(classId, {
       id: classId,
       data: payload,
       status: 'Guardando',
-      pendingOperation: { requestKey, payload, status: 'in_flight' }
+      pendingOperation: onlyStudentId ? currentReg.pendingOperation : inFlightOp,
+      pendingStudentOperations: pendingStudentOps
     });
   }
 
   try {
     const resp = await server('saveClassRecord', payload);
     if (resp && resp.ok) {
-      if (typeof saveActivityToRegistry === 'function') {
-        saveActivityToRegistry(classId, { status: 'Guardado', pendingOperation: null });
+      const confirmedEvaluations = payloadEvaluations;
+      const confirmedSids = new Set(confirmedEvaluations.map(r => String(r.alumnoId)));
+
+      // 1. Actualizar gs.evaluations con copias profundas de lo confirmado
+      gs.evaluations = gs.evaluations || [];
+      gs.evaluations = gs.evaluations.filter(e => !(String(e.claseId) === String(classId) && confirmedSids.has(String(e.alumnoId))));
+      confirmedEvaluations.forEach(r => gs.evaluations.push(deepClone(r)));
+
+      // 2. Actualizar initialGradingEvaluations con copias profundas de lo confirmado
+      if (window.dailyState.initialGradingEvaluations) {
+        confirmedEvaluations.forEach(r => {
+          const sid = String(r.alumnoId);
+          window.dailyState.initialGradingEvaluations[sid] = deepClone(r);
+        });
       }
 
-      // Actualizar estado local: fusionar las evaluaciones que cambiaron sin borrar las existentes
-      gs.evaluations = gs.evaluations || [];
-      const updatedSids = new Set(rows.map(r => String(r.alumnoId)));
-      gs.evaluations = gs.evaluations.filter(e => !(String(e.claseId) === String(classId) && updatedSids.has(String(e.alumnoId))));
-      rows.forEach(r => gs.evaluations.push(r));
-
-      // Actualizar el estado inicial para reflejar que los cambios actuales ya fueron guardados
-      window.dailyState.initialGradingEvaluations = JSON.parse(JSON.stringify(window.dailyState.gradingEvaluations || {}));
+      // 3. Actualizar registro: NUNCA filtrar ni mutar el payload de currentReg.pendingOperation
+      if (typeof saveActivityToRegistry === 'function') {
+        confirmedSids.forEach(sid => {
+          delete pendingStudentOps[sid];
+        });
+        let remOp = currentReg.pendingOperation;
+        if (remOp && remOp.requestKey === payload.requestKey) {
+          remOp = null; // Si fue la operación de pendingOperation la que se resolvió, liberarla
+        }
+        const hasAnyPending = remOp || Object.keys(pendingStudentOps).length > 0;
+        saveActivityToRegistry(classId, {
+          id: classId,
+          status: hasAnyPending ? 'Pendiente de guardar' : 'Guardado',
+          pendingOperation: remOp, // Se conserva 100% INMUTABLE si era otra operación
+          pendingStudentOperations: pendingStudentOps
+        });
+      }
 
       if (gs.classes) {
         const cIdx = gs.classes.findIndex(c => String(c.id) === String(classId));
@@ -2975,10 +3616,21 @@ async function saveGradingActivity() {
         }
       }
 
-      if (typeof toast === 'function') toast('Calificaciones guardadas correctamente.');
       if (typeof setLoading === 'function') setLoading(false);
       _isSavingGrading = false;
-      backToDailyActivitiesList();
+
+      // 4. Notificaciones coherentes
+      if (onlyStudentId && !returnToList) {
+        const sidStr = String(onlyStudentId);
+        if (confirmedSids.has(sidStr)) {
+          if (typeof toast === 'function') toast('Calificación guardada correctamente para el alumno.');
+        }
+      } else {
+        if (typeof toast === 'function') toast('Calificaciones guardadas correctamente.');
+        if (returnToList) {
+          backToDailyActivitiesList();
+        }
+      }
     } else {
       if (typeof setLoading === 'function') setLoading(false);
       _isSavingGrading = false;
@@ -2988,21 +3640,19 @@ async function saveGradingActivity() {
     if (typeof setLoading === 'function') setLoading(false);
     _isSavingGrading = false;
     const isNetError = /interrumpió|conex|tardó|tiempo de espera/i.test(String(e.message || ''));
-    if (isNetError && typeof saveActivityToRegistry === 'function') {
+    const uncertainOp = { requestKey, payload: deepClone(payload), status: isNetError ? 'uncertain' : 'rejected' };
+
+    if (typeof saveActivityToRegistry === 'function') {
+      if (onlyStudentId) {
+        pendingStudentOps[String(onlyStudentId)] = uncertainOp;
+      }
       saveActivityToRegistry(classId, {
         id: classId,
         data: payload,
-        status: 'Pendiente de guardar',
+        status: isNetError ? 'Pendiente de guardar' : 'Borrador',
         error: e.message,
-        pendingOperation: { requestKey, payload, status: 'uncertain' }
-      });
-    } else if (typeof saveActivityToRegistry === 'function') {
-      saveActivityToRegistry(classId, {
-        id: classId,
-        data: payload,
-        status: 'Borrador',
-        error: e.message,
-        pendingOperation: { requestKey, payload, status: 'rejected' }
+        pendingOperation: onlyStudentId ? currentReg.pendingOperation : uncertainOp,
+        pendingStudentOperations: pendingStudentOps
       });
     }
     alert(`Error al guardar calificaciones: ${e.message}`);
