@@ -1,0 +1,1723 @@
+/**
+ * ============================================================================
+ * ARCHIVO: api.gs
+ * PROPÓSITO: Servicios centrales de lógica académica, reportes y operaciones API
+ * FECHA DE MODIFICACIÓN: 27/11/2026
+ * AUTOR DE LA MODIFICACIÓN: Asistente Técnico (Carpeta Académica 4.º A)
+ * ============================================================================
+ * DESCRIPCIÓN DE SECCIONES:
+ * 1. Inicialización y Bootstrap: getBootstrapData_, getBootstrapDataLite_, ensureInstalled_.
+ * 2. Gestión de Alumnos y Proyectos: listStudents_, saveStudent_, deleteStudent_, listProjects_, etc.
+ * 3. Actividades y Evaluaciones: getClassRecord_, saveClassRecord_, deleteClassRecords_.
+ * 4. Reportes Académicos: getStudentAcademicReport_, countFollowUp_.
+ * 5. Estilos de Aprendizaje: configurarEstilosVAK_, syncLearningStyles_.
+ * 6. Número Oficial de Lista: parseOfficialRosterNumber_, validateOfficialRosterNumber_.
+ * 7. Módulo Evaluaciones Trimestrales (ETAPA 7A): Funciones enlace hacia EvaluacionesTrimestrales.gs.
+ *
+ * FUNCIONES QUE CONTIENE:
+ * getBootstrapData_, getBootstrapDataLite_, ensureInstalled_, listStudents_,
+ * enrichLegacyStudent_, knownStudentNameParts_, saveStudent_, deleteStudent_,
+ * deleteStudentsBatch_, deleteLegacyStudentRows_, deleteLegacyStudentRowsBatch_,
+ * listProjects_, saveProject_, deleteProject_, getProjectWorkspace_, getClassRecord_,
+ * getTodayIsoCancun_, hasValue_, buildEffectiveEvaluation_, esFechaRealValida_,
+ * calcularFechaLimiteOficial_, normalizeHourValue_, saveClassRecord_, configurarEstilosVAK_,
+ * normalizePersonName_, findStudentForVakName_, syncLearningStyles_, replaceEvaluationRows_,
+ * getStudentAcademicReport_, countFollowUp_, fullName_, createTutorUsername_,
+ * createTemporaryPassword_, slug_, hash_, clearDailyObjectsByIdsBatch_, deleteClassRecords_,
+ * getDeletionStatus_, parseOfficialRosterNumber_, validateOfficialRosterNumber_,
+ * getTrimesterEvaluationBundle_, syncTrimesterEvaluationBatch_.
+ *
+ * DEPENDENCIAS:
+ * Database.gs (DB, readRows_, upsertObjectsBatch_), EvaluacionesTrimestrales.gs.
+ *
+ * CAMBIOS REALIZADOS (27/11/2026):
+ * - Se incorporaron las funciones de puente oficial para el módulo Evaluaciones Trimestrales:
+ *   getTrimesterEvaluationBundle_ y syncTrimesterEvaluationBatch_.
+ * - Se preservó 100% íntegro el código y funciones preexistentes de api.gs sin ninguna eliminación.
+ *
+ * MOTIVO DE CADA MODIFICACIÓN:
+ * - Brindar un punto de acceso desacoplado en la API para las consultas y sincronizaciones
+ *   por lotes de Evaluaciones Trimestrales, delegando la lógica al módulo especializado.
+ * ============================================================================
+ */
+
+//api.gs
+
+
+function getBootstrapData_() {
+  ensureInstalled_();
+  const students = listStudents_();
+  const projects = listProjects_();
+  return {
+    config: getConfig_(),
+    subjects: readRows_('Materias').filter(x => x.activo !== false),
+    rubrics: readRows_('Rubricas').filter(x => x.activo !== false),
+    instruments: instrumentsList_(),
+    students,
+    projects,
+    attendance: getInitialData_(),
+    stats: {
+      students: students.filter(x => x.activo !== false).length,
+      projects: projects.filter(x => x.estado === 'Activo').length,
+      activities: readRows_('Clases').length,
+      followUp: countFollowUp_()
+    }
+  };
+}
+
+function getBootstrapDataLite_() {
+  ensureInstalled_();
+  const students = listStudents_(true);
+  const projects = listProjects_(true);
+  const classesSheet = getSpreadsheet_().getSheetByName('Clases');
+  return {
+    config: getConfig_(),
+    subjects: readRows_('Materias').filter(x => x.activo !== false),
+    rubrics: readRows_('Rubricas').filter(x => x.activo !== false),
+    instruments: instrumentsList_(),
+    students,
+    projects,
+    attendance: null,
+    stats: {
+      students: students.filter(x => x.activo !== false).length,
+      projects: projects.filter(x => x.estado === 'Activo').length,
+      activities: classesSheet ? Math.max(0, classesSheet.getLastRow() - 1) : 0,
+      followUp: countFollowUp_()
+    }
+  };
+}
+
+function ensureInstalled_() {
+  const schemaCache = CacheService.getScriptCache();
+  if (schemaCache.get('CARPETA_SCHEMA_READY_V153') === '1') return;
+  const ss = getSpreadsheet_();
+  if (!ss.getSheetByName('Configuracion') || !ss.getSheetByName('Registro')) setupSystem_();
+  Object.keys(DB).forEach(name => ensureSheet_(ss, name, DB[name]));
+  seedRubrics_();
+  seedEvaluationPeriods_();
+  schemaCache.put('CARPETA_SCHEMA_READY_V153', '1', 600);
+}
+
+function listStudents_(skipInstallCheck) {
+  if (!skipInstallCheck) ensureInstalled_();
+  const styles = readRows_('EstilosVAK').reduce((acc, row) => {
+    acc[row.alumnoId] = row;
+    return acc;
+  }, {});
+  return readRows_('Alumnos')
+    .filter(x => x.activo !== false && String(x.activo).toLowerCase() !== 'false')
+    .map(x => {
+      const student = enrichLegacyStudent_(x);
+      const vak = styles[x.id] || {};
+      const officialNum = parseOfficialRosterNumber_(x.numeroLista);
+      return Object.assign({}, student, {
+        numeroLista: officialNum,
+        estilo: vak.resultado || 'Sin evaluar',
+        visual: vak.visual === '' || vak.visual === undefined ? null : vak.visual,
+        auditivo: vak.auditivo === '' || vak.auditivo === undefined ? null : vak.auditivo,
+        kinestesico: vak.kinestesico === '' || vak.kinestesico === undefined ? null : vak.kinestesico,
+        fechaEvaluacion: vak.fechaEvaluacion || ''
+      });
+    })
+    .sort((a, b) => fullName_(a).localeCompare(fullName_(b), 'es'));
+}
+
+function enrichLegacyStudent_(student) {
+  const copy = Object.assign({}, student);
+  if (normalizeText_(copy.apellidoPaterno) && normalizeText_(copy.nombres)) return copy;
+  const parts = knownStudentNameParts_(copy.nombreCompleto);
+  if (!parts) return copy;
+  copy.apellidoPaterno = copy.apellidoPaterno || parts.apellidoPaterno;
+  copy.apellidoMaterno = copy.apellidoMaterno || parts.apellidoMaterno;
+  copy.nombres = copy.nombres || parts.nombres;
+  return copy;
+}
+
+function knownStudentNameParts_(fullName) {
+  const rows = [];
+  const key = normalizePersonName_(fullName);
+  const row = rows.find(item => normalizePersonName_(item[0]) === key);
+  return row ? { apellidoPaterno: row[1], apellidoMaterno: row[2], nombres: row[3] } : null;
+}
+
+function saveStudent_(payload) {
+  ensureInstalled_();
+  const p = payload || {};
+  const requestKey = normalizeText_(p.requestKey);
+  const cached = cachedOperationV2_(requestKey, 'saveStudent');
+  if (cached) return cached;
+  return withDocumentLockV2_(function () {
+    const repeated = cachedOperationV2_(requestKey, 'saveStudent');
+    if (repeated) return repeated;
+    if (!normalizeText_(p.apellidoPaterno) || !normalizeText_(p.nombres)) {
+      throw new Error('Apellido paterno y nombre son obligatorios.');
+    }
+    const studentRows = readRows_('Alumnos');
+    const current = p.id ? studentRows.find(x => x.id === p.id) : null;
+    if (!current) {
+      const curpKey = normalizeKeyV2_(p.curp);
+      const personKey = normalizeKeyV2_([p.apellidoPaterno, p.apellidoMaterno, p.nombres, p.fechaNacimiento].join('|'));
+      const duplicate = studentRows.find(function (row) {
+        const sameCurp = curpKey && normalizeKeyV2_(row.curp) === curpKey;
+        const samePerson = personKey && normalizeKeyV2_([row.apellidoPaterno, row.apellidoMaterno, row.nombres, row.fechaNacimiento].join('|')) === personKey;
+        return sameCurp || samePerson;
+      });
+      if (duplicate) throw new Error('Posible alumno duplicado: ' + fullName_(duplicate) + '. Revisa el registro existente antes de continuar.');
+    }
+    const created = !current;
+    const id = current ? current.id : newId_('ALU');
+    const username = current ? current.tutorUsuario : createTutorUsername_(p.nombres, p.apellidoPaterno);
+    const timestamp = now_();
+    let finalNumeroLista = null;
+    if (p.numeroLista !== undefined) {
+      finalNumeroLista = validateOfficialRosterNumber_(p.numeroLista, id, studentRows);
+    } else if (current) {
+      finalNumeroLista = parseOfficialRosterNumber_(current.numeroLista);
+    }
+    const record = {
+      id,
+      nombreCompleto: [normalizeText_(p.apellidoPaterno), normalizeText_(p.apellidoMaterno), normalizeText_(p.nombres)].filter(Boolean).join(' ').toUpperCase(),
+      apellidoPaterno: normalizeText_(p.apellidoPaterno),
+      apellidoMaterno: normalizeText_(p.apellidoMaterno),
+      nombres: normalizeText_(p.nombres),
+      fechaNacimiento: normalizeText_(p.fechaNacimiento),
+      edad: Number(p.edad || 0),
+      tutorNombre: normalizeText_(p.tutorNombre),
+      tutorParentesco: normalizeText_(p.tutorParentesco),
+      tutorTelefono: normalizeText_(p.tutorTelefono),
+      tutorUsuario: username,
+      curp: normalizeText_(p.curp).toUpperCase(),
+      sexo: normalizeText_(p.sexo),
+      entidadNacimiento: normalizeText_(p.entidadNacimiento),
+      estadoInscripcion: normalizeText_(p.estadoInscripcion),
+      numeroLista: finalNumeroLista,
+      activo: true,
+      creadoEn: current ? current.creadoEn : timestamp,
+      actualizadoEn: timestamp
+    };
+    upsertObject_('Alumnos', record, 'id');
+
+    let temporaryPassword = '';
+    if (created) {
+      temporaryPassword = createTemporaryPassword_(record.apellidoPaterno);
+      appendObjects_('UsuariosTutor', [{
+        id: newId_('USR'), alumnoId: id, usuario: username,
+        passwordHash: hash_(temporaryPassword), debeCambiarPassword: true,
+        activo: true, creadoEn: timestamp
+      }]);
+    }
+    const result = { ok: true, student: Object.assign({}, record, { estilo: 'Sin evaluar' }), temporaryPassword };
+    rememberOperationV2_(requestKey, 'saveStudent', id, result);
+    return result;
+  });
+}
+
+function deleteStudent_(studentId) {
+  const result = deleteStudentsBatch_([studentId]);
+  return { ok: true, message: result.message };
+}
+
+function deleteStudentsBatch_(studentIds) {
+  ensureInstalled_();
+  const ids = Array.from(new Set((Array.isArray(studentIds) ? studentIds : [studentIds]).map(String).filter(Boolean))).slice(0, 100);
+  if (!ids.length) throw new Error('Selecciona por lo menos un alumno.');
+  const idSet = new Set(ids);
+  const students = readRows_('Alumnos');
+  const found = students.filter(row => idSet.has(String(row.id)));
+  if (!found.length) throw new Error('No se encontraron los alumnos seleccionados.');
+  const foundIds = new Set(found.map(row => String(row.id)));
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(20000);
+  try {
+    replaceObjects_('Alumnos', students.filter(row => !foundIds.has(String(row.id))));
+    ['UsuariosTutor','EstilosVAK','Evaluaciones','Asistencia','ResultadosInstrumento','CalificacionesManual','DirectorioFamilias','DirectorioContactos','InvitacionesFamilia'].forEach(function (sheetName) {
+      replaceObjects_(sheetName, readRows_(sheetName).filter(row => !foundIds.has(String(row.alumnoId))));
+    });
+
+    const familyAccounts = readRows_('CuentasFamilia');
+    const removedFamilyAccountIds = new Set(familyAccounts.filter(row => foundIds.has(String(row.alumnoId))).map(row => String(row.id)));
+    replaceObjects_('CuentasFamilia', familyAccounts.filter(row => !foundIds.has(String(row.alumnoId))));
+    replaceObjects_('RecuperacionesFamilia', readRows_('RecuperacionesFamilia').filter(row => !removedFamilyAccountIds.has(String(row.cuentaId))));
+
+    const enrollments = readRows_('Inscripciones');
+    const removedEnrollmentIds = new Set(enrollments.filter(row => foundIds.has(String(row.alumnoId))).map(row => String(row.id)));
+    replaceObjects_('Inscripciones', enrollments.filter(row => !foundIds.has(String(row.alumnoId))));
+    replaceObjects_('FotosInscripcion', readRows_('FotosInscripcion').filter(row => !removedEnrollmentIds.has(String(row.inscripcionId))));
+    replaceObjects_('HistorialInscripcion', readRows_('HistorialInscripcion').filter(row => !removedEnrollmentIds.has(String(row.inscripcionId))));
+
+    deleteLegacyStudentRowsBatch_(foundIds);
+    reconstruirResumenes_(getSpreadsheet_());
+    return {
+      ok: true,
+      count: found.length,
+      deletedIds: Array.from(foundIds),
+      message: found.length === 1
+        ? 'El alumno y sus registros relacionados fueron eliminados definitivamente.'
+        : found.length + ' alumnos y sus registros relacionados fueron eliminados definitivamente.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deleteLegacyStudentRows_(studentId) {
+  deleteLegacyStudentRowsBatch_(new Set([String(studentId)]));
+}
+
+function deleteLegacyStudentRowsBatch_(studentIds) {
+  const ss = getSpreadsheet_();
+  [APP.SHEETS.RECORDS, APP.SHEETS.FAMILY].forEach(name => {
+    const sheet = ss.getSheetByName(name);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const columnCount = sheet.getLastColumn();
+    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, columnCount).getValues();
+    reemplazarDatos_(sheet, rows.filter(row => !studentIds.has(String(row[1]))), columnCount);
+  });
+}
+
+function listProjects_(skipInstallCheck) {
+  if (!skipInstallCheck) ensureInstalled_();
+  return readRows_('Proyectos')
+    .filter(x => x.estado !== 'Eliminado' && x.estado !== 'Archivado')
+    .sort((a, b) => String(b.creadoEn).localeCompare(String(a.creadoEn)));
+}
+
+function saveProject_(payload) {
+  ensureInstalled_();
+  const p = payload || {};
+  const requestKey = normalizeText_(p.requestKey);
+  const cached = cachedOperationV2_(requestKey, 'saveProject');
+  if (cached) return cached;
+  if (!normalizeText_(p.nombre) || !normalizeText_(p.campoFormativo)) {
+    throw new Error('Nombre y campo formativo son obligatorios.');
+  }
+  return withDocumentLockV2_(function () {
+    const repeated = cachedOperationV2_(requestKey, 'saveProject');
+    if (repeated) return repeated;
+    const current = p.id ? readRows_('Proyectos').find(x => x.id === p.id) : null;
+    const timestamp = now_();
+    const record = {
+      id: current ? current.id : newId_('PRO'),
+      nombre: normalizeText_(p.nombre), campoFormativo: normalizeText_(p.campoFormativo),
+      fechaInicio: normalizeText_(p.fechaInicio), fechaFin: normalizeText_(p.fechaFin),
+      temporalidad: normalizeText_(p.temporalidad), planPeriodo: normalizeText_(p.planPeriodo),
+      metodologia: normalizeText_(p.metodologia), escenario: normalizeText_(p.escenario),
+      ejes: normalizeText_(p.ejes), contenidos: normalizeText_(p.contenidos), pda: normalizeText_(p.pda),
+      proposito: normalizeText_(p.proposito), productoFinal: normalizeText_(p.productoFinal),
+      sinProductoFinal: Boolean(p.sinProductoFinal), estado: normalizeText_(p.estado) || 'Activo',
+      creadoEn: current ? current.creadoEn : timestamp, actualizadoEn: timestamp
+    };
+    upsertObject_('Proyectos', record, 'id');
+    const result = { ok: true, project: record };
+    rememberOperationV2_(requestKey, 'saveProject', record.id, result);
+    return result;
+  });
+}
+
+function deleteProject_(projectId) {
+  ensureInstalled_();
+  const current = readRows_('Proyectos').find(x => String(x.id) === String(projectId));
+  if (!current) throw new Error('Proyecto no encontrado.');
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(20000);
+  try {
+    const projectIdText = String(projectId);
+    const allClasses = readRows_('Clases');
+    const removedClassIds = new Set(allClasses
+      .filter(x => String(x.proyectoId) === projectIdText)
+      .map(x => String(x.id)));
+    replaceObjects_('Evaluaciones', readRows_('Evaluaciones').filter(x => !removedClassIds.has(String(x.claseId))));
+    replaceObjects_('Clases', allClasses.filter(x => String(x.proyectoId) !== projectIdText));
+    replaceObjects_('Proyectos', readRows_('Proyectos').filter(x => String(x.id) !== projectIdText));
+    return {
+      ok: true,
+      deletedActivities: removedClassIds.size,
+      message: 'Proyecto eliminado definitivamente junto con sus actividades y evaluaciones.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getProjectWorkspace_(projectId) {
+  ensureInstalled_();
+  const project = readRows_('Proyectos').find(x => String(x.id) === String(projectId));
+  if (!project) throw new Error('Proyecto no encontrado.');
+  const classes = readRows_('Clases')
+    .filter(x => String(x.proyectoId) === String(projectId))
+    .sort((a, b) => String(b.fecha + b.horaInicio).localeCompare(String(a.fecha + a.horaInicio)));
+  const classIds = new Set(classes.map(x => String(x.id)));
+  const evaluations = readRows_('Evaluaciones').filter(x => classIds.has(String(x.claseId)));
+  const byClass = {};
+  evaluations.forEach(item => {
+    const key = String(item.claseId);
+    if (!byClass[key]) byClass[key] = [];
+    byClass[key].push(item);
+  });
+  const activityRows = classes.map(item => {
+    const rows = byClass[String(item.id)] || [];
+    return Object.assign({}, item, {
+      totals: {
+        students: rows.length,
+        complete: rows.filter(x => x.trabajo === 'Completo').length,
+        partial: rows.filter(x => x.trabajo === 'Incompleto').length,
+        none: rows.filter(x => x.trabajo === 'No trabajó').length,
+        conduct: rows.filter(x => x.conducta === 'Requiere apoyo').length,
+        noParticipation: rows.filter(x => x.participacion === 'Nula').length
+      }
+    });
+  });
+  return { project, activities: activityRows };
+}
+
+function getClassRecord_(classId) {
+  ensureInstalled_();
+  const classRecord = readRows_('Clases').find(x => String(x.id) === String(classId));
+  if (!classRecord) throw new Error('Actividad no encontrada.');
+  const instrumentRows = readRows_('ResultadosInstrumento').filter(x => String(x.claseId) === String(classId));
+  const evaluations = readRows_('Evaluaciones').filter(x => String(x.claseId) === String(classId)).map(function (row) {
+    const saved = instrumentRows.find(function (item) { return String(item.alumnoId) === String(row.alumnoId); });
+    const selections = {};
+    instrumentsParseJson_(saved ? saved.resultadosJson : '', []).forEach(function (item) {
+      selections[item.criterioId] = item.criterioId === '__grade' ? item.valor : item.nivel;
+    });
+    return Object.assign({}, row, { instrumentResults: selections });
+  });
+  return { classRecord, evaluations };
+}
+
+// ============================================================================
+// BLOQUE INSTALABLE: Api.gs (REGISTRO DIARIO)
+// ============================================================================
+// Destino: Archivo Api.gs en el proyecto de Google Apps Script.
+// ATENCIÓN: Este archivo es un BLOQUE MODULAR para incorporar en Api.gs,
+//           NO es un reemplazo completo del archivo Api.gs.
+//
+// Instrucciones exactas:
+// 1. Antes de pegar, comprobar en el proyecto de Apps Script si alguna de las
+//    funciones auxiliares (getTodayIsoCancun_, hasValue_, buildEffectiveEvaluation_,
+//    esFechaRealValida_, calcularFechaLimiteOficial_) ya fue declarada en otro
+//    archivo .gs, a fin de evitar identificadores duplicados.
+// 2. Localizar la función saveClassRecord_ existente en Api.gs (aprox. línea 370 a 494).
+// 3. Reemplazar toda esa función existente pegando exactamente el siguiente bloque.
+//    (Incluye las 5 funciones auxiliares y la versión corregida de saveClassRecord_).
+// ============================================================================
+
+/**
+ * Obtiene la fecha actual en formato YYYY-MM-DD en la zona horaria oficial America/Cancun.
+ * Implementación limpia de producción (sin controles de prueba ni variables mock).
+ */
+function getTodayIsoCancun_() {
+  var tz = (typeof APP !== 'undefined' && APP && APP.TIMEZONE) ? APP.TIMEZONE : 'America/Cancun';
+  return Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+}
+
+/**
+ * Detección explícita de presencia de un valor (incluyendo 0 numérico y texto "0").
+ * Evita la coerción booleana errónea de (value || '') donde 0 se convierte en cadena vacía.
+ */
+function hasValue_(v) {
+  return v !== undefined && v !== null && String(v).trim() !== '';
+}
+
+/**
+ * Combina datos existentes de una evaluación con los cambios solicitados distinguiendo:
+ * - Omitido (undefined): conserva el valor existente en la base de datos.
+ * - Vacío explícito ('' o null): vacía el campo deliberadamente.
+ * - Valor explícito: actualiza el valor.
+ */
+function buildEffectiveEvaluation_(row, old) {
+  var r = row || {};
+  var o = old || {};
+
+  function pickField(fieldName) {
+    if (r[fieldName] !== undefined) {
+      if (r[fieldName] === null) return '';
+      return typeof r[fieldName] === 'string' ? r[fieldName].trim() : String(r[fieldName]).trim();
+    }
+    return o[fieldName] !== undefined && o[fieldName] !== null ? o[fieldName] : '';
+  }
+
+  var isReopeningSubmitted = Boolean(r.reabiertoMotivo !== undefined || r.reabiertoEn !== undefined || r.reabiertoFechaLimite !== undefined);
+  var reabiertoMotivoVal = '';
+  var reabiertoEnVal = '';
+  var reabiertoFechaLimiteVal = '';
+
+  if (isReopeningSubmitted) {
+    reabiertoMotivoVal = r.reabiertoMotivo !== undefined && r.reabiertoMotivo !== null ? String(r.reabiertoMotivo).trim() : '';
+    reabiertoEnVal = r.reabiertoEn !== undefined && r.reabiertoEn !== null ? String(r.reabiertoEn).trim() : '';
+    reabiertoFechaLimiteVal = r.reabiertoFechaLimite !== undefined && r.reabiertoFechaLimite !== null ? String(r.reabiertoFechaLimite).trim() : '';
+  } else {
+    reabiertoMotivoVal = o.reabiertoMotivo !== undefined && o.reabiertoMotivo !== null ? o.reabiertoMotivo : '';
+    reabiertoEnVal = o.reabiertoEn !== undefined && o.reabiertoEn !== null ? o.reabiertoEn : '';
+    reabiertoFechaLimiteVal = o.reabiertoFechaLimite !== undefined && o.reabiertoFechaLimite !== null ? o.reabiertoFechaLimite : '';
+  }
+
+  var effective = {
+    alumnoId: r.alumnoId !== undefined ? String(r.alumnoId).trim() : (o.alumnoId ? String(o.alumnoId).trim() : ''),
+    trabajo: pickField('trabajo'),
+    desempeno: pickField('desempeno'),
+    conducta: pickField('conducta'),
+    participacion: pickField('participacion'),
+    observacionLibre: pickField('observacionLibre'),
+    fechaEntrega: pickField('fechaEntrega'),
+    estadoEntrega: pickField('estadoEntrega'),
+    calificacionInstrumento: r.calificacionInstrumento !== undefined
+      ? (r.calificacionInstrumento === null || String(r.calificacionInstrumento).trim() === '' ? '' : r.calificacionInstrumento)
+      : (o.calificacionInstrumento !== undefined && o.calificacionInstrumento !== null ? o.calificacionInstrumento : ''),
+    nivelInstrumento: pickField('nivelInstrumento'),
+    areasOportunidad: pickField('areasOportunidad'),
+    mensajeInstrumento: pickField('mensajeInstrumento'),
+    fechaInicioPlazo: pickField('fechaInicioPlazo'),
+    fechaLimiteJustificada: pickField('fechaLimiteJustificada'),
+    reabiertoMotivo: reabiertoMotivoVal,
+    reabiertoEn: reabiertoEnVal,
+    reabiertoFechaLimite: reabiertoFechaLimiteVal,
+    instrumentResults: r.instrumentResults !== undefined ? r.instrumentResults : undefined
+  };
+
+  return effective;
+}
+
+/**
+ * Valida fechas reales de calendario (rechaza meses inválidos, días > 30/31 y 29 de feb no bisiesto).
+ */
+function esFechaRealValida_(iso) {
+  if (typeof iso !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  var parts = iso.split('-').map(Number);
+  var year = parts[0];
+  var month = parts[1];
+  var day = parts[2];
+  if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+  var dt = new Date(year, month - 1, day, 12, 0, 0);
+  return dt.getFullYear() === year && (dt.getMonth() + 1) === month && dt.getDate() === day;
+}
+
+/**
+ * Calcula el plazo oficial de 5 días hábiles escolares a partir de la reincorporación,
+ * consultando suspensiones y fines de semana en AttendanceLegacy.gs.
+ */
+function calcularFechaLimiteOficial_(startDateStr, ss) {
+  var spreadsheet = ss || (typeof getSpreadsheet_ === 'function' ? getSpreadsheet_() : (typeof obtenerLibro_ === 'function' ? obtenerLibro_() : null));
+  var cursor = fechaDesdeIso_(startDateStr);
+  var added = 0;
+  while (added < 5) {
+    cursor.setDate(cursor.getDate() + 1);
+    var motivo = obtenerMotivoSinClase_(spreadsheet, cursor);
+    if (motivo !== null) continue;
+    added++;
+  }
+  return isoDesdeFecha_(cursor);
+}
+
+/**
+ * Normaliza y valida una cadena u objeto de hora en formato HH:mm.
+ * Si recibe un objeto Date, extrae HH:mm con el huso horario oficial.
+ * Si detecta el valor corrupto histórico "1899-12-30", no inventa hora y retorna cadena vacía.
+ */
+function normalizeHourValue_(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'HH:mm');
+  }
+  var str = String(val).trim();
+  if (str === '1899-12-30') return ''; // Información horaria perdida históricamente
+  if (/^([01]\d|2[0-3]):[0-5]\d$/.test(str)) return str;
+  var m = str.match(/T([01]\d|2[0-3]):([0-5]\d)/);
+  if (m) return m[1] + ':' + m[2];
+  return str;
+}
+
+/**
+ * Guarda una actividad diaria con validaciones estrictas de asistencia, regla J,
+ * plazos escolares, conservación de actualizaciones parciales e idempotencia por requestKey.
+ */
+function saveClassRecord_(payload) {
+  ensureInstalled_();
+  var p = payload || {};
+  var requestKey = normalizeText_(p.requestKey);
+  var cached = cachedOperationV2_(requestKey, 'saveClassRecord');
+  if (cached) return cached;
+
+  var allClasses = readRows_('Clases');
+  var current = p.id ? allClasses.find(function (x) { return String(x.id) === String(p.id); }) : null;
+  var classId = current ? current.id : newId_('CLA');
+
+  // Proyecto opcional: si está vacío permite actividad libre sin asignar proyecto
+  var rawProjectId = p.proyectoId !== undefined ? normalizeText_(p.proyectoId) : (current ? current.proyectoId : '');
+  var finalProjectId = '';
+  if (rawProjectId) {
+    var project = readRows_('Proyectos').find(function (x) { return String(x.id) === rawProjectId; });
+    if (!project) throw new Error('Selecciona un proyecto válido.');
+    finalProjectId = String(project.id);
+  }
+
+  // Valores efectivos distinguiendo omitidos vs deliberadamente vaciados
+  var effectiveFecha = p.fecha !== undefined ? normalizeText_(p.fecha) : (current ? current.fecha : '');
+  var rawHoraInicio = p.horaInicio !== undefined ? p.horaInicio : (current ? current.horaInicio : '');
+  var rawHoraFin = p.horaFin !== undefined ? p.horaFin : (current ? current.horaFin : '');
+  var effectiveHoraInicio = normalizeHourValue_(rawHoraInicio);
+  var effectiveHoraFin = normalizeHourValue_(rawHoraFin);
+  var effectiveMateria = p.materia !== undefined ? normalizeText_(p.materia) : (current ? current.materia : '');
+  var effectiveActividad = p.actividad !== undefined ? normalizeText_(p.actividad) : (current ? current.actividad : '');
+  var effectiveMaterial = p.material !== undefined ? normalizeText_(p.material) : (current ? current.material : '');
+  var effectivePda = p.pdaTema !== undefined ? normalizeText_(p.pdaTema) : (current ? (current.pdaTema || '') : '');
+
+  // Validaciones básicas de la actividad
+  if (!esFechaRealValida_(effectiveFecha)) throw new Error('Selecciona una fecha válida.');
+  if (!effectiveHoraInicio || !effectiveHoraFin) {
+    if (String(rawHoraInicio).trim() === '1899-12-30' || String(rawHoraFin).trim() === '1899-12-30') {
+      throw new Error('El registro histórico contiene un horario no disponible o dañado (1899-12-30). Por favor captura horas válidas en formato HH:mm (ej. 13:00).');
+    }
+    throw new Error('Indica la hora de inicio y de término en formato HH:mm.');
+  }
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(effectiveHoraInicio) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(effectiveHoraFin)) {
+    throw new Error('Las horas deben tener formato válido HH:mm (ej. 13:00).');
+  }
+  if (effectiveHoraFin <= effectiveHoraInicio) throw new Error('La hora de término debe ser posterior a la hora de inicio.');
+  if (!effectiveMateria || !effectiveActividad || !effectiveMaterial) {
+    throw new Error('Materia, actividad y material son obligatorios.');
+  }
+
+  // Evaluaciones e instrumentos preexistentes de esta clase
+  var allEvaluations = readRows_('Evaluaciones');
+  var existing = allEvaluations.filter(function (x) { return String(x.claseId) === String(classId); });
+  var existingByStudent = existing.reduce(function (acc, row) { acc[String(row.alumnoId)] = row; return acc; }, {});
+  var allInstrumentResults = readRows_('ResultadosInstrumento');
+  var existingInstrumentByStudent = allInstrumentResults.filter(function (row) { return String(row.claseId) === String(classId); })
+    .reduce(function (map, row) { map[String(row.alumnoId)] = row; return map; }, {});
+
+  var rows = Array.isArray(p.evaluaciones) ? p.evaluaciones : [];
+  var isGradingOperation = rows.length > 0;
+
+  var students = listStudents_();
+  var studentsMap = students.reduce(function (acc, s) { acc[String(s.id)] = s; return acc; }, {});
+  
+  var attendanceMap = {};
+  var fullAttendanceRecords = [];
+
+  if (isGradingOperation || (current && effectiveFecha !== current.fecha && existing.length > 0)) {
+    fullAttendanceRecords = obtenerRegistros_(obtenerLibro_());
+    var attendanceDayRows = fullAttendanceRecords.filter(function (row) { return isoDesdeFecha_(row.date) === effectiveFecha; });
+    
+    if (!attendanceDayRows.length) {
+      throw new Error('Primero registra y guarda la asistencia de la fecha (' + effectiveFecha + ') en el Pase de lista.');
+    }
+
+    attendanceDayRows.forEach(function (row) {
+      attendanceMap[String(row.studentId)] = String(row.status || '').toUpperCase();
+    });
+  }
+
+  // Detección de conflictos de asistencia y plazos al cambiar la fecha de una actividad
+  if (current && effectiveFecha !== current.fecha && existing.length > 0) {
+    var conflicts = [];
+    existing.forEach(function (ev) {
+      var studentId = String(ev.alumnoId);
+      var student = studentsMap[studentId];
+      var studentName = student ? fullName_(student) : ('ID ' + studentId);
+      var newStatus = attendanceMap[studentId];
+
+      if (!newStatus) {
+        conflicts.push(studentName + ': sin registro de asistencia en la fecha ' + effectiveFecha);
+        return;
+      }
+
+      if (newStatus === 'F') {
+        var hadWork = ev.trabajo === 'Completo' || ev.trabajo === 'Incompleto' || ev.trabajo === 'Entregada tarde' || Boolean(ev.calificacionInstrumento);
+        if (hadWork) {
+          conflicts.push(studentName + ' tiene falta injustificada (F) en la nueva fecha (' + effectiveFecha + ') pero cuenta con trabajo previo calificado (' + ev.trabajo + ').');
+        }
+      } else if (newStatus === 'J') {
+        var studentHistory = fullAttendanceRecords
+          .filter(function (r) { return String(r.studentId) === studentId; })
+          .sort(function (a, b) { return normalizarFecha_(a.date) - normalizarFecha_(b.date); });
+
+        var postAttendance = studentHistory.find(function (r) {
+          var rDate = isoDesdeFecha_(r.date);
+          return rDate > effectiveFecha && (r.status === 'A' || r.status === 'R');
+        });
+        var reincorporacionDate = postAttendance ? isoDesdeFecha_(postAttendance.date) : '';
+        var limitDate = reincorporacionDate ? calcularFechaLimiteOficial_(reincorporacionDate, getSpreadsheet_()) : '';
+
+        if (ev.fechaEntrega && limitDate && ev.fechaEntrega > limitDate && !ev.reabiertoFechaLimite) {
+          conflicts.push(studentName + ' tiene justificación (J) en la nueva fecha y su entrega registrada (' + ev.fechaEntrega + ') excedería el plazo oficial (' + limitDate + ').');
+        }
+      }
+    });
+
+    if (conflicts.length > 0) {
+      throw new Error('Conflicto de fecha: No se puede cambiar la fecha a ' + effectiveFecha + ' debido a incompatibilidades con registros de asistencia existentes:\n- ' + conflicts.join('\n- '));
+    }
+  }
+
+  var todayCancun = getTodayIsoCancun_();
+
+  // Validaciones de alumnos y regla J en operación de evaluación
+  if (isGradingOperation) {
+    rows.forEach(function (row) {
+      var studentId = row.alumnoId !== undefined ? String(row.alumnoId).trim() : '';
+      if (!studentId || !studentsMap[studentId]) {
+        throw new Error('El alumno ' + (studentId || '(sin ID)') + ' no existe en el grupo.');
+      }
+      var student = studentsMap[studentId];
+      var studentName = fullName_(student);
+      var attStatus = attendanceMap[studentId];
+
+      if (!attStatus) {
+        throw new Error('El alumno ' + studentName + ' no tiene registro de asistencia en la fecha (' + effectiveFecha + ') en el Pase de lista.');
+      }
+
+      if (attStatus === 'F') {
+        throw new Error('El alumno ' + studentName + ' tiene falta injustificada (F) en esta fecha. No es posible asignarle entrega ni calificación.');
+      }
+
+      if (attStatus !== 'A' && attStatus !== 'R' && attStatus !== 'J') {
+        throw new Error('El alumno ' + studentName + ' tiene un estado de asistencia no válido o desconocido (' + attStatus + ') en esta fecha.');
+      }
+
+      var existingRow = existingByStudent[studentId];
+      var effectiveRow = buildEffectiveEvaluation_(row, existingRow);
+
+      // Validar fecha de entrega para alumnos con asistencia ordinaria (A o R)
+      if ((attStatus === 'A' || attStatus === 'R') && effectiveRow.fechaEntrega) {
+        var fe = effectiveRow.fechaEntrega;
+        if (!esFechaRealValida_(fe)) {
+          throw new Error('La fecha de entrega de ' + studentName + ' debe tener formato válido YYYY-MM-DD.');
+        }
+        if (fe > todayCancun) {
+          throw new Error('La fecha de entrega de ' + studentName + ' (' + fe + ') no puede ser una fecha futura.');
+        }
+      }
+
+      if (attStatus === 'J') {
+        var studentHistory = fullAttendanceRecords
+          .filter(function (r) { return String(r.studentId) === studentId; })
+          .sort(function (a, b) { return normalizarFecha_(a.date) - normalizarFecha_(b.date); });
+
+        var postAttendance = studentHistory.find(function (r) {
+          var rDate = isoDesdeFecha_(r.date);
+          return rDate > effectiveFecha && (r.status === 'A' || r.status === 'R');
+        });
+        var reincorporacionDate = postAttendance ? isoDesdeFecha_(postAttendance.date) : '';
+
+        var isReopeningSubmitted = Boolean(row.reabiertoMotivo !== undefined || row.reabiertoEn !== undefined || row.reabiertoFechaLimite !== undefined);
+        var isPreviouslyReopened = Boolean(existingRow && existingRow.reabiertoMotivo && existingRow.reabiertoFechaLimite);
+
+        var isReopened = false;
+
+        // La reapertura exige motivo, fecha de autorización y nueva fecha límite
+        if (isReopeningSubmitted) {
+          if (!effectiveRow.reabiertoMotivo) {
+            throw new Error('Para reapertura de plazo en ' + studentName + ' es obligatorio especificar el motivo justificado.');
+          }
+          if (!esFechaRealValida_(effectiveRow.reabiertoEn)) {
+            throw new Error('Para reapertura de plazo en ' + studentName + ' es obligatorio especificar la fecha de autorización válida (YYYY-MM-DD).');
+          }
+          if (effectiveRow.reabiertoEn > todayCancun) {
+            throw new Error('La fecha de autorización de reapertura para ' + studentName + ' (' + effectiveRow.reabiertoEn + ') no puede ser una fecha futura.');
+          }
+          if (!esFechaRealValida_(effectiveRow.reabiertoFechaLimite)) {
+            throw new Error('La nueva fecha límite autorizada para ' + studentName + ' debe tener formato válido YYYY-MM-DD.');
+          }
+          if (effectiveRow.reabiertoFechaLimite < effectiveRow.reabiertoEn) {
+            throw new Error('La nueva fecha límite para ' + studentName + ' (' + effectiveRow.reabiertoFechaLimite + ') no puede ser anterior a la fecha de autorización (' + effectiveRow.reabiertoEn + ').');
+          }
+          isReopened = true;
+        } else if (isPreviouslyReopened) {
+          isReopened = true;
+        }
+
+        var hasGradingOrEvaluation = hasValue_(effectiveRow.desempeno) ||
+                                     hasValue_(effectiveRow.conducta) ||
+                                     hasValue_(effectiveRow.participacion) ||
+                                     hasValue_(effectiveRow.observacionLibre) ||
+                                     hasValue_(effectiveRow.calificacionInstrumento) ||
+                                     (hasValue_(effectiveRow.nivelInstrumento) && effectiveRow.nivelInstrumento !== 'Pendiente') ||
+                                     (effectiveRow.instrumentResults && typeof effectiveRow.instrumentResults === 'object' && Object.keys(effectiveRow.instrumentResults).length > 0);
+
+        var hasDelivery = (hasValue_(effectiveRow.trabajo) && effectiveRow.trabajo !== 'Pendiente') ||
+                          hasValue_(effectiveRow.fechaEntrega);
+
+        var isRealEvaluation = hasGradingOrEvaluation || hasDelivery;
+        var fechaEntrega = effectiveRow.fechaEntrega;
+
+        if (!reincorporacionDate && !isReopened) {
+          if (isRealEvaluation) {
+            throw new Error('El alumno ' + studentName + ' no se ha reincorporado a clases presenciales tras su falta justificada. La actividad permanece como Pendiente de entrega y no puede calificarse hasta su reincorporación.');
+          }
+        } else {
+          var officialDeadline = reincorporacionDate ? calcularFechaLimiteOficial_(reincorporacionDate, getSpreadsheet_()) : '';
+          var effectiveDeadline = isReopened ? effectiveRow.reabiertoFechaLimite : officialDeadline;
+
+          if (isRealEvaluation) {
+            if (fechaEntrega) {
+              if (!esFechaRealValida_(fechaEntrega)) {
+                throw new Error('La fecha de entrega de ' + studentName + ' debe tener formato válido YYYY-MM-DD.');
+              }
+              if (fechaEntrega > todayCancun) {
+                throw new Error('La fecha de entrega de ' + studentName + ' (' + fechaEntrega + ') no puede ser una fecha futura.');
+              }
+              if (reincorporacionDate && fechaEntrega < reincorporacionDate) {
+                throw new Error('La fecha de entrega de ' + studentName + ' (' + fechaEntrega + ') no puede ser anterior a su fecha de reincorporación a clases (' + reincorporacionDate + ').');
+              }
+              if (effectiveDeadline && fechaEntrega > effectiveDeadline) {
+                throw new Error('La entrega de ' + studentName + ' (' + fechaEntrega + ') se realizó fuera del plazo autorizado (límite: ' + effectiveDeadline + '). Requiere autorización de reapertura con motivo y nueva fecha límite.');
+              }
+            } else {
+              if (effectiveDeadline && todayCancun > effectiveDeadline) {
+                throw new Error('El plazo de entrega justificada para ' + studentName + ' venció el ' + effectiveDeadline + '. Para registrar una entrega extemporánea se requiere autorización de reapertura con motivo y nueva fecha límite.');
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  var effectiveInstrumentId = p.instrumentoId !== undefined
+    ? normalizeText_(p.instrumentoId)
+    : (current ? normalizeText_(current.instrumentoId) : '');
+
+  var instrumentSource = effectiveInstrumentId
+    ? readRows_('InstrumentosEvaluacion').find(function (row) { return String(row.id) === effectiveInstrumentId; })
+    : null;
+  var preparedInstrument = instrumentSource ? instrumentsPublic_(instrumentSource) : null;
+
+  return withDocumentLockV2_(function () {
+    var repeated = cachedOperationV2_(requestKey, 'saveClassRecord');
+    if (repeated) return repeated;
+    var timestamp = now_();
+
+    // Guardar registro de la clase con pdaTema ampliado en columna 15
+    var record = {
+      id: classId,
+      proyectoId: finalProjectId,
+      fecha: effectiveFecha,
+      horaInicio: effectiveHoraInicio,
+      horaFin: effectiveHoraFin,
+      materia: effectiveMateria,
+      pdaTema: effectivePda,
+      actividad: effectiveActividad,
+      material: effectiveMaterial,
+      creadoEn: current ? current.creadoEn : timestamp,
+      instrumentoId: effectiveInstrumentId,
+      instrumentoTipo: normalizeText_(p.instrumentoTipo || (effectiveInstrumentId ? 'INSTRUMENTO' : (current ? current.instrumentoTipo : 'SIMPLE'))),
+      tipoActividad: p.tipoActividad !== undefined
+        ? (['Clase', 'Tarea para casa'].indexOf(normalizeText_(p.tipoActividad)) >= 0 ? normalizeText_(p.tipoActividad) : 'Clase')
+        : (current ? (current.tipoActividad || 'Clase') : 'Clase'),
+      paginas: p.paginas !== undefined ? normalizeText_(p.paginas) : (current ? (current.paginas || '') : ''),
+      instrucciones: p.instrucciones !== undefined ? normalizeText_(p.instrucciones) : (current ? (current.instrucciones || '') : '')
+    };
+    upsertObject_('Clases', record, 'id');
+
+    // Calificación progresiva: mantener evaluaciones de los demás alumnos
+    var evaluationsMap = Object.assign({}, existingByStudent);
+    var instrumentResultsMap = Object.assign({}, existingInstrumentByStudent);
+
+    if (isGradingOperation) {
+      rows.forEach(function (row) {
+        var studentId = row.alumnoId !== undefined ? String(row.alumnoId).trim() : '';
+        var old = existingByStudent[studentId];
+        var attStatus = attendanceMap[studentId];
+        var effectiveRow = buildEffectiveEvaluation_(row, old);
+
+        var reincorporacionDate = '';
+        if (attStatus === 'J') {
+          var studentHistory = fullAttendanceRecords
+            .filter(function (r) { return String(r.studentId) === studentId; })
+            .sort(function (a, b) { return normalizarFecha_(a.date) - normalizarFecha_(b.date); });
+
+          var postAttendance = studentHistory.find(function (r) {
+            var rDate = isoDesdeFecha_(r.date);
+            return rDate > effectiveFecha && (r.status === 'A' || r.status === 'R');
+          });
+          reincorporacionDate = postAttendance ? isoDesdeFecha_(postAttendance.date) : '';
+        }
+
+        var isReopeningSubmitted = Boolean(row.reabiertoMotivo !== undefined || row.reabiertoEn !== undefined || row.reabiertoFechaLimite !== undefined);
+        var isPreviouslyReopened = Boolean(old && old.reabiertoMotivo && old.reabiertoFechaLimite);
+        var isReopened = isReopeningSubmitted || isPreviouslyReopened;
+
+        var isUnreopenedJ = attStatus === 'J' && !reincorporacionDate && !isReopened;
+
+        var isExam = preparedInstrument && preparedInstrument.tipo === 'EXAMEN';
+        var hasExamGrade = isExam && effectiveRow.instrumentResults && effectiveRow.instrumentResults.__grade !== undefined && String(effectiveRow.instrumentResults.__grade).trim() !== '';
+        var hasAllCriteria = preparedInstrument && !isExam && preparedInstrument.criterios && preparedInstrument.criterios.length > 0 &&
+          preparedInstrument.criterios.every(function (c) {
+            return effectiveRow.instrumentResults && effectiveRow.instrumentResults[c.id] && String(effectiveRow.instrumentResults[c.id]).trim() !== '';
+          });
+
+        var evaluated = null;
+        if (!isUnreopenedJ && preparedInstrument && (hasAllCriteria || hasExamGrade)) {
+          evaluated = instrumentsEvaluatePrepared_(preparedInstrument, effectiveRow.instrumentResults || {});
+        }
+
+        var instrumentResult = null;
+        if (evaluated) {
+          var previousResult = existingInstrumentByStudent[studentId];
+          instrumentResult = {
+            id: previousResult ? previousResult.id : newId_('REI'),
+            claseId: classId,
+            alumnoId: studentId,
+            instrumentoId: evaluated.instrument.id,
+            instrumentoVersion: evaluated.instrument.version || 1,
+            resultadosJson: JSON.stringify(evaluated.results),
+            puntosObtenidos: evaluated.grade,
+            puntosPosibles: 10,
+            calificacion: evaluated.grade,
+            nivel: evaluated.level,
+            areasOportunidad: evaluated.opportunities.join(' | '),
+            mensajeResultado: evaluated.feedback ? evaluated.feedback.label + ': ' + evaluated.feedback.message : '',
+            creadoEn: previousResult ? previousResult.creadoEn : (old ? old.creadoEn : timestamp),
+            actualizadoEn: timestamp
+          };
+          instrumentResultsMap[studentId] = instrumentResult;
+        } else if (!isUnreopenedJ && effectiveRow.instrumentResults && Object.keys(effectiveRow.instrumentResults).length > 0) {
+          var previousResult = existingInstrumentByStudent[studentId];
+          instrumentResult = {
+            id: previousResult ? previousResult.id : newId_('REI'),
+            claseId: classId,
+            alumnoId: studentId,
+            instrumentoId: preparedInstrument ? preparedInstrument.id : '',
+            instrumentoVersion: preparedInstrument ? (preparedInstrument.version || 1) : 1,
+            resultadosJson: JSON.stringify(effectiveRow.instrumentResults),
+            puntosObtenidos: '',
+            puntosPosibles: 10,
+            calificacion: '',
+            nivel: 'Pendiente',
+            areasOportunidad: '',
+            mensajeResultado: 'Criterios incompletos · Pendiente de calificar',
+            creadoEn: previousResult ? previousResult.creadoEn : timestamp,
+            actualizadoEn: timestamp
+          };
+          instrumentResultsMap[studentId] = instrumentResult;
+        } else if (isUnreopenedJ) {
+          delete instrumentResultsMap[studentId];
+        } else if (existingInstrumentByStudent[studentId]) {
+          instrumentResultsMap[studentId] = existingInstrumentByStudent[studentId];
+        }
+
+        if (isUnreopenedJ) {
+          // Alumno con falta justificada sin reincorporación: permanece estrictamente Pendiente sin notas
+          evaluationsMap[studentId] = {
+            id: old ? old.id : newId_('EVA'),
+            claseId: classId,
+            alumnoId: studentId,
+            trabajo: 'Pendiente',
+            desempeno: '',
+            conducta: '',
+            participacion: '',
+            observacionLibre: '',
+            creadoEn: old ? old.creadoEn : timestamp,
+            calificacionInstrumento: '',
+            nivelInstrumento: '',
+            areasOportunidad: '',
+            mensajeInstrumento: '',
+            fechaEntrega: '',
+            evaluadoEn: timestamp,
+            estadoEntrega: 'Pendiente',
+            fechaInicioPlazo: '',
+            fechaLimiteJustificada: '',
+            reabiertoMotivo: '',
+            reabiertoEn: '',
+            reabiertoFechaLimite: ''
+          };
+        } else if (attStatus === 'J') {
+          var officialDeadline = reincorporacionDate ? calcularFechaLimiteOficial_(reincorporacionDate, getSpreadsheet_()) : '';
+          var hasDelivery = (hasValue_(effectiveRow.trabajo) && effectiveRow.trabajo !== 'Pendiente') || hasValue_(effectiveRow.fechaEntrega);
+
+          var trabajoVal = 'Pendiente';
+          var estadoEntregaVal = 'Pendiente';
+          if (hasDelivery) {
+            trabajoVal = ['Completo', 'Incompleto', 'No trabajó', 'Entregada tarde'].indexOf(effectiveRow.trabajo) >= 0 ? effectiveRow.trabajo : (effectiveRow.trabajo || 'Completo');
+            estadoEntregaVal = trabajoVal === 'Entregada tarde' ? 'Entregada tarde' : 'Entregado';
+          }
+
+          evaluationsMap[studentId] = {
+            id: old ? old.id : newId_('EVA'),
+            claseId: classId,
+            alumnoId: studentId,
+            trabajo: trabajoVal,
+            desempeno: effectiveRow.desempeno || '',
+            conducta: ['Excelente', 'Adecuada', 'Requiere apoyo'].indexOf(effectiveRow.conducta) >= 0 ? effectiveRow.conducta : '',
+            participacion: ['Alta', 'Media', 'Nula'].indexOf(effectiveRow.participacion) >= 0 ? effectiveRow.participacion : '',
+            observacionLibre: effectiveRow.observacionLibre || '',
+            creadoEn: old ? old.creadoEn : timestamp,
+            calificacionInstrumento: instrumentResult ? instrumentResult.calificacion : (hasValue_(effectiveRow.calificacionInstrumento) ? effectiveRow.calificacionInstrumento : (old ? old.calificacionInstrumento : '')),
+            nivelInstrumento: instrumentResult ? instrumentResult.nivel : (effectiveRow.nivelInstrumento || (old ? old.nivelInstrumento : '')),
+            areasOportunidad: instrumentResult ? instrumentResult.areasOportunidad : (effectiveRow.areasOportunidad || (old ? old.areasOportunidad : '')),
+            mensajeInstrumento: instrumentResult ? instrumentResult.mensajeResultado : (effectiveRow.mensajeInstrumento || (old ? old.mensajeInstrumento : '')),
+            fechaEntrega: effectiveRow.fechaEntrega || '',
+            evaluadoEn: row.evaluadoEn !== undefined ? normalizeText_(row.evaluadoEn) : timestamp,
+            estadoEntrega: estadoEntregaVal,
+            fechaInicioPlazo: reincorporacionDate || (old ? old.fechaInicioPlazo : ''),
+            fechaLimiteJustificada: officialDeadline || (old ? old.fechaLimiteJustificada : ''),
+            reabiertoMotivo: effectiveRow.reabiertoMotivo || '',
+            reabiertoEn: effectiveRow.reabiertoEn || '',
+            reabiertoFechaLimite: effectiveRow.reabiertoFechaLimite || ''
+          };
+        } else {
+          evaluationsMap[studentId] = {
+            id: old ? old.id : newId_('EVA'),
+            claseId: classId,
+            alumnoId: studentId,
+            trabajo: ['Completo', 'Incompleto', 'No trabajó', 'Entregada tarde', 'Pendiente'].indexOf(effectiveRow.trabajo) >= 0 ? effectiveRow.trabajo : (effectiveRow.trabajo || ''),
+            desempeno: effectiveRow.desempeno || '',
+            conducta: ['Excelente', 'Adecuada', 'Requiere apoyo'].indexOf(effectiveRow.conducta) >= 0 ? effectiveRow.conducta : '',
+            participacion: ['Alta', 'Media', 'Nula'].indexOf(effectiveRow.participacion) >= 0 ? effectiveRow.participacion : '',
+            observacionLibre: effectiveRow.observacionLibre || '',
+            creadoEn: old ? old.creadoEn : timestamp,
+            calificacionInstrumento: instrumentResult ? instrumentResult.calificacion : (hasValue_(effectiveRow.calificacionInstrumento) ? effectiveRow.calificacionInstrumento : (old ? old.calificacionInstrumento : '')),
+            nivelInstrumento: instrumentResult ? instrumentResult.nivel : (effectiveRow.nivelInstrumento || (old ? old.nivelInstrumento : '')),
+            areasOportunidad: instrumentResult ? instrumentResult.areasOportunidad : (effectiveRow.areasOportunidad || (old ? old.areasOportunidad : '')),
+            mensajeInstrumento: instrumentResult ? instrumentResult.mensajeResultado : (effectiveRow.mensajeInstrumento || (old ? old.mensajeInstrumento : '')),
+            fechaEntrega: effectiveRow.fechaEntrega || '',
+            evaluadoEn: row.evaluadoEn !== undefined ? normalizeText_(row.evaluadoEn) : timestamp,
+            estadoEntrega: effectiveRow.estadoEntrega || '',
+            fechaInicioPlazo: effectiveRow.fechaInicioPlazo || '',
+            fechaLimiteJustificada: effectiveRow.fechaLimiteJustificada || '',
+            reabiertoMotivo: effectiveRow.reabiertoMotivo || '',
+            reabiertoEn: effectiveRow.reabiertoEn || '',
+            reabiertoFechaLimite: effectiveRow.reabiertoFechaLimite || ''
+          };
+        }
+      });
+
+      var finalEvaluations = Object.values(evaluationsMap);
+      upsertObjectsBatch_('Evaluaciones', finalEvaluations, 'id');
+
+      var finalInstruments = Object.values(instrumentResultsMap);
+      if (finalInstruments.length > 0) {
+        upsertObjectsBatch_('ResultadosInstrumento', finalInstruments, 'id');
+      }
+    }
+
+    var currentEvaluations = readRows_('Evaluaciones').filter(function (row) { return String(row.claseId) === String(classId); });
+    var totals = currentEvaluations.reduce(function (acc, row) {
+      if (row.trabajo === 'Completo' || row.trabajo === 'Entregada tarde') acc.complete++;
+      else if (row.trabajo === 'Incompleto' || row.trabajo === 'Pendiente') acc.partial++;
+      else acc.none++;
+      if (row.conducta === 'Requiere apoyo') acc.conduct++;
+      return acc;
+    }, { complete: 0, partial: 0, none: 0, conduct: 0 });
+
+    var result = {
+      ok: true,
+      classRecord: record,
+      activity: Object.assign({}, record, { totals: totals }),
+      followUp: countFollowUp_(),
+      message: 'Actividad guardada correctamente.'
+    };
+
+    rememberOperationV2_(requestKey, 'saveClassRecord', classId, result);
+    return result;
+  });
+}
+
+function configurarEstilosVAK_() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt(
+    'Vincular estilos de aprendizaje',
+    'Pega la dirección de la hoja de cálculo del test VAK o solamente su ID:',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (response.getSelectedButton() !== ui.Button.OK) return;
+  const raw = String(response.getResponseText() || '').trim();
+  const match = raw.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  const spreadsheetId = match ? match[1] : raw;
+  if (!/^[a-zA-Z0-9_-]{20,}$/.test(spreadsheetId)) {
+    ui.alert('La dirección o el ID no son válidos.');
+    return;
+  }
+  SpreadsheetApp.openById(spreadsheetId);
+  saveConfigValue_('estilosSpreadsheetId', spreadsheetId);
+  const result = syncLearningStyles_();
+  const detail = result.unmatched.length
+    ? '\n\nSin coincidencia: ' + result.unmatched.join(', ')
+    : '';
+  ui.alert('Estilos VAK', `${result.matched} resultado(s) vinculados.${detail}`, ui.ButtonSet.OK);
+}
+
+function normalizePersonName_(value) {
+  return String(value || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase().replace(/[^A-ZÑ0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
+function findStudentForVakName_(sourceName, students) {
+  const source = normalizePersonName_(sourceName);
+  if (!source) return null;
+  const sourceTokens = source.split(' ').filter(Boolean);
+  const matches = students.filter(student => {
+    const full = normalizePersonName_(fullName_(student));
+    if (full === source) return true;
+    const tokens = new Set(full.split(' ').filter(Boolean));
+    return sourceTokens.length >= 2 && sourceTokens.every(token => tokens.has(token));
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function syncLearningStyles_() {
+  ensureInstalled_();
+  const config = getConfig_();
+  if (!config.estilosSpreadsheetId) {
+    throw new Error('Primero vincula la hoja del test desde el menú Carpeta Académica > Vincular resultados de estilos VAK.');
+  }
+  const sourceBook = SpreadsheetApp.openById(config.estilosSpreadsheetId);
+  const sheet = sourceBook.getSheetByName('Resultados');
+  if (!sheet || sheet.getLastRow() < 2) throw new Error('La hoja vinculada no contiene resultados en la pestaña “Resultados”.');
+  const values = sheet.getDataRange().getValues();
+  const headers = values.shift().map(value => normalizePersonName_(value));
+  const column = names => {
+    for (let i = 0; i < names.length; i++) {
+      const index = headers.indexOf(normalizePersonName_(names[i]));
+      if (index >= 0) return index;
+    }
+    return -1;
+  };
+  const indexes = {
+    date: column(['Fecha y hora', 'Marca temporal']),
+    name: column(['Nombre del alumno', 'Alumno']),
+    visual: column(['Visual (A)', 'Visual']),
+    auditory: column(['Auditivo (B)', 'Auditivo']),
+    kinesthetic: column(['Kinestésico (C)', 'Kinestesico']),
+    result: column(['Resultado predominante', 'Resultado'])
+  };
+  if (indexes.name < 0 || indexes.result < 0) throw new Error('No se encontraron las columnas Nombre del alumno y Resultado predominante.');
+  const latest = {};
+  values.forEach(row => {
+    const name = String(row[indexes.name] || '').trim();
+    if (name) latest[normalizePersonName_(name)] = { name, row };
+  });
+  const students = listStudents_();
+  const existing = readRows_('EstilosVAK');
+  const byStudent = existing.reduce((acc, row) => { acc[String(row.alumnoId)] = row; return acc; }, {});
+  const unmatched = [];
+  let matched = 0;
+  Object.keys(latest).forEach(key => {
+    const item = latest[key];
+    const student = findStudentForVakName_(item.name, students);
+    if (!student) { unmatched.push(item.name); return; }
+    const old = byStudent[String(student.id)];
+    const dateValue = indexes.date >= 0 ? item.row[indexes.date] : '';
+    byStudent[String(student.id)] = {
+      id: old ? old.id : newId_('VAK'),
+      alumnoId: student.id,
+      visual: indexes.visual >= 0 ? Number(item.row[indexes.visual] || 0) : 0,
+      auditivo: indexes.auditory >= 0 ? Number(item.row[indexes.auditory] || 0) : 0,
+      kinestesico: indexes.kinesthetic >= 0 ? Number(item.row[indexes.kinesthetic] || 0) : 0,
+      resultado: String(item.row[indexes.result] || 'Sin evaluar').trim(),
+      fechaEvaluacion: dateValue instanceof Date
+        ? Utilities.formatDate(dateValue, Session.getScriptTimeZone(), 'yyyy-MM-dd')
+        : String(dateValue || '').trim()
+    };
+    matched++;
+  });
+  replaceObjects_('EstilosVAK', Object.keys(byStudent).map(id => byStudent[id]));
+  return { ok: true, matched, totalResults: Object.keys(latest).length, unmatched, students: listStudents_() };
+}
+
+function replaceEvaluationRows_(objects) {
+  const sheet = getSpreadsheet_().getSheetByName('Evaluaciones');
+  const headers = DB.Evaluaciones;
+  const missingRows = objects.length + 1 - sheet.getMaxRows();
+  if (missingRows > 0) sheet.insertRowsAfter(sheet.getMaxRows(), missingRows);
+  const previousRows = Math.max(sheet.getLastRow() - 1, 0);
+  const rowsToClear = Math.max(previousRows, objects.length);
+  if (rowsToClear) sheet.getRange(2, 1, rowsToClear, headers.length).clearContent();
+  if (objects.length) {
+    const values = objects.map(obj => headers.map(h => obj[h] === undefined ? '' : obj[h]));
+    sheet.getRange(2, 1, values.length, headers.length).setValues(values);
+  }
+}
+
+function getStudentAcademicReport_(studentId, reportType, reference) {
+  ensureInstalled_();
+  const student = listStudents_().find(x => String(x.id) === String(studentId));
+  if (!student) throw new Error('Alumno no encontrado.');
+  const type = reportType === 'monthly' ? 'monthly' : 'weekly';
+  let start;
+  let end;
+  let period;
+  if (type === 'monthly') {
+    if (!/^\d{4}-\d{2}$/.test(String(reference || ''))) throw new Error('Selecciona un mes válido.');
+    const parts = String(reference).split('-').map(Number);
+    start = reference + '-01';
+    end = Utilities.formatDate(new Date(parts[0], parts[1], 0, 12), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    period = MONTH_NAMES[parts[1] - 1] + ' ' + parts[0];
+  } else {
+    validarFechaIso_(reference);
+    const date = fechaDesdeIso_(reference);
+    const day = date.getDay();
+    const monday = new Date(date); monday.setDate(date.getDate() - (day === 0 ? 6 : day - 1));
+    const friday = new Date(monday); friday.setDate(monday.getDate() + 4);
+    start = Utilities.formatDate(monday, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    end = Utilities.formatDate(friday, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    period = formatearFechaLarga_(monday) + ' al ' + formatearFechaLarga_(friday);
+  }
+  const classes = readRows_('Clases')
+    .filter(x => String(x.fecha) >= start && String(x.fecha) <= end)
+    .sort((a, b) => String(a.fecha + a.horaInicio).localeCompare(String(b.fecha + b.horaInicio)));
+  const evaluations = readRows_('Evaluaciones').filter(x => String(x.alumnoId) === String(studentId));
+  const byClass = evaluations.reduce((acc, row) => { acc[String(row.claseId)] = row; return acc; }, {});
+  const activities = classes.map(item => {
+    const evaluation = byClass[String(item.id)] || {};
+    return {
+      id: item.id, projectId: item.proyectoId, date: item.fecha, subject: item.materia,
+      activity: item.actividad, material: item.material, start: item.horaInicio, end: item.horaFin,
+      work: evaluation.trabajo || 'Sin registrar', conduct: evaluation.conducta || 'Sin registrar',
+      participation: evaluation.participacion || 'Sin registrar', rubric: evaluation.desempeno || '',
+      observation: evaluation.observacionLibre || ''
+    };
+  });
+  const subjectRows = readRows_('Materias').filter(x => x.activo !== false).map(subject => {
+    const rows = activities.filter(x => x.subject === subject.nombre);
+    return {
+      name: subject.nombre,
+      activities: rows.length,
+      complete: rows.filter(x => x.work === 'Completo').length,
+      partial: rows.filter(x => x.work === 'Incompleto').length,
+      none: rows.filter(x => x.work === 'No trabajó').length
+    };
+  });
+  const attendanceRows = obtenerRegistros_(obtenerLibro_()).filter(row => {
+    const date = isoDesdeFecha_(row.date);
+    return String(row.studentId) === String(studentId) && date >= start && date <= end;
+  });
+  const attendanceCounts = { A: 0, F: 0, R: 0, J: 0 };
+  attendanceRows.forEach(row => { if (attendanceCounts[row.status] !== undefined) attendanceCounts[row.status]++; });
+  const attended = attendanceCounts.A + attendanceCounts.R;
+  const totalAttendance = attendanceRows.length;
+  return {
+    type, start, end, period,
+    student: { id: student.id, name: fullName_(student) },
+    summary: {
+      activities: activities.length,
+      complete: activities.filter(x => x.work === 'Completo').length,
+      partial: activities.filter(x => x.work === 'Incompleto').length,
+      none: activities.filter(x => x.work === 'No trabajó').length,
+      conductAttention: activities.filter(x => x.conduct === 'Requiere apoyo').length,
+      noParticipation: activities.filter(x => x.participation === 'Nula').length
+    },
+    subjects: subjectRows,
+    activities,
+    attendance: { counts: attendanceCounts, total: totalAttendance, percentage: totalAttendance ? Math.round(attended * 100 / totalAttendance) : 0 }
+  };
+}
+
+function countFollowUp_() {
+  const evaluations = readRows_('Evaluaciones');
+  const ids = new Set(evaluations
+    .filter(x => x.conducta === 'Requiere apoyo' || x.participacion === 'Nula' || x.trabajo === 'No' || x.trabajo === 'No trabajó')
+    .map(x => x.alumnoId));
+  return ids.size;
+}
+
+function fullName_(student) {
+  return student.nombreCompleto || [student.apellidoPaterno, student.apellidoMaterno, student.nombres].filter(Boolean).join(' ');
+}
+
+function createTutorUsername_(names, surname) {
+  const base = slug_((String(names).split(/\s+/)[0] || 'tutor') + '.' + surname);
+  const used = new Set(readRows_('UsuariosTutor').map(x => x.usuario));
+  let candidate = base;
+  let n = 2;
+  while (used.has(candidate)) candidate = base + n++;
+  return candidate;
+}
+
+function createTemporaryPassword_(surname) {
+  const clean = normalizeText_(surname).replace(/\s+/g, '');
+  return (clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase()) + String(new Date().getFullYear());
+}
+
+function slug_(text) {
+  return String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9.]+/g, '').slice(0, 40);
+}
+
+function hash_(text) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text, Utilities.Charset.UTF_8);
+  return bytes.map(b => ('0' + ((b + 256) % 256).toString(16)).slice(-2)).join('');
+}
+
+
+function clearDailyObjectsByIdsBatch_(sheetName, idsToClear, idField, onWriteApplied) {
+  var wanted = new Set((idsToClear || []).map(String));
+  if (!wanted.size) return 0;
+  var ss = getSpreadsheet_();
+  var sheet = ss ? ss.getSheetByName(sheetName) : null;
+  var headers = DB[sheetName];
+  if (!sheet || sheet.getLastRow() < 2) return 0;
+  var idColumn = headers.indexOf(idField) + 1;
+  if (idColumn < 1) return 0;
+
+  var ids = sheet.getRange(2, idColumn, sheet.getLastRow() - 1, 1).getDisplayValues().flat();
+  var rows = ids.map(function (id, index) { return wanted.has(String(id)) ? index + 2 : 0; }).filter(Boolean).sort(function (a, b) { return a - b; });
+  var start = 0, previous = 0;
+  var clearedCount = 0;
+  rows.concat([0]).forEach(function (row) {
+    if (start && row !== previous + 1) {
+      sheet.getRange(start, 1, previous - start + 1, headers.length).clearContent();
+      clearedCount += (previous - start + 1);
+      if (typeof onWriteApplied === 'function') onWriteApplied(sheetName, clearedCount);
+      start = 0;
+    }
+    if (row) { if (!start) start = row; previous = row; }
+  });
+  return clearedCount;
+}
+
+/**
+ * Elimina una o más actividades de forma ordenada bajo bloqueo mutuo (withDocumentLockV2_).
+ *
+ * Principios de consistencia y blindaje:
+ * 1. Exclusión mutua con withDocumentLockV2_ para evitar colisiones de concurrencia.
+ *    (Aclaración: Apps Script no provee rollback transaccional multi-hoja nativo;
+ *    la consistencia se asegura mediante orden de dependencias e idempotencia de recuperación).
+ * 2. Distinción explícita de ResultadosInstrumento:
+ *    - Si no existe (sheet === null), se omite de forma segura.
+ *    - Si existe, cualquier error de lectura o escritura se propaga como fallo operativo real.
+ * 3. Uso de clearDailyObjectsByIdsBatch_ para limpiar ÚNICAMENTE las filas vinculadas a los IDs
+ *    especificados, evitando reescribir tablas completas y protegiendo datos ajenos.
+ * 4. Secuencia estricta de dependencias hijas a padre:
+ *    Etapa 1: ResultadosInstrumento (hijos de rúbrica, si la hoja existe).
+ *    Etapa 2: Evaluaciones (hijos de clase).
+ *    Etapa 3: Clases (entidad padre).
+ * 5. Si ocurre un fallo en cualquier etapa:
+ *    - NO se finge éxito ni se declara ok: true.
+ *    - Se registra el estado de fallo 'Incompleta' e incierto en SolicitudesOperacion
+ *      con esquema canónico ('creadoEn', 'actualizadoEn').
+ *    - Si falla el registro en SolicitudesOperacion, se captura explícitamente sin enmascarar.
+ * 6. Recuperación en reintentos y combinaciones existentes/ausentes:
+ *    - Limpia registros huérfanos de instrumentos y evaluaciones para todos los IDs solicitados.
+ *    - Verifica post-limpieza que no persistan registros vinculados pendientes antes de confirmar éxito.
+ */
+function deleteClassRecords_(classIds, options) {
+  ensureInstalled_();
+  if (!classIds) throw new Error('Se requiere especificar los IDs de las actividades a eliminar.');
+
+  var targetIds = [];
+  var requestKey = '';
+  if (Array.isArray(classIds)) {
+    targetIds = classIds.map(String).filter(Boolean);
+  } else if (typeof classIds === 'object' && classIds !== null) {
+    if (Array.isArray(classIds.ids)) {
+      targetIds = classIds.ids.map(String).filter(Boolean);
+    } else if (classIds.id) {
+      targetIds = [String(classIds.id)];
+    }
+    if (classIds.requestKey) requestKey = String(classIds.requestKey);
+  } else if (typeof classIds === 'string' && classIds.trim()) {
+    targetIds = [classIds.trim()];
+  }
+
+  if (options && options.requestKey) requestKey = String(options.requestKey);
+
+  if (!targetIds.length) {
+    throw new Error('Lista de IDs de actividades vacía o inválida.');
+  }
+
+    // 0. Validación de unicidad e inmutabilidad de la clave de solicitud (requestKey)
+  if (requestKey) {
+    var requestedCanonical = targetIds.slice().sort().join(',');
+
+    // Consultar registro previo de esta clave en SolicitudesOperacion
+    var existingOp = readRows_('SolicitudesOperacion').find(function (item) {
+      return String(item.id) === String(requestKey) && String(item.accion) === 'deleteClassRecords';
+    });
+
+    if (existingOp) {
+      var storedCanonical = String(existingOp.entidadId || '')
+        .split(',')
+        .map(function (s) { return s.trim(); })
+        .filter(Boolean)
+        .sort()
+        .join(',');
+
+      // REGLA: Una clave identifica un conjunto original inmutable de IDs.
+      // Si la clave ya fue registrada para un conjunto diferente, rechazar de inmediato sin escrituras.
+      if (storedCanonical && storedCanonical !== requestedCanonical) {
+        throw new Error(
+          'La clave de solicitud "' + requestKey + '" ya fue utilizada para una operación previa con un conjunto diferente de actividades (' +
+          storedCanonical + ' vs ' + requestedCanonical + '). No se realizaron escrituras.'
+        );
+      }
+
+      // Si el conjunto de IDs coincide y la operación ya está Completada: comportamiento idempotente
+      if (String(existingOp.estado) === 'Completada') {
+        try {
+          var parsedCached = JSON.parse(String(existingOp.respuestaJson || 'null'));
+          if (parsedCached) return parsedCached;
+        } catch (e) {}
+      }
+    }
+  }
+
+    return withDocumentLockV2_(function () {
+    var ss = getSpreadsheet_();
+    if (!ss) throw new Error('No se pudo acceder al libro de cálculo de Google Sheets.');
+
+    // 0. Validación definitiva bajo bloqueo mutuo de unicidad e inmutabilidad de requestKey
+    // (Protección contra condiciones de carrera e intercalado entre solicitudes concurrentes)
+    if (requestKey) {
+      var lockedCanonical = targetIds.slice().sort().join(',');
+
+      var lockedOp = readRows_('SolicitudesOperacion').find(function (item) {
+        return String(item.id) === String(requestKey) && String(item.accion) === 'deleteClassRecords';
+      });
+
+      if (lockedOp) {
+        var lockedStoredCanonical = String(lockedOp.entidadId || '')
+          .split(',')
+          .map(function (s) { return s.trim(); })
+          .filter(Boolean)
+          .sort()
+          .join(',');
+
+        if (lockedStoredCanonical && lockedStoredCanonical !== lockedCanonical) {
+          throw new Error(
+            'La clave de solicitud "' + requestKey + '" ya fue utilizada para una operación previa con un conjunto diferente de actividades (' +
+            lockedStoredCanonical + ' vs ' + lockedCanonical + '). No se realizaron escrituras.'
+          );
+        }
+
+        if (String(lockedOp.estado) === 'Completada') {
+          try {
+            var lockedCached = JSON.parse(String(lockedOp.respuestaJson || 'null'));
+            if (lockedCached) return lockedCached;
+          } catch (e) {}
+        }
+      }
+    }
+
+    // 1. Verificación previa de existencia de hojas indispensables
+    var sheetClases = ss.getSheetByName('Clases');
+    if (!sheetClases) throw new Error('La hoja Clases no existe en el libro de cálculo.');
+
+    var sheetEvals = ss.getSheetByName('Evaluaciones');
+    if (!sheetEvals) throw new Error('La hoja Evaluaciones no existe en el libro de cálculo.');
+
+    // 2. Detección precisa de hoja opcional ResultadosInstrumento
+    var sheetInst = ss.getSheetByName('ResultadosInstrumento');
+    var hasInstrumentsSheet = (sheetInst !== null && sheetInst !== undefined);
+
+    // 3. Identificación integral de registros vinculados a TODOS los IDs solicitados
+    var targetSet = new Set(targetIds.map(String));
+    var allClasses = readRows_('Clases');
+    var existingClasses = allClasses.filter(function (c) { return targetSet.has(String(c.id)); });
+    var foundClassIds = existingClasses.map(function (c) { return String(c.id); });
+
+    var allEvaluations = readRows_('Evaluaciones');
+    var targetEvaluations = allEvaluations.filter(function (e) { return targetSet.has(String(e.claseId)); });
+    var targetEvaluationIds = targetEvaluations.map(function (e) { return String(e.id); });
+    var targetEvalSet = new Set(targetEvaluationIds);
+
+    var targetInstrumentIds = [];
+    if (hasInstrumentsSheet) {
+      var allInstruments = readRows_('ResultadosInstrumento');
+      var targetInstruments = allInstruments.filter(function (r) {
+        return targetSet.has(String(r.claseId)) || (r.evaluacionId && targetEvalSet.has(String(r.evaluacionId)));
+      });
+      targetInstrumentIds = targetInstruments.map(function (r) { return String(r.id); });
+    }
+
+    // Si ninguna clase ni registros vinculados existen en ninguna tabla:
+    if (foundClassIds.length === 0 && targetEvaluationIds.length === 0 && targetInstrumentIds.length === 0) {
+      var emptyResult = {
+        ok: true,
+        deletedClassIds: [],
+        failedClassIds: [],
+        deletedCount: 0,
+        deletedEvaluations: 0,
+        deletedInstruments: 0,
+        message: 'Ninguna de las actividades solicitadas ni registros vinculados existen en el registro.'
+      };
+      if (requestKey) rememberOperationV2_(requestKey, 'deleteClassRecords', targetIds.slice().sort().join(','), emptyResult);
+      return emptyResult;
+    }
+
+    // 4. Ejecución ordenada de limpieza por ID (sin tocar datos ajenos)
+    var stage = 'START';
+    var instrumentsCleared = false;
+    var evaluationsCleared = false;
+    var classesCleared = false;
+    var partialWriteOccurred = false;
+
+    var onWriteApplied = function () {
+      partialWriteOccurred = true;
+    };
+
+    try {
+      // ETAPA 1: Resultados de Instrumento (si la hoja existe y hay registros)
+      if (hasInstrumentsSheet && targetInstrumentIds.length > 0) {
+        stage = 'INSTRUMENTS';
+        clearDailyObjectsByIdsBatch_('ResultadosInstrumento', targetInstrumentIds, 'id', onWriteApplied);
+        instrumentsCleared = true;
+      }
+
+      // ETAPA 2: Evaluaciones
+      if (targetEvaluationIds.length > 0) {
+        stage = 'EVALUATIONS';
+        clearDailyObjectsByIdsBatch_('Evaluaciones', targetEvaluationIds, 'id', onWriteApplied);
+        evaluationsCleared = true;
+      }
+
+      // ETAPA 3: Clases (si se encontraron actividades padre)
+      if (foundClassIds.length > 0) {
+        stage = 'CLASSES';
+        clearDailyObjectsByIdsBatch_('Clases', foundClassIds, 'id', onWriteApplied);
+        classesCleared = true;
+      }
+
+    } catch (stepError) {
+      var uncertain = (stage !== 'START' || partialWriteOccurred);
+      var audit = {};
+      try {
+        audit.remainingClasses = readRows_('Clases').filter(function (c) { return targetSet.has(String(c.id)); }).length;
+        audit.remainingEvaluations = readRows_('Evaluaciones').filter(function (e) { return targetSet.has(String(e.claseId)); }).length;
+        if (hasInstrumentsSheet) {
+          audit.remainingInstruments = readRows_('ResultadosInstrumento').filter(function (r) {
+            return targetSet.has(String(r.claseId)) || (r.evaluacionId && targetEvalSet.has(String(r.evaluacionId)));
+          }).length;
+        }
+      } catch (auditErr) {
+        audit.auditError = auditErr.message;
+        uncertain = true;
+      }
+
+      var failureDetail = {
+        ok: false,
+        error: 'Fallo durante la eliminación en la etapa ' + stage + ': ' + stepError.message,
+        stage: stage,
+        instrumentsCleared: instrumentsCleared,
+        evaluationsCleared: evaluationsCleared,
+        classesCleared: classesCleared,
+        partialWriteOccurred: partialWriteOccurred,
+        deletedClassIds: classesCleared ? foundClassIds : [],
+        failedClassIds: classesCleared ? [] : foundClassIds,
+        uncertain: uncertain,
+        audit: audit
+      };
+
+      if (requestKey) {
+        try {
+          upsertObject_('SolicitudesOperacion', {
+            id: String(requestKey),
+            accion: 'deleteClassRecords',
+            entidadId: targetIds.slice().sort().join(','),
+            estado: 'Incompleta',
+            respuestaJson: JSON.stringify(failureDetail),
+            creadoEn: now_(),
+            actualizadoEn: now_()
+          }, 'id');
+        } catch (opRecordError) {
+          failureDetail.operationRecordError = opRecordError.message;
+        }
+      }
+
+      var errMsg = failureDetail.error + (uncertain ? ' (Estado incierto: se iniciaron escrituras pero no se completó la eliminación. Consulta o reintenta con la misma clave).' : '');
+      if (failureDetail.operationRecordError) {
+        errMsg += ' [Advertencia: Falló el registro en SolicitudesOperacion: ' + failureDetail.operationRecordError + ']';
+      }
+      throw new Error(errMsg);
+    }
+
+    // 5. Verificación final: comprobar que no persistan registros vinculados pendientes
+    var remClasses = foundClassIds.length > 0
+      ? readRows_('Clases').filter(function (c) { return targetSet.has(String(c.id)); })
+      : [];
+    var remEvals = targetEvaluationIds.length > 0
+      ? readRows_('Evaluaciones').filter(function (e) { return targetSet.has(String(e.claseId)); })
+      : [];
+    var remInsts = (hasInstrumentsSheet && targetInstrumentIds.length > 0)
+      ? readRows_('ResultadosInstrumento').filter(function (r) {
+          return targetSet.has(String(r.claseId)) || (r.evaluacionId && targetEvalSet.has(String(r.evaluacionId)));
+        })
+      : [];
+
+    if (remClasses.length > 0 || remEvals.length > 0 || remInsts.length > 0) {
+      var postCheckFailure = {
+        ok: false,
+        stage: 'POST_CHECK',
+        uncertain: true,
+        error: 'La eliminación no se completó: persisten registros vinculados (' +
+               remClasses.length + ' clases, ' + remEvals.length + ' evaluaciones, ' +
+               remInsts.length + ' instrumentos).',
+        remainingClasses: remClasses.map(function (c) { return c.id; }),
+        remainingEvaluations: remEvals.length,
+        remainingInstruments: remInsts.length
+      };
+      if (requestKey) {
+        try {
+          upsertObject_('SolicitudesOperacion', {
+            id: String(requestKey),
+            accion: 'deleteClassRecords',
+            entidadId: targetIds.slice().sort().join(','),
+            estado: 'Incompleta',
+            respuestaJson: JSON.stringify(postCheckFailure),
+            creadoEn: now_(),
+            actualizadoEn: now_()
+          }, 'id');
+        } catch (opErr) {
+          postCheckFailure.operationRecordError = opErr.message;
+        }
+      }
+      throw new Error(postCheckFailure.error);
+    }
+
+    // Resultado exitoso confirmado
+    var result = {
+      ok: true,
+      deletedClassIds: foundClassIds,
+      deletedCount: foundClassIds.length,
+      deletedEvaluations: targetEvaluationIds.length,
+      deletedInstruments: targetInstrumentIds.length,
+      message: (foundClassIds.length ? foundClassIds.length + ' actividad(es) eliminada(s) correctamente.' : 'Registros vinculados eliminados correctamente.') +
+               ' (' + targetEvaluationIds.length + ' evaluaciones y ' + targetInstrumentIds.length + ' resultados de instrumento removidos).'
+    };
+
+    if (requestKey) {
+      rememberOperationV2_(requestKey, 'deleteClassRecords', targetIds.slice().sort().join(','), result);
+    }
+    return result;
+  });
+}
+
+/**
+ * Consulta el estado de persistencia de actividades para resolver estados inciertos.
+ * No califica falsamente como PARTIALLY_DELETED actividades nuevas sin calificar:
+ * solo determina PARTIALLY_DELETED si existe evidencia fehaciente en SolicitudesOperacion
+ * de una operación incompleta sobre esa clase.
+ */
+function getDeletionStatus_(classIds) {
+  ensureInstalled_();
+  var ids = Array.isArray(classIds) ? classIds.map(String).filter(Boolean) : [String(classIds || '').trim()];
+  var targetSet = new Set(ids);
+
+  var classes = readRows_('Clases').filter(function (c) { return targetSet.has(String(c.id)); });
+  var evals = readRows_('Evaluaciones').filter(function (e) { return targetSet.has(String(e.claseId)); });
+  
+  var ss = getSpreadsheet_();
+  var sheetInst = ss ? ss.getSheetByName('ResultadosInstrumento') : null;
+  var insts = (sheetInst !== null && sheetInst !== undefined)
+    ? readRows_('ResultadosInstrumento').filter(function (r) { return targetSet.has(String(r.claseId)); })
+    : [];
+
+  // Buscar evidencia de operaciones incompletas previas en SolicitudesOperacion
+  var opRecords = [];
+  try {
+    opRecords = readRows_('SolicitudesOperacion').filter(function (op) {
+      return String(op.accion) === 'deleteClassRecords';
+    });
+  } catch (opErr) { /* tabla opcional o error de lectura */ }
+
+  var statusByClass = {};
+  ids.forEach(function (id) {
+    var hasClass = classes.some(function (c) { return String(c.id) === id; });
+    var hasEvals = evals.some(function (e) { return String(e.claseId) === id; });
+    var hasInsts = insts.some(function (r) { return String(r.claseId) === id; });
+
+    // Comprobar si existe evidencia fehaciente de una operación incompleta para este ID
+    var hasIncompleteOp = opRecords.some(function (op) {
+      var matchesId = String(op.entidadId || '').split(',').map(function (s) { return s.trim(); }).indexOf(id) >= 0;
+      var isIncomplete = String(op.estado).toLowerCase() === 'incompleta';
+      return matchesId && isIncomplete;
+    });
+
+    var state = 'UNKNOWN';
+    if (!hasClass && !hasEvals && !hasInsts) {
+      state = 'DELETED';
+    } else if (hasClass && hasEvals) {
+      state = 'ACTIVE';
+    } else if (hasClass && !hasEvals) {
+      // Si la clase existe y no tiene evaluaciones:
+      // Solo es PARTIALLY_DELETED si existe evidencia de una operación incompleta.
+      // Si es una actividad nueva o sin calificar, es ACTIVE (sin evaluaciones).
+      state = hasIncompleteOp ? 'PARTIALLY_DELETED' : 'ACTIVE';
+    } else if (!hasClass && (hasEvals || hasInsts)) {
+      state = 'ORPHANED_DATA';
+    }
+    
+    statusByClass[id] = {
+      state: state,
+      hasClass: hasClass,
+      hasEvals: hasEvals,
+      hasInsts: hasInsts,
+      hasIncompleteOp: hasIncompleteOp
+    };
+  });
+
+  return {
+    ok: true,
+    statusByClass: statusByClass
+  };
+}
+
+
+function parseOfficialRosterNumber_(val) {
+  if (val === null || val === undefined) return null;
+  var s = String(val).trim();
+  if (s === '' || !/^\d+$/.test(s)) return null;
+  var n = parseInt(s, 10);
+  return n > 0 ? n : null;
+}
+
+function validateOfficialRosterNumber_(numeroListaVal, studentId, studentRows) {
+  if (numeroListaVal === null || numeroListaVal === undefined || String(numeroListaVal).trim() === '') {
+    return null;
+  }
+  var rawStr = String(numeroListaVal).trim();
+  if (!/^\d+$/.test(rawStr)) {
+    throw new Error('El número oficial de lista debe ser un número entero positivo.');
+  }
+  var num = parseInt(rawStr, 10);
+  if (num <= 0) {
+    throw new Error('El número oficial de lista debe ser mayor que cero.');
+  }
+  var duplicate = (studentRows || []).find(function (row) {
+    if (studentId && String(row.id) === String(studentId)) return false;
+    if (row.activo === false || String(row.activo).toLowerCase() === 'false') return false;
+    var existingNum = parseOfficialRosterNumber_(row.numeroLista);
+    return existingNum !== null && existingNum === num;
+  });
+  if (duplicate) {
+    throw new Error('El número oficial de lista ' + num + ' ya está asignado al alumno ' + fullName_(duplicate) + '.');
+  }
+  return num;
+}
+
+// ============================================================================
+// SECCIÓN 7: MÓDULO EVALUACIONES TRIMESTRALES (ETAPA 7A) — ENLACE DE API
+// ============================================================================
+
+/**
+ * Enlace oficial de API para recuperar el paquete de evaluación trimestral consolidado.
+ * Delega en la implementación especializada de EvaluacionesTrimestrales.gs.
+ * 
+ * @param {Object} payload Parámetros de consulta (cicloEscolar, grupo, trimestre).
+ * @param {string} [sessionToken] Token de autenticación del usuario.
+ * @return {Object} Paquete con { config, actividades, calificaciones, desempeno, mensajes, version }.
+ */
+function getTrimesterEvaluationBundle_(payload, sessionToken) {
+  if (typeof getTrimesterEvaluationBundle === 'function') {
+    return getTrimesterEvaluationBundle(payload, sessionToken);
+  }
+  throw new Error('Módulo EvaluacionesTrimestrales.gs no encontrado o no inicializado.');
+}
+
+/**
+ * Enlace oficial de API para sincronizar por lotes la evaluación trimestral.
+ * Delega en la implementación especializada de EvaluacionesTrimestrales.gs.
+ * 
+ * @param {Object} payload Datos del lote a sincronizar con batchId y hash.
+ * @param {string} [sessionToken] Token de autenticación del usuario.
+ * @return {Object} Resultado de la sincronización con estado de consolidación.
+ */
+function syncTrimesterEvaluationBatch_(payload, sessionToken) {
+  if (typeof syncTrimesterEvaluationBatch === 'function') {
+    return syncTrimesterEvaluationBatch(payload, sessionToken);
+  }
+  throw new Error('Módulo EvaluacionesTrimestrales.gs no encontrado o no inicializado.');
+}

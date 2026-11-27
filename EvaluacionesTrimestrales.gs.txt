@@ -1,0 +1,672 @@
+/**
+ * ============================================================================
+ * ARCHIVO: EvaluacionesTrimestrales.gs
+ * PROPÓSITO: Módulo autónomo de Evaluaciones Trimestrales para Google Apps Script
+ * FECHA DE CREACIÓN: 27/11/2026
+ * AUTOR: Asistente Técnico (Carpeta Académica 4.º A)
+ * ============================================================================
+ * DESCRIPCIÓN DE SECCIONES:
+ * 1. Constantes y catálogos canónicos aprobados:
+ *    - 23 indicadores de desempeño integral (distribución 4 + 9 + 8 + 2).
+ *    - Escala oficial E (Excelente), B (Bueno), R (Regular), A (Requiere Apoyo).
+ *    - Campos formativos oficiales de la NEM.
+ * 2. Validación de seguridad y reglas de negocio:
+ *    - validateTeacherAuth_: Validación de sesión con RECHAZO POR DEFECTO (Zero-Trust).
+ *    - validateGradeValue_: Validación estricta de calificaciones (0.00 a 10.00).
+ *    - validateFamilyMessage_: Longitud máxima de 245 caracteres para mensajes.
+ * 3. Servicios centrales de persistencia (Two-Phase Staged Persistence):
+ *    - getTrimesterEvaluationBundle: Consulta de datos consolidados.
+ *    - syncTrimesterEvaluationBatch: Sincronización atómica por lotes con DocumentLock.
+ * 4. Funciones de instalación controlada (Paso a paso):
+ *    - verificarInstalacionEvaluacionesTrimestrales: Modo seco (0 escrituras).
+ *    - aplicarInstalacionEvaluacionesTrimestrales: Creación controlada de hojas faltantes.
+ * 5. Procedimiento de reversión inmutable (Rollback sin pérdida de datos).
+ *
+ * FUNCIONES QUE CONTIENE:
+ * validateTeacherAuth_, validateGradeValue_, validateFamilyMessage_,
+ * computeBundleIntegrityHash_, getTrimesterEvaluationBundle, syncTrimesterEvaluationBatch,
+ * migrateEvaluacionesTrimestralesSchema_, verificarInstalacionEvaluacionesTrimestrales,
+ * aplicarInstalacionEvaluacionesTrimestrales.
+ *
+ * DEPENDENCIAS:
+ * Database.gs (DB, readRows_, upsertObjectsBatch_, appendObjects_, withDocumentLockV2_).
+ *
+ * CAMBIOS Y MOTIVOS (27/11/2026):
+ * - Creación inicial del módulo para desacoplar totalmente las evaluaciones trimestrales
+ *   de las operaciones diarias, garantizando que ninguna falla en este módulo
+ *   afecte pase de lista, proyectos ni directorio familiar.
+ * - Implementación de Two-Phase Staged Persistence: escrituras preparatorias con batchId
+ *   propio que no sobrescriben registros consolidados previos y consolidación atómica
+ *   en EvalVersiones.
+ * ============================================================================
+ */
+
+// ============================================================================
+// SECCIÓN 1: CATÁLOGOS CANÓNICOS Y CONSTANTES OFICIALES
+// ============================================================================
+
+var EVAL_INDICADORES_VALIDOS = {
+  // Desempeño académico (4 indicadores)
+  acad_lectura: 'Lectura y comprensión',
+  acad_escritura: 'Escritura y ortografía',
+  acad_matematicas: 'Habilidades matemáticas',
+  acad_contenidos: 'Comprensión de contenidos',
+  // Hábitos y responsabilidad escolar (9 indicadores)
+  hab_tareas: 'Cumplimiento de tareas',
+  hab_actividades: 'Finalización de actividades',
+  hab_completos: 'Entrega de trabajos completos',
+  hab_materiales: 'Materiales escolares completos',
+  hab_limpieza: 'Limpieza y presentación de trabajos',
+  hab_indicaciones: 'Seguimiento de indicaciones',
+  hab_autonomia: 'Organización y autonomía',
+  hab_concentracion: 'Atención y concentración',
+  hab_participacion: 'Participación activa',
+  // Convivencia y conducta (8 indicadores)
+  cond_companeros: 'Respeto a sus compañeros',
+  cond_docente: 'Respeto al docente',
+  cond_acuerdos: 'Cumplimiento de acuerdos',
+  cond_autorregulacion: 'Autorregulación emocional y conductual',
+  cond_conflictos: 'Resolución pacífica de conflictos',
+  cond_colaborativo: 'Trabajo colaborativo',
+  cond_actitud: 'Actitud y disposición para aprender',
+  cond_mobiliario: 'Cuidado del mobiliario escolar',
+  // Asistencia y puntualidad (2 indicadores)
+  asis_regular: 'Asistencia regular',
+  asis_puntualidad: 'Puntualidad'
+};
+
+var EVAL_NIVELES_VALIDOS = { E: true, B: true, R: true, A: true };
+
+var EVAL_CAMPOS_FORMATIVOS = {
+  'Lenguajes': true,
+  'Saberes y Pensamiento Científico': true,
+  'Ética, Naturaleza y Sociedades': true,
+  'De lo Humano y lo Comunitario': true
+};
+
+// ============================================================================
+// SECCIÓN 2: VALIDACIÓN DE SEGURIDAD Y REGLAS DE NEGOCIO
+// ============================================================================
+
+/**
+ * Valida la identidad y credenciales docentes antes de procesar operaciones de evaluación.
+ * 
+ * POLÍTICA ZERO-TRUST CON RECHAZO POR DEFECTO (SECURITY_REJECT_DEFAULT):
+ * Si no se encuentra vinculada una función de validación de sesión docente auténtica
+ * en el entorno de Google Apps Script, TODAS las solicitudes son RECHAZADAS.
+ */
+function validateTeacherAuth_(sessionToken, targetGroup) {
+  var authFn = null;
+  if (typeof isTeacherSessionValid_ === 'function') {
+    authFn = isTeacherSessionValid_;
+  } else if (typeof checkTeacherSession_ === 'function') {
+    authFn = checkTeacherSession_;
+  } else if (typeof validateSession_ === 'function') {
+    authFn = validateSession_;
+  } else if (typeof requireTeacherAuth_ === 'function') {
+    authFn = requireTeacherAuth_;
+  }
+
+  // RECHAZO POR DEFECTO estricto si no existe validador de sesión docente
+  if (!authFn) {
+    throw new Error('SECURITY_REJECT_DEFAULT: Mecanismo de autenticación docente no vinculado en el backend. Proporcione la función de validación de sesión docente.');
+  }
+
+  var authResult = authFn(sessionToken, targetGroup);
+  if (!authResult) {
+    throw new Error('AUTH_ERROR: Sesión docente inválida, expirada o no autorizada para el grupo ' + (targetGroup || '') + '.');
+  }
+
+  return authResult;
+}
+
+/**
+ * Valida que una calificación numérica sea válida entre 0.00 y 10.00.
+ */
+function validateGradeValue_(val) {
+  if (val === null || val === undefined || val === '') return null;
+  var num = Number(val);
+  if (isNaN(num)) throw new Error('Calificación numérica inválida: ' + val);
+  if (num < 0 || num > 10) throw new Error('Calificación fuera del rango escolar (0.00 - 10.00): ' + val);
+  return Number(num.toFixed(2));
+}
+
+/**
+ * Valida el mensaje dirigido a familias (longitud máxima de 245 caracteres).
+ */
+function validateFamilyMessage_(msg) {
+  if (msg === null || msg === undefined) return '';
+  var clean = String(msg).trim();
+  if (clean.length > 245) {
+    throw new Error('El mensaje a la familia excede el límite máximo de 245 caracteres (longitud: ' + clean.length + ').');
+  }
+  return clean;
+}
+
+/**
+ * Calcula un hash de verificación para el contenido del paquete.
+ */
+function computeBundleIntegrityHash_(payload) {
+  var raw = (payload.cicloEscolar || '') + '|' + (payload.grupo || '') + '|' + (payload.trimestre || '') + '|' +
+            JSON.stringify(payload.calificaciones || []) + '|' +
+            JSON.stringify(payload.desempeno || []) + '|' +
+            JSON.stringify(payload.mensajes || []);
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw, Utilities.Charset.UTF_8);
+  return bytes.map(function (b) { var hex = (b < 0 ? b + 256 : b).toString(16); return hex.length === 1 ? '0' + hex : hex; }).join('');
+}
+
+// ============================================================================
+// SECCIÓN 3: SERVICIOS CENTRALES DE PERSISTENCIA (TWO-PHASE STAGED)
+// ============================================================================
+
+/**
+ * Recupera el paquete de evaluación consolidado para un ciclo, grupo y trimestre.
+ * Lee EXCLUSIVAMENTE los registros correspondientes al último batch consolidado en EvalVersiones.
+ */
+function getTrimesterEvaluationBundle(payload, sessionToken) {
+  var p = payload || {};
+  var ciclo = p.cicloEscolar || '2026-2027';
+  var grupo = p.grupo || '4A';
+  var t = parseInt(p.trimestre || 1, 10);
+
+  // Validación de seguridad Zero-Trust
+  validateTeacherAuth_(sessionToken, grupo);
+
+  // 1. Obtener última versión consolidada desde EvalVersiones
+  var versiones = (typeof readRows_ === 'function' ? readRows_('EvalVersiones') : []).filter(function (v) {
+    return String(v.cicloEscolar) === String(ciclo) &&
+           String(v.grupo) === String(grupo) &&
+           parseInt(v.trimestre, 10) === t &&
+           v.estadoConsolidacion === 'consolidado';
+  });
+
+  var latestVersionNum = 0;
+  var latestBatchId = null;
+  versiones.forEach(function (v) {
+    var vNum = parseInt(v.versionNueva || v.version || 0, 10);
+    if (vNum > latestVersionNum) {
+      latestVersionNum = vNum;
+      latestBatchId = v.batchId;
+    }
+  });
+
+  // 2. Cargar Configuración trimestral
+  var configRows = (typeof readRows_ === 'function' ? readRows_('EvalConfig') : []).filter(function (c) {
+    return String(c.cicloEscolar) === String(ciclo) &&
+           String(c.grupo) === String(grupo) &&
+           parseInt(c.trimestre, 10) === t;
+  });
+  var activeConfig = configRows.length > 0 ? configRows[configRows.length - 1] : null;
+
+  // 3. Cargar Actividades seleccionadas
+  var actividades = (typeof readRows_ === 'function' ? readRows_('EvalActividades') : []).filter(function (a) {
+    return String(a.cicloEscolar) === String(ciclo) &&
+           String(a.grupo) === String(grupo) &&
+           parseInt(a.trimestre, 10) === t;
+  });
+
+  // 4. Si no hay versión consolidada, retornar estructura vacía
+  if (!latestBatchId) {
+    return {
+      ok: true,
+      data: {
+        cicloEscolar: ciclo,
+        grupo: grupo,
+        trimestre: t,
+        version: 0,
+        batchId: null,
+        estadoConsolidacion: 'sin_consolidar',
+        config: activeConfig,
+        actividades: actividades,
+        calificaciones: [],
+        desempeno: [],
+        mensajes: []
+      }
+    };
+  }
+
+  // 5. Cargar registros consolidados vinculados al batchId ganador
+  var calificaciones = (typeof readRows_ === 'function' ? readRows_('EvalCalificaciones') : []).filter(function (c) {
+    return c.batchId === latestBatchId;
+  });
+
+  var desempeno = (typeof readRows_ === 'function' ? readRows_('EvalDesempeno') : []).filter(function (d) {
+    return d.batchId === latestBatchId;
+  });
+
+  var mensajes = (typeof readRows_ === 'function' ? readRows_('EvalMensajes') : []).filter(function (m) {
+    return m.batchId === latestBatchId;
+  });
+
+  return {
+    ok: true,
+    data: {
+      cicloEscolar: ciclo,
+      grupo: grupo,
+      trimestre: t,
+      version: latestVersionNum,
+      batchId: latestBatchId,
+      estadoConsolidacion: 'consolidado',
+      config: activeConfig,
+      actividades: actividades,
+      calificaciones: calificaciones,
+      desempeno: desempeno,
+      mensajes: mensajes
+    }
+  };
+}
+
+/**
+ * Sincroniza por lotes la evaluación trimestral.
+ * 
+ * GARANTÍAS DE PERSISTENCIA:
+ * 1. Control de concurrencia: Bloqueo exclusivo con LockService.getDocumentLock().
+ * 2. Idempotencia: Si el batchId ya está consolidado con el mismo contenido, devuelve éxito inmediato.
+ * 3. Detección de conflictos: Compara payload.baseVersion con la última versión consolidada en servidor.
+ * 4. No sobreescritura de versiones anteriores: Las filas preparatorias se insertan con claves
+ *    que incluyen el batchId propio, preservando 100% intactas las filas de versiones consolidadas previas.
+ * 5. Consolidación atómica en dos fases: Se inserta primero como 'en_preparacion' y se sella
+ *    como 'consolidado' en EvalVersiones tras finalizar todas las inserciones.
+ */
+function syncTrimesterEvaluationBatch(payload, sessionToken) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Payload inválido para sincronización de evaluación trimestral.');
+  }
+
+  var ciclo = payload.cicloEscolar || '2026-2027';
+  var grupo = payload.grupo || '4A';
+  var t = parseInt(payload.trimestre || 1, 10);
+  var batchId = payload.batchId;
+  var user = payload.usuario || 'docente_4a';
+
+  if (!batchId) {
+    throw new Error('Falta batchId único en el payload de sincronización.');
+  }
+
+  // Validación de seguridad Zero-Trust
+  validateTeacherAuth_(sessionToken, grupo);
+
+  var lock = LockService.getDocumentLock();
+  if (!lock) throw new Error('Se requiere libro vinculado para sincronizar evaluaciones.');
+  lock.waitLock(25000);
+
+  try {
+    var now = (typeof now_ === 'function') ? now_() : new Date().toISOString();
+    var payloadHash = payload.hash || computeBundleIntegrityHash_(payload);
+
+    // 1. Verificar si este batchId ya fue consolidado en EvalVersiones (Idempotencia)
+    var versionesExistentes = (typeof readRows_ === 'function' ? readRows_('EvalVersiones') : []).filter(function (v) {
+      return String(v.cicloEscolar) === String(ciclo) &&
+             String(v.grupo) === String(grupo) &&
+             parseInt(v.trimestre, 10) === t;
+    });
+
+    var matchingConsolidated = versionesExistentes.find(function (v) {
+      return v.batchId === batchId && v.estadoConsolidacion === 'consolidado';
+    });
+
+    if (matchingConsolidated) {
+      // Validar que corresponda al mismo contenido y ámbito autorizado
+      if (matchingConsolidated.payloadHash && matchingConsolidated.payloadHash !== payloadHash) {
+        throw new Error('CONFLICTO_REINTENTO_INCONSISTENTE: El batchId ya fue utilizado con un contenido diferente.');
+      }
+      return {
+        ok: true,
+        data: {
+          batchId: batchId,
+          version: matchingConsolidated.versionNueva || matchingConsolidated.version,
+          idempotent: true,
+          mensaje: 'Lote previamente consolidado.'
+        }
+      };
+    }
+
+    // 2. Control de concurrencia optimista (Detección de conflictos entre dispositivos)
+    var latestConsolidatedVer = 0;
+    versionesExistentes.forEach(function (v) {
+      if (v.estadoConsolidacion === 'consolidado') {
+        var vNum = parseInt(v.versionNueva || v.version || 0, 10);
+        if (vNum > latestConsolidatedVer) latestConsolidatedVer = vNum;
+      }
+    });
+
+    var clientBaseVer = parseInt(payload.baseVersion || 0, 10);
+    if (clientBaseVer < latestConsolidatedVer) {
+      throw new Error('CONFLICTO_VERSION: La versión base del cliente (' + clientBaseVer +
+                      ') es anterior a la última versión consolidada en servidor (' + latestConsolidatedVer +
+                      '). Recargue los datos antes de guardar para no sobrescribir cambios.');
+    }
+
+    var newVersionNumber = latestConsolidatedVer + 1;
+    var result = {
+      batchId: batchId,
+      version: newVersionNumber,
+      calificacionesCount: 0,
+      desempenoCount: 0,
+      mensajesCount: 0
+    };
+
+    // 3. Escritura preparatoria de Calificaciones por lotes (con batchId en clave para no sobrescribir V anteriores)
+    if (Array.isArray(payload.calificaciones) && payload.calificaciones.length > 0) {
+      var califBatch = [];
+      payload.calificaciones.forEach(function (c) {
+        if (!c.alumnoId || !c.campoFormativo) return;
+        if (!EVAL_CAMPOS_FORMATIVOS[c.campoFormativo]) {
+          throw new Error('Campo formativo no reconocido: ' + c.campoFormativo);
+        }
+        var califId = ciclo + '_' + grupo + '_T' + t + '_' + batchId + '_' + c.alumnoId + '_' + c.campoFormativo;
+        califBatch.push({
+          id: califId,
+          cicloEscolar: ciclo,
+          grupo: grupo,
+          trimestre: t,
+          alumnoId: String(c.alumnoId),
+          numeroLista: c.numeroLista ? parseInt(c.numeroLista, 10) : null,
+          campoFormativo: c.campoFormativo,
+          modalidad: c.modalidad || 'asistida',
+          desgloseAutoJson: JSON.stringify(c.desgloseAuto || {}),
+          desgloseManualJson: JSON.stringify(c.desgloseManual || {}),
+          examenGrade: validateGradeValue_(c.examenGrade),
+          configAplicadaJson: JSON.stringify(c.configAplicada || {}),
+          actividadesRefJson: JSON.stringify(c.actividadesRef || []),
+          calcGradeOriginal: validateGradeValue_(c.calcGradeOriginal),
+          calcGradePreliminar: validateGradeValue_(c.calcGradePreliminar),
+          ajusteManual: validateGradeValue_(c.ajusteManual),
+          motivoAjuste: c.motivoAjuste || '',
+          authorizedGrade: validateGradeValue_(c.authorizedGrade),
+          status: c.status || 'PENDIENTE',
+          authorizedAt: c.authorizedAt || '',
+          authorizedPor: c.authorizedPor || '',
+          batchId: batchId,
+          estadoConsolidacion: 'en_preparacion',
+          version: newVersionNumber,
+          actualizadoEn: now,
+          actualizadoPor: user
+        });
+        result.calificacionesCount++;
+      });
+
+      if (typeof upsertObjectsBatch_ === 'function') {
+        upsertObjectsBatch_('EvalCalificaciones', califBatch, 'id');
+      } else if (typeof appendObjects_ === 'function') {
+        appendObjects_('EvalCalificaciones', califBatch);
+      }
+    }
+
+    // 4. Escritura preparatoria de Desempeño Integral por lotes (23 indicadores)
+    if (Array.isArray(payload.desempeno) && payload.desempeno.length > 0) {
+      var desempBatch = [];
+      payload.desempeno.forEach(function (d) {
+        if (!d.alumnoId) return;
+        var cleanRatings = d.ratings || {};
+        for (var indKey in cleanRatings) {
+          if (!EVAL_INDICADORES_VALIDOS[indKey]) delete cleanRatings[indKey];
+          else if (!EVAL_NIVELES_VALIDOS[cleanRatings[indKey]]) delete cleanRatings[indKey];
+        }
+
+        var desempId = ciclo + '_' + grupo + '_T' + t + '_' + batchId + '_' + d.alumnoId;
+        desempBatch.push({
+          id: desempId,
+          cicloEscolar: ciclo,
+          grupo: grupo,
+          trimestre: t,
+          alumnoId: String(d.alumnoId),
+          numeroLista: d.numeroLista ? parseInt(d.numeroLista, 10) : null,
+          indicadorId: '23_INDICADORES_COMPLETOS',
+          valoracion: JSON.stringify(cleanRatings),
+          catalogoVersion: '2026_V1_23IND',
+          estadoRevision: d.isReviewed !== false ? 'revisado' : 'pendiente',
+          origen: d.source || 'manual',
+          trimestreOrigen: t,
+          batchId: batchId,
+          estadoConsolidacion: 'en_preparacion',
+          version: newVersionNumber,
+          actualizadoEn: now,
+          actualizadoPor: user
+        });
+        result.desempenoCount++;
+      });
+
+      if (typeof upsertObjectsBatch_ === 'function') {
+        upsertObjectsBatch_('EvalDesempeno', desempBatch, 'id');
+      } else if (typeof appendObjects_ === 'function') {
+        appendObjects_('EvalDesempeno', desempBatch);
+      }
+    }
+
+    // 5. Escritura preparatoria de Mensajes Familiares por lotes (máx 245 car)
+    if (Array.isArray(payload.mensajes) && payload.mensajes.length > 0) {
+      var mensajesBatch = [];
+      payload.mensajes.forEach(function (m) {
+        if (!m.alumnoId) return;
+        var cleanMsg = validateFamilyMessage_(m.mensaje);
+        var msgId = ciclo + '_' + grupo + '_T' + t + '_' + batchId + '_' + m.alumnoId;
+        mensajesBatch.push({
+          id: msgId,
+          cicloEscolar: ciclo,
+          grupo: grupo,
+          trimestre: t,
+          alumnoId: String(m.alumnoId),
+          numeroLista: m.numeroLista ? parseInt(m.numeroLista, 10) : null,
+          mensaje: cleanMsg,
+          caracteres: cleanMsg.length,
+          templateId: m.templateId || '',
+          estadoRevision: m.estadoRevision || 'pendiente',
+          batchId: batchId,
+          estadoConsolidacion: 'en_preparacion',
+          version: newVersionNumber,
+          actualizadoEn: now,
+          actualizadoPor: user
+        });
+        result.mensajesCount++;
+      });
+
+      if (typeof upsertObjectsBatch_ === 'function') {
+        upsertObjectsBatch_('EvalMensajes', mensajesBatch, 'id');
+      } else if (typeof appendObjects_ === 'function') {
+        appendObjects_('EvalMensajes', mensajesBatch);
+      }
+    }
+
+    // 6. Consolidación atómica: Sellar el lote en EvalVersiones
+    var versId = 'VER_' + ciclo + '_' + grupo + '_T' + t + '_' + batchId;
+    var versionRec = {
+      id: versId,
+      cicloEscolar: ciclo,
+      grupo: grupo,
+      trimestre: t,
+      alumnoId: 'GRUPO_COMPLETO',
+      tipoOperacion: payload.tipoEvento || 'sincronizacion_evaluacion',
+      batchId: batchId,
+      versionAnterior: latestConsolidatedVer,
+      versionNueva: newVersionNumber,
+      motivoModificacion: payload.motivo || 'Sincronización consolidada de evaluación trimestral',
+      snapshotJson: JSON.stringify({
+        calificacionesCount: result.calificacionesCount,
+        desempenoCount: result.desempenoCount,
+        mensajesCount: result.mensajesCount
+      }),
+      payloadHash: payloadHash,
+      creadoEn: now,
+      usuario: user,
+      estadoConsolidacion: 'consolidado'
+    };
+
+    if (typeof appendObjects_ === 'function') {
+      appendObjects_('EvalVersiones', [versionRec]);
+    } else if (typeof appendRow_ === 'function') {
+      appendRow_('EvalVersiones', versionRec);
+    }
+
+    return { ok: true, data: result };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ============================================================================
+// SECCIÓN 4: FUNCIONES DE INSTALACIÓN CONTROLADA (PASO A PASO)
+// ============================================================================
+
+/**
+ * Función de migración idempotente.
+ * Crea exclusivamente las 7 hojas faltantes con sus encabezados oficiales.
+ * Si alguna hoja ya existe, valida su correspondencia de columnas sin sobrescribir nada.
+ */
+function migrateEvaluacionesTrimestralesSchema_(ss) {
+  var targetSs = ss || (typeof getSpreadsheet_ === 'function' ? getSpreadsheet_() : SpreadsheetApp.getActiveSpreadsheet());
+  if (!targetSs) throw new Error('No se pudo acceder al libro de Google Sheets.');
+
+  var schema = {
+    EvalConfig: [
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'fechaInicio', 'fechaFin',
+      'estadoPeriodo', 'ponderacionesJson', 'valoresTareasJson', 'valoresConductaJson',
+      'valoresParticipacionJson', 'configAsistenciaJson', 'ajustesAdminJson', 'version',
+      'actualizadoEn', 'actualizadoPor'
+    ],
+    EvalActividades: [
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'campoFormativo', 'criterio',
+      'actividadId', 'tipoActividad', 'fechaActividad', 'nombreActividad',
+      'seleccionada', 'peso', 'exclusionesAlumnosJson', 'version', 'actualizadoEn', 'actualizadoPor'
+    ],
+    EvalCalificaciones: [
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
+      'campoFormativo', 'modalidad', 'desgloseAutoJson', 'desgloseManualJson', 'examenGrade',
+      'configAplicadaJson', 'actividadesRefJson', 'calcGradeOriginal', 'calcGradePreliminar',
+      'ajusteManual', 'motivoAjuste', 'authorizedGrade', 'status', 'authorizedAt', 'authorizedPor',
+      'batchId', 'estadoConsolidacion', 'version', 'actualizadoEn', 'actualizadoPor'
+    ],
+    EvalDesempeno: [
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
+      'indicadorId', 'valoracion', 'catalogoVersion', 'estadoRevision', 'origen',
+      'trimestreOrigen', 'batchId', 'estadoConsolidacion', 'version', 'actualizadoEn', 'actualizadoPor'
+    ],
+    EvalMensajes: [
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
+      'mensaje', 'caracteres', 'templateId', 'estadoRevision', 'batchId', 'estadoConsolidacion',
+      'version', 'actualizadoEn', 'actualizadoPor'
+    ],
+    EvalBancoRecomendaciones: [
+      'id', 'categoria', 'campoFormativo', 'nivel', 'texto', 'caracteres',
+      'estadoAprobacion', 'activo', 'creadoEn', 'actualizadoEn', 'actualizadoPor', 'version'
+    ],
+    EvalVersiones: [
+      'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'tipoOperacion',
+      'batchId', 'versionAnterior', 'versionNueva', 'motivoModificacion', 'snapshotJson',
+      'payloadHash', 'creadoEn', 'usuario', 'estadoConsolidacion'
+    ]
+  };
+
+  var created = [];
+  var verified = [];
+
+  for (var sheetName in schema) {
+    var expectedHeaders = schema[sheetName];
+    var sheet = targetSs.getSheetByName(sheetName);
+
+    if (!sheet) {
+      sheet = targetSs.insertSheet(sheetName);
+      sheet.getRange(1, 1, 1, expectedHeaders.length).setValues([expectedHeaders]);
+      sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight('bold');
+      sheet.setFrozenRows(1);
+      created.push(sheetName);
+    } else {
+      var lastCol = sheet.getLastColumn();
+      if (lastCol === 0) {
+        sheet.getRange(1, 1, 1, expectedHeaders.length).setValues([expectedHeaders]);
+        sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight('bold');
+        sheet.setFrozenRows(1);
+        created.push(sheetName + ' (encabezados inicializados)');
+      } else {
+        var currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+        for (var i = 0; i < expectedHeaders.length; i++) {
+          if (i >= currentHeaders.length || String(currentHeaders[i] || '').trim() !== expectedHeaders[i]) {
+            throw new Error('Esquema incompatible en hoja "' + sheetName + '" en columna ' + (i + 1) + 
+                            ': esperado "' + expectedHeaders[i] + '", encontrado "' + (currentHeaders[i] || '') + '".');
+          }
+        }
+        verified.push(sheetName);
+      }
+    }
+  }
+
+  return { ok: true, created: created, verified: verified };
+}
+
+/**
+ * 1. PASO PREVIO OBLIGATORIO: Inspección de solo lectura (Dry-Run: 0 escrituras).
+ * Comprueba el estado de la hoja de cálculo sin modificar ni crear nada.
+ */
+function verificarInstalacionEvaluacionesTrimestrales() {
+  var ss = typeof getSpreadsheet_ === 'function' ? getSpreadsheet_() : SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) throw new Error('No se pudo acceder al libro de cálculo.');
+
+  var targetSheets = [
+    'EvalConfig', 'EvalActividades', 'EvalCalificaciones',
+    'EvalDesempeno', 'EvalMensajes', 'EvalBancoRecomendaciones', 'EvalVersiones'
+  ];
+
+  var existentes = [];
+  var faltantes = [];
+
+  targetSheets.forEach(function (name) {
+    if (ss.getSheetByName(name)) existentes.push(name);
+    else faltantes.push(name);
+  });
+
+  var r = {
+    ok: true,
+    totalHojasRequeridas: targetSheets.length,
+    hojasExistentes: existentes,
+    hojasPorCrear: faltantes,
+    escrituras: 0,
+    listoParaCrearHojas: true
+  };
+
+  console.log(JSON.stringify(r));
+  return r;
+}
+
+/**
+ * 2. PASO DE APLICACIÓN CONTROLADA (Requiere autorización explícita).
+ * Crea exclusivamente las hojas faltantes bajo DocumentLock.
+ * No sobrescribe encabezados ni registros de hojas existentes.
+ */
+function aplicarInstalacionEvaluacionesTrimestrales() {
+  var lock = LockService.getDocumentLock();
+  if (!lock) throw new Error('Se requiere libro vinculado para la instalación.');
+  lock.waitLock(20000);
+  try {
+    var mig = migrateEvaluacionesTrimestralesSchema_();
+    SpreadsheetApp.flush();
+    var ver = verificarInstalacionEvaluacionesTrimestrales();
+    if (ver.hojasPorCrear.length > 0) {
+      throw new Error('Verificación posterior fallida: aún quedan hojas por inicializar.');
+    }
+    var r = {
+      ok: true,
+      mensaje: 'Instalación de hojas completada con éxito.',
+      hojasCreadas: mig.created,
+      hojasVerificadas: mig.verified
+    };
+    console.log(JSON.stringify(r));
+    return r;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ============================================================================
+// SECCIÓN 5: PROCEDIMIENTO DE REVERSIÓN INMUTABLE (ROLLBACK)
+// ============================================================================
+/*
+PROCEDIMIENTO DE REVERSIÓN INMEDIATA (ROLLBACK SIN PÉRDIDA DE DATOS):
+REGLA INMUTABLE: El procedimiento de reversión conserva de manera intacta cualquier información académica almacenada.
+NO SE AUTORIZA LA ELIMINACIÓN DE HOJAS CON DATOS REALES.
+
+Si se presenta alguna incompatibilidad o anomalía:
+1. Reversión en Apps Script: En 'Administrar implementaciones', volver a apuntar la URL Web App a la versión de despliegue anterior.
+2. Reversión en Api.gs: Retirar o comentar las dos ramas añadidas en el switch de Api.gs.
+3. Conservación de datos en Google Sheets: CONSERVAR DE FORMA INTACTA E INMUTABLE TODAS LAS HOJAS Y REGISTROS (EvalConfig, EvalActividades, EvalCalificaciones, EvalDesempeno, EvalMensajes, EvalBancoRecomendaciones, EvalVersiones). Prohibido eliminar o vaciar hojas con datos reales.
+Cualquier información histórica o registros capturados permanecerán seguros para auditoría, consulta o reactivación futura sin riesgo de pérdida de datos.
+*/

@@ -1,0 +1,662 @@
+/**
+ * ============================================================================
+ * ARCHIVO: Database.gs
+ * PROPÓSITO: Definición de esquemas de tablas (DB), utilidades de acceso y persistencia
+ * FECHA DE MODIFICACIÓN: 27/11/2026
+ * AUTOR DE LA MODIFICACIÓN: Asistente Técnico (Carpeta Académica 4.º A)
+ * ============================================================================
+ * DESCRIPCIÓN DE SECCIONES:
+ * 1. const DB: Diccionario central con las columnas oficiales de cada tabla.
+ * 2. setupSystem_: Función de inicialización de hojas y catálogos semilla del sistema.
+ * 3. Utilidades CRUD: readRows_, upsertObject_, upsertObjectsBatch_, appendObjects_, etc.
+ * 4. Migraciones históricas: Estructura de Alumnos y campos curriculares.
+ *
+ * FUNCIONES QUE CONTIENE:
+ * setupSystem_, seedEvaluationPeriods_, migrateLegacyStudents_, seedConfig_,
+ * seedSubjects_, seedRubrics_, ensureSheet_, readRows_, appendObjects_,
+ * upsertObject_, upsertObjectsBatch_, replaceObjects_, getConfig_, setConfig_,
+ * serializeCell_, newId_, now_, normalizeText_, getSpreadsheet_, etc.
+ *
+ * DEPENDENCIAS:
+ * Google Apps Script (SpreadsheetApp, CacheService, Utilities, LockService).
+ *
+ * CAMBIOS REALIZADOS (27/11/2026):
+ * - Se incorporaron las 7 definiciones de tablas del módulo Evaluaciones Trimestrales
+ *   dentro del diccionario global DB: EvalConfig, EvalActividades, EvalCalificaciones,
+ *   EvalDesempeno, EvalMensajes, EvalBancoRecomendaciones y EvalVersiones.
+ *
+ * MOTIVO DE CADA MODIFICACIÓN:
+ * - Permitir que las utilidades centrales (ensureSheet_, upsertObjectsBatch_, readRows_)
+ *   reconozcan las columnas oficiales de las tablas de evaluación trimestral sin alterar
+ *   ninguna de las 26 tablas preexistentes del sistema.
+ * ============================================================================
+ */
+
+
+//nombre del archivo es Database.gs
+const DB = {
+  Configuracion: ['clave', 'valor'],
+  Materias: ['id', 'nombre', 'orden', 'activo'],
+  Alumnos: ['id', 'nombreCompleto', 'apellidoPaterno', 'apellidoMaterno', 'nombres', 'fechaNacimiento', 'edad', 'tutorNombre', 'tutorParentesco', 'tutorTelefono', 'tutorUsuario', 'activo', 'creadoEn', 'actualizadoEn', 'curp', 'sexo', 'entidadNacimiento', 'estadoInscripcion', 'numeroLista'],
+  UsuariosTutor: ['id', 'alumnoId', 'usuario', 'passwordHash', 'debeCambiarPassword', 'activo', 'creadoEn'],
+  EstilosVAK: ['id', 'alumnoId', 'visual', 'auditivo', 'kinestesico', 'resultado', 'fechaEvaluacion'],
+  Proyectos: ['id', 'nombre', 'campoFormativo', 'fechaInicio', 'fechaFin', 'temporalidad', 'planPeriodo', 'metodologia', 'escenario', 'ejes', 'contenidos', 'pda', 'proposito', 'productoFinal', 'sinProductoFinal', 'estado', 'creadoEn', 'actualizadoEn'],
+    Clases: [
+    'id', 'proyectoId', 'fecha', 'horaInicio', 'horaFin',
+    'materia', 'actividad', 'material', 'creadoEn', 'instrumentoId',
+    'instrumentoTipo', 'tipoActividad', 'paginas', 'instrucciones',
+    'pdaTema'
+  ],
+  Evaluaciones: [
+    'id', 'claseId', 'alumnoId', 'trabajo', 'desempeno',
+    'conducta', 'participacion', 'observacionLibre', 'creadoEn',
+    'calificacionInstrumento', 'nivelInstrumento',
+    'areasOportunidad', 'mensajeInstrumento',
+    'fechaEntrega', 'evaluadoEn', 'estadoEntrega', 'fechaInicioPlazo',
+    'fechaLimiteJustificada', 'reabiertoMotivo',
+    'reabiertoEn', 'reabiertoFechaLimite'
+  ],
+  Rubricas: ['id', 'categoria', 'nivel', 'mensaje', 'activo', 'orden'],
+  InstrumentosEvaluacion: ['id', 'titulo', 'tipo', 'campoFormativo', 'descripcion', 'criteriosJson', 'nivelesJson', 'activo', 'version', 'origenId', 'creadoEn', 'actualizadoEn', 'area', 'contenidoId', 'contenido', 'pdaJson', 'configuracionJson', 'origenCurricular'],
+  ResultadosInstrumento: ['id', 'claseId', 'alumnoId', 'instrumentoId', 'instrumentoVersion', 'resultadosJson', 'puntosObtenidos', 'puntosPosibles', 'calificacion', 'nivel', 'areasOportunidad', 'mensajeResultado', 'creadoEn', 'actualizadoEn'],
+  Asistencia: ['id', 'alumnoId', 'fecha', 'estado', 'observacion'],
+  DirectorioFamilias: ['id', 'alumnoId', 'alumnoApellidoPaterno', 'alumnoApellidoMaterno', 'alumnoNombres', 'tutorApellidoPaterno', 'tutorApellidoMaterno', 'tutorNombres', 'tutorParentesco', 'tutorTelefono', 'tutorTelefonoAlterno', 'calle', 'numeroExterior', 'numeroInterior', 'entreCalles', 'colonia', 'region', 'codigoPostal', 'referencias', 'completo', 'creadoEn', 'actualizadoEn'],
+  DirectorioContactos: ['id', 'alumnoId', 'orden', 'apellidoPaterno', 'apellidoMaterno', 'nombres', 'parentesco', 'telefono', 'fotoUrl', 'activo', 'creadoEn', 'actualizadoEn'],
+  CuentasFamilia: ['id', 'alumnoId', 'correo', 'passwordHash', 'salt', 'activo', 'creadoEn', 'actualizadoEn', 'ultimoAcceso', 'usuario', 'debeCambiarPassword', 'telefonoRecuperacion', 'datosConfirmadosEn', 'primerAccesoEn', 'passwordTemporalExpiraEn', 'passwordTemporalVisible', 'accesoRevocadoEn', 'esCuentaTecnica'],
+  InvitacionesFamilia: ['id', 'alumnoId', 'tokenHash', 'estado', 'expiraEn', 'creadoEn', 'usadoEn'],
+  RecuperacionesFamilia: ['id', 'cuentaId', 'tokenHash', 'estado', 'expiraEn', 'creadoEn', 'usadoEn'],
+  InvitacionesGrupo: ['id', 'tokenHash', 'estado', 'expiraEn', 'creadoEn'],
+  PeriodosEvaluacion: ['id', 'trimestre', 'nombre', 'fechaInicio', 'fechaFin', 'activo', 'actualizadoEn'],
+  Ponderaciones: ['id', 'trimestre', 'campoFormativo', 'criterio', 'porcentaje', 'tipo', 'orden', 'activo', 'actualizadoEn'],
+  CalificacionesManual: ['id', 'trimestre', 'campoFormativo', 'alumnoId', 'criterio', 'calificacion', 'actualizadoEn'],
+  PeriodosInscripcion: ['id', 'nombre', 'gradoGrupo', 'cicloEscolar', 'estado', 'tokenHash', 'token', 'fechaInicio', 'fechaFin', 'creadoEn', 'actualizadoEn'],
+  CuentasInscripcion: ['id', 'correo', 'telefono', 'passwordHash', 'salt', 'activo', 'creadoEn', 'actualizadoEn', 'ultimoAcceso'],
+  Inscripciones: ['id', 'periodoId', 'cuentaId', 'alumnoId', 'curp', 'estado', 'pasoActual', 'porcentaje', 'datosJson', 'creadoEn', 'actualizadoEn', 'enviadoEn', 'aprobadoEn', 'observacionesRevision'],
+  FotosInscripcion: ['id', 'inscripcionId', 'tipo', 'archivoId', 'mimeType', 'nombreArchivo', 'pesoBytes', 'actualizadoEn'],
+  HistorialInscripcion: ['id', 'inscripcionId', 'accion', 'actor', 'detalle', 'creadoEn'],
+  ObservacionesBanco: ['id', 'categoria', 'tipo', 'texto', 'recomendacion', 'favorita', 'personalizada', 'activo', 'orden', 'creadoEn', 'actualizadoEn'],
+  ObservacionesRegistro: ['id', 'alumnoId', 'semanaInicio', 'fecha', 'categoria', 'tipo', 'observacionId', 'texto', 'evidencia', 'ocurrenciasJson', 'estadoReporte', 'autorizada', 'creadoEn', 'actualizadoEn'],
+  RecomendacionesFamilia: ['id', 'categoria', 'nivel', 'texto', 'activo', 'creadoEn', 'actualizadoEn'],
+  ReportesSemanales: ['id', 'alumnoId', 'semanaInicio', 'version', 'estado', 'datosJson', 'creadoEn', 'actualizadoEn', 'publicadoEn'],
+  SolicitudesOperacion: ['id', 'accion', 'entidadId', 'estado', 'respuestaJson', 'creadoEn', 'actualizadoEn'],
+  // --- MÓDULO: EVALUACIONES TRIMESTRALES (ETAPA 7A) ---
+  EvalConfig: [
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'fechaInicio', 'fechaFin',
+    'estadoPeriodo', 'ponderacionesJson', 'valoresTareasJson', 'valoresConductaJson',
+    'valoresParticipacionJson', 'configAsistenciaJson', 'ajustesAdminJson', 'version',
+    'actualizadoEn', 'actualizadoPor'
+  ],
+  EvalActividades: [
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'campoFormativo', 'criterio',
+    'actividadId', 'tipoActividad', 'fechaActividad', 'nombreActividad',
+    'seleccionada', 'peso', 'exclusionesAlumnosJson', 'version', 'actualizadoEn', 'actualizadoPor'
+  ],
+  EvalCalificaciones: [
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
+    'campoFormativo', 'modalidad', 'desgloseAutoJson', 'desgloseManualJson', 'examenGrade',
+    'configAplicadaJson', 'actividadesRefJson', 'calcGradeOriginal', 'calcGradePreliminar',
+    'ajusteManual', 'motivoAjuste', 'authorizedGrade', 'status', 'authorizedAt', 'authorizedPor',
+    'batchId', 'estadoConsolidacion', 'version', 'actualizadoEn', 'actualizadoPor'
+  ],
+  EvalDesempeno: [
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
+    'indicadorId', 'valoracion', 'catalogoVersion', 'estadoRevision', 'origen',
+    'trimestreOrigen', 'batchId', 'estadoConsolidacion', 'version', 'actualizadoEn', 'actualizadoPor'
+  ],
+  EvalMensajes: [
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
+    'mensaje', 'caracteres', 'templateId', 'estadoRevision', 'batchId', 'estadoConsolidacion',
+    'version', 'actualizadoEn', 'actualizadoPor'
+  ],
+  EvalBancoRecomendaciones: [
+    'id', 'categoria', 'campoFormativo', 'nivel', 'texto', 'caracteres',
+    'estadoAprobacion', 'activo', 'creadoEn', 'actualizadoEn', 'actualizadoPor', 'version'
+  ],
+  EvalVersiones: [
+    'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'tipoOperacion',
+    'batchId', 'versionAnterior', 'versionNueva', 'motivoModificacion', 'snapshotJson',
+    'payloadHash', 'creadoEn', 'usuario', 'estadoConsolidacion'
+  ]
+};
+
+function setupSystem_() {
+  const ss = getSpreadsheet_();
+  migrateLegacyStudents_(ss);
+  Object.keys(DB).forEach(name => ensureSheet_(ss, name, DB[name]));
+  seedConfig_();
+  seedSubjects_();
+  seedRubrics_();
+  seedObservationBankV2_();
+  seedEvaluationPeriods_();
+  configurar_();
+  CacheService.getScriptCache().put('CARPETA_SCHEMA_READY_V153', '1', 600);
+  CacheService.getScriptCache().put('CARPETA_DIRECTORY_READY_V153', '1', 600);
+  return { ok: true, message: 'Sistema instalado correctamente.', spreadsheetId: ss.getId() };
+}
+
+function seedEvaluationPeriods_() {
+  if (readRows_('PeriodosEvaluacion').length) return;
+  appendObjects_('PeriodosEvaluacion', [1, 2, 3].map(function (number) {
+    return { id: 'TRI-' + number, trimestre: number, nombre: 'Trimestre ' + number, fechaInicio: '', fechaFin: '', activo: true, actualizadoEn: now_() };
+  }));
+}
+
+function migrateLegacyStudents_(ss) {
+  const sheet = ss.getSheetByName('Alumnos');
+  if (!sheet || sheet.getLastRow() < 1) return;
+  const headers = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getDisplayValues()[0];
+  if (headers.indexOf('nombreCompleto') >= 0) return;
+  const legacyId = headers.indexOf('ID');
+  const legacyName = headers.indexOf('Nombre completo');
+  const legacyActive = headers.indexOf('Activo');
+  if (legacyId < 0 || legacyName < 0) return;
+
+  const backupName = 'Alumnos respaldo antes de unificar';
+  if (!ss.getSheetByName(backupName)) sheet.copyTo(ss).setName(backupName);
+  const source = sheet.getLastRow() > 1
+    ? sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues()
+    : [];
+  const now = now_();
+  const migrated = source.filter(row => row[legacyId] && row[legacyName]).map(row => ({
+    id: String(row[legacyId]),
+    nombreCompleto: String(row[legacyName]),
+    apellidoPaterno: '', apellidoMaterno: '', nombres: '', fechaNacimiento: '', edad: '',
+    tutorNombre: '', tutorParentesco: '', tutorTelefono: '', tutorUsuario: '',
+    activo: legacyActive < 0 || row[legacyActive] !== false,
+    creadoEn: now, actualizadoEn: now
+  }));
+  sheet.clear();
+  sheet.getRange(1, 1, 1, DB.Alumnos.length).setValues([DB.Alumnos]);
+  if (migrated.length) {
+    const rows = migrated.map(obj => DB.Alumnos.map(h => obj[h] === undefined ? '' : obj[h]));
+    sheet.getRange(2, 1, rows.length, DB.Alumnos.length).setValues(rows);
+  }
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, DB.Alumnos.length).setFontWeight('bold').setBackground('#0B315D').setFontColor('#FFFFFF');
+}
+
+function getSpreadsheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) throw new Error('Este proyecto debe estar vinculado a una hoja de Google Sheets.');
+  return ss;
+}
+
+function ensureSheet_(ss, name, headers) {
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) sheet = ss.insertSheet(name);
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setFontWeight('bold')
+      .setBackground('#0B315D')
+      .setFontColor('#FFFFFF');
+    sheet.autoResizeColumns(1, headers.length);
+  } else {
+    const current = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getDisplayValues()[0].map(String);
+    if (name === 'Alumnos') {
+      const expected = DB.Alumnos;
+      if (current.length !== expected.length || current.some(function (h, i) { return h !== expected[i]; })) {
+        throw new Error('La hoja Alumnos requiere revisión del esquema. Ejecuta únicamente la migración puntual autorizada antes de continuar; no se agregaron columnas automáticamente.');
+      }
+    }
+    const missing = headers.filter(function (header) { return current.indexOf(header) < 0; });
+    if (missing.length) {
+      const start = current.length + 1;
+      sheet.getRange(1, start, 1, missing.length).setValues([missing]);
+      sheet.getRange(1, start, 1, missing.length).setFontWeight('bold').setBackground('#0B315D').setFontColor('#FFFFFF');
+      sheet.autoResizeColumns(start, missing.length);
+    }
+  }
+  return sheet;
+}
+
+function seedConfig_() {
+  const rows = readRows_('Configuracion');
+  const defaults = [
+    { clave: 'escuela', valor: 'Escuela Primaria Francisco Hoil Torres T.V.' },
+    { clave: 'cct', valor: '23DPR0136V' },
+    { clave: 'docente', valor: 'Prof. Michel Otaner Polledo Nieves' },
+    { clave: 'gradoGrupo', valor: '4° A' },
+    { clave: 'turno', valor: 'Vespertino' },
+    { clave: 'cicloEscolar', valor: '2026–2027' },
+    { clave: 'jornadaInicio', valor: '13:00' },
+    { clave: 'jornadaFin', valor: '17:00' }
+  ];
+  const existing = new Set(rows.map(row => row.clave));
+  appendObjects_('Configuracion', defaults.filter(row => !existing.has(row.clave)));
+}
+
+function seedSubjects_() {
+  if (readRows_('Materias').length) return;
+  const names = [
+    'Lenguajes',
+    'Saberes y Pensamiento Matemático',
+    'Saberes y Pensamiento Científico',
+    'Ética, Naturaleza y Sociedades',
+    'De lo Humano y lo Comunitario',
+    'Ortografía',
+    'Dibujo'
+  ];
+  appendObjects_('Materias', names.map((nombre, i) => ({ id: newId_('MAT'), nombre, orden: i + 1, activo: true })));
+}
+
+function seedRubrics_() {
+  const data = [
+    ['Escritura', 'Logrado', 'Escribe con letra legible, coloca correctamente su nombre y la fecha, respeta el espacio y comunica sus ideas con claridad.'],
+    ['Escritura', 'En proceso', 'Escribe la actividad y coloca nombre y fecha, pero necesita mejorar la legibilidad, el orden o la ortografía.'],
+    ['Escritura', 'Requiere apoyo', 'Necesita acompañamiento para escribir de forma legible, colocar nombre y fecha y completar sus ideas.'],
+    ['Suma', 'Logrado', 'Resuelve sumas correctamente y presenta un procedimiento ordenado.'],
+    ['Suma', 'En proceso', 'Comprende la suma, pero necesita revisar la alineación de cifras y las llevadas.'],
+    ['Suma', 'Requiere apoyo', 'Necesita acompañamiento para identificar el valor posicional y resolver las sumas.'],
+    ['Resta', 'Logrado', 'Resuelve restas correctamente y comprueba sus resultados.'],
+    ['Resta', 'En proceso', 'Comprende la resta, pero necesita reforzar los préstamos y la alineación de cifras.'],
+    ['Resta', 'Requiere apoyo', 'Necesita apoyo para identificar el procedimiento y resolver restas paso a paso.'],
+    ['Multiplicación', 'Logrado', 'Resuelve multiplicaciones correctamente, organiza el procedimiento y utiliza las tablas con seguridad.'],
+    ['Multiplicación', 'En proceso', 'Comprende el procedimiento; necesita reforzar las tablas de multiplicar.'],
+    ['Multiplicación', 'Requiere apoyo', 'Necesita acompañamiento para elegir la operación, usar las tablas y completar el procedimiento.'],
+    ['División', 'Logrado', 'Resuelve divisiones, identifica dividendo, divisor, cociente y residuo y comprueba el resultado.'],
+    ['División', 'En proceso', 'Identifica los elementos de la división, pero requiere apoyo para completar el procedimiento.'],
+    ['División', 'Requiere apoyo', 'Necesita acompañamiento paso a paso para repartir, calcular el cociente y reconocer el residuo.'],
+    ['Fracciones', 'Logrado', 'Identifica numerador y denominador, representa la fracción y resuelve correctamente la actividad.'],
+    ['Fracciones', 'En proceso', 'Representa fracciones y necesita reforzar la identificación de equivalencias.'],
+    ['Fracciones', 'Requiere apoyo', 'Necesita apoyo para reconocer las partes del entero y relacionarlas con numerador y denominador.'],
+    ['Perímetro y área', 'Logrado', 'Selecciona la fórmula adecuada, sustituye los datos y expresa correctamente el resultado.'],
+    ['Perímetro y área', 'En proceso', 'Reconoce la figura, pero necesita reforzar la elección de la fórmula y el uso de las unidades.'],
+    ['Triángulo', 'Logrado', 'Identifica base y altura y aplica correctamente la fórmula del área del triángulo.'],
+    ['Cuadrado', 'Logrado', 'Identifica la medida del lado y calcula correctamente perímetro y área del cuadrado.'],
+    ['Conducta', 'Excelente', 'Respeta los acuerdos de convivencia, escucha y colabora con sus compañeros.'],
+    ['Conducta', 'Adecuada', 'Mantiene una conducta adecuada con recordatorios ocasionales.'],
+    ['Conducta', 'Requiere apoyo', 'Requiere acompañamiento para respetar turnos y mantenerse concentrado durante la actividad.'],
+    ['Participación', 'Alta', 'Participa tres o más veces con aportaciones relacionadas con el tema.'],
+    ['Participación', 'Media', 'Participa una o dos veces cuando se le invita.'],
+    ['Participación', 'Nula', 'No participó durante la sesión; se recomienda ofrecer apoyos y preguntas guiadas.']
+  ];
+  const rows = readRows_('Rubricas');
+  const existing = new Set(rows.map(r => String(r.categoria) + '|' + String(r.nivel)));
+  const additions = data.filter(r => !existing.has(r[0] + '|' + r[1]));
+  appendObjects_('Rubricas', additions.map((r, i) => ({ id: newId_('RUB'), categoria: r[0], nivel: r[1], mensaje: r[2], activo: true, orden: rows.length + i + 1 })));
+}
+
+function readRows_(sheetName) {
+  const sheet = getSpreadsheet_().getSheetByName(sheetName);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const values = sheet.getDataRange().getValues();
+  const headers = values.shift().map(String);
+  return values.filter(row => row.some(v => v !== '')).map(row => {
+    const obj = {};
+   headers.forEach((h, i) => obj[h] = serializeCell_(row[i], h));
+    return obj;
+  });
+}
+
+function appendObjects_(sheetName, objects) {
+  if (!objects.length) return;
+  const sheet = getSpreadsheet_().getSheetByName(sheetName);
+  const headers = DB[sheetName];
+  const rows = objects.map(obj => headers.map(h => obj[h] === undefined ? '' : obj[h]));
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, headers.length).setValues(rows);
+}
+
+function upsertObject_(sheetName, object, idField) {
+  const sheet = getSpreadsheet_().getSheetByName(sheetName);
+  const headers = DB[sheetName];
+  const idColumn = headers.indexOf(idField) + 1;
+  const ids = sheet.getLastRow() > 1
+    ? sheet.getRange(2, idColumn, sheet.getLastRow() - 1, 1).getDisplayValues().flat()
+    : [];
+  const index = ids.indexOf(String(object[idField]));
+  const row = headers.map(h => object[h] === undefined ? '' : object[h]);
+  if (index === -1) sheet.appendRow(row);
+  else sheet.getRange(index + 2, 1, 1, headers.length).setValues([row]);
+}
+
+function upsertObjectsBatch_(sheetName, objects, idField) {
+  if (!objects || !objects.length) return;
+  const sheet = getSpreadsheet_().getSheetByName(sheetName);
+  const headers = DB[sheetName];
+  if (!sheet || !headers) throw new Error('No se encontró la tabla ' + sheetName + '.');
+  const idColumn = headers.indexOf(idField) + 1;
+  const ids = sheet.getLastRow() > 1 ? sheet.getRange(2, idColumn, sheet.getLastRow() - 1, 1).getDisplayValues().flat() : [];
+  const updates = [], additions = [];
+  objects.forEach(function (object) {
+    const index = ids.indexOf(String(object[idField]));
+    const values = headers.map(function (header) { return object[header] === undefined ? '' : object[header]; });
+    if (index < 0) additions.push(values); else updates.push({ row: index + 2, values: values });
+  });
+  updates.sort(function (a, b) { return a.row - b.row; });
+  let group = [];
+  const flush = function () {
+    if (!group.length) return;
+    sheet.getRange(group[0].row, 1, group.length, headers.length).setValues(group.map(function (item) { return item.values; }));
+    group = [];
+  };
+  updates.forEach(function (item) {
+    if (group.length && item.row !== group[group.length - 1].row + 1) flush();
+    group.push(item);
+  });
+  flush();
+  if (additions.length) sheet.getRange(sheet.getLastRow() + 1, 1, additions.length, headers.length).setValues(additions);
+}
+
+function clearObjectsByIdsBatch_(sheetName, idsToClear, idField) {
+  const wanted = new Set((idsToClear || []).map(String));
+  if (!wanted.size) return;
+  const sheet = getSpreadsheet_().getSheetByName(sheetName), headers = DB[sheetName];
+  if (!sheet || sheet.getLastRow() < 2) return;
+  const idColumn = headers.indexOf(idField) + 1;
+  const ids = sheet.getRange(2, idColumn, sheet.getLastRow() - 1, 1).getDisplayValues().flat();
+  const rows = ids.map(function (id, index) { return wanted.has(String(id)) ? index + 2 : 0; }).filter(Boolean).sort(function (a, b) { return a - b; });
+  let start = 0, previous = 0;
+  rows.concat([0]).forEach(function (row) {
+    if (start && row !== previous + 1) { sheet.getRange(start, 1, previous - start + 1, headers.length).clearContent(); start = 0; }
+    if (row) { if (!start) start = row; previous = row; }
+  });
+}
+
+function replaceObjects_(sheetName, objects) {
+  const sheet = getSpreadsheet_().getSheetByName(sheetName);
+  const headers = DB[sheetName];
+  if (!sheet || !headers) throw new Error('No se encontró la tabla ' + sheetName + '.');
+  const missingRows = objects.length + 1 - sheet.getMaxRows();
+  if (missingRows > 0) sheet.insertRowsAfter(sheet.getMaxRows(), missingRows);
+  const rowsToClear = Math.max(sheet.getLastRow() - 1, objects.length);
+  if (rowsToClear > 0) sheet.getRange(2, 1, rowsToClear, headers.length).clearContent();
+  if (objects.length) {
+    sheet.getRange(2, 1, objects.length, headers.length)
+      .setValues(objects.map(obj => headers.map(h => obj[h] === undefined ? '' : obj[h])));
+  }
+}
+
+function saveConfigValue_(key, value) {
+  upsertObject_('Configuracion', { clave: String(key), valor: String(value || '') }, 'clave');
+}
+
+function getConfig_() {
+  return readRows_('Configuracion').reduce((acc, row) => {
+    acc[row.clave] = row.valor;
+    return acc;
+  }, {});
+}
+
+function serializeCell_(value, header) {
+  if (value instanceof Date) {
+    if (header === 'horaInicio' || header === 'horaFin') {
+      return Utilities.formatDate(
+        value, Session.getScriptTimeZone(), 'HH:mm'
+      );
+    }
+    return Utilities.formatDate(
+      value, Session.getScriptTimeZone(), 'yyyy-MM-dd'
+    );
+  }
+  return value;
+}
+
+function newId_(prefix) {
+  return prefix + '-' + Utilities.getUuid().split('-')[0].toUpperCase();
+}
+
+function now_() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+}
+
+function normalizeText_(value) {
+  return String(value || '').trim();
+}
+
+
+
+// ----------------------------------------------------------------------------
+// PARTE 2: FUNCIÓN DE MIGRACIÓN PROTEGIDA DE ENCABEZADOS
+// Instrucción: Pegar la siguiente función al final de Database.gs.
+// Realiza validación pre-vuelo atómica de ambas hojas antes de escribir.
+// ----------------------------------------------------------------------------
+
+/**
+ * Migra los encabezados de las hojas Clases y Evaluaciones en Google Sheets.
+ * Inspecciona y valida ambas hojas antes de realizar cualquier modificación.
+ * Rechaza sin escrituras ante columnas duplicadas, desordenadas o incompatibles.
+ * Es idempotente: una segunda ejecución sobre el esquema correcto no produce cambios.
+ */
+function migrateDailyDatabaseSchema_(customSpreadsheet) {
+  var ss = customSpreadsheet || (typeof getSpreadsheet_ === 'function' ? getSpreadsheet_() : (typeof obtenerLibro_ === 'function' ? obtenerLibro_() : SpreadsheetApp.getActiveSpreadsheet()));
+  if (!ss) throw new Error('No se pudo acceder a la hoja de cálculo de Google Sheets.');
+
+  var targetClases = DB.Clases;
+  var targetEvaluaciones = DB.Evaluaciones;
+
+  if (!targetClases || !targetEvaluaciones) {
+    throw new Error('DatabaseSchemaError: Definiciones DB.Clases o DB.Evaluaciones no encontradas en el objeto DB.');
+  }
+
+  var sheetClases = ss.getSheetByName('Clases');
+  var sheetEvaluaciones = ss.getSheetByName('Evaluaciones');
+
+  if (!sheetClases) throw new Error('MigracionError: No se encontró la hoja "Clases" en el libro.');
+  if (!sheetEvaluaciones) throw new Error('MigracionError: No se encontró la hoja "Evaluaciones" en el libro.');
+
+  function inspectSheet(sheet, sheetName, targetHeaders, minExpectedCols) {
+    var lastCol = sheet.getLastColumn();
+    var lastRow = sheet.getLastRow();
+    if (lastCol === 0 || lastRow === 0) {
+      throw new Error('MigracionError: La hoja "' + sheetName + '" está vacía. Debe inicializarse primero con ensureInstalled_.');
+    }
+
+    var currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h || '').trim(); });
+
+    // 1. Verificar duplicados y vacíos
+    var seen = {};
+    for (var i = 0; i < currentHeaders.length; i++) {
+      var h = currentHeaders[i];
+      if (!h) {
+        throw new Error('MigracionError: La hoja "' + sheetName + '" contiene un encabezado vacío en la columna ' + (i + 1) + '.');
+      }
+      if (seen[h]) {
+        throw new Error('MigracionError: La hoja "' + sheetName + '" contiene la columna duplicada "' + h + '" (columnas ' + seen[h] + ' y ' + (i + 1) + ').');
+      }
+      seen[h] = i + 1;
+    }
+
+    // 2. Verificar longitud mínima (estructura original) y máxima (estructura meta)
+    if (currentHeaders.length < minExpectedCols) {
+      throw new Error('MigracionError: La hoja "' + sheetName + '" tiene solo ' + currentHeaders.length + ' columnas; se esperaban al menos ' + minExpectedCols + ' columnas de la estructura base.');
+    }
+    if (currentHeaders.length > targetHeaders.length) {
+      throw new Error('MigracionError: La hoja "' + sheetName + '" tiene ' + currentHeaders.length + ' columnas, superando las ' + targetHeaders.length + ' definidas en el esquema.');
+    }
+
+    // 3. Verificar orden estricto de columnas existentes
+    for (var j = 0; j < currentHeaders.length; j++) {
+      if (currentHeaders[j] !== targetHeaders[j]) {
+        throw new Error('MigracionError: Discrepancia en la hoja "' + sheetName + '" en la columna ' + (j + 1) + ': se encontró "' + currentHeaders[j] + '", pero se esperaba "' + targetHeaders[j] + '". Orden incompatible.');
+      }
+    }
+
+    var missingHeaders = targetHeaders.slice(currentHeaders.length);
+    return {
+      sheet: sheet,
+      sheetName: sheetName,
+      currentCount: currentHeaders.length,
+      targetCount: targetHeaders.length,
+      missingHeaders: missingHeaders
+    };
+  }
+
+  // FASE 1: Inspección y validación pre-vuelo de AMBAS hojas (Sin escrituras)
+  var planClases = inspectSheet(sheetClases, 'Clases', targetClases, 14);
+  var planEvaluaciones = inspectSheet(sheetEvaluaciones, 'Evaluaciones', targetEvaluaciones, 13);
+
+  // FASE 2: Aplicación atómica de encabezados faltantes al final
+  var changesApplied = [];
+
+  function applyMissing(plan) {
+    if (plan.missingHeaders.length === 0) return;
+    var startCol = plan.currentCount + 1;
+    var count = plan.missingHeaders.length;
+    var rowValues = [plan.missingHeaders];
+    var range = plan.sheet.getRange(1, startCol, 1, count);
+    range.setValues(rowValues);
+    range.setFontWeight('bold');
+    try {
+      range.setBackground('#0B315D');
+      range.setFontColor('#FFFFFF');
+    } catch (e) {}
+    changesApplied.push(plan.sheetName + ': se añadieron ' + count + ' columnas al final (' + plan.missingHeaders.join(', ') + ').');
+  }
+
+  applyMissing(planClases);
+  applyMissing(planEvaluaciones);
+
+  if (changesApplied.length === 0) {
+    return {
+      ok: true,
+      modified: false,
+      message: 'Esquema verificado. Ambas hojas ya se encuentran en la estructura correcta; no se requirieron cambios.'
+    };
+  }
+
+  return {
+    ok: true,
+    modified: true,
+    message: 'Migración completada con éxito:\n- ' + changesApplied.join('\n- ')
+  };
+}
+
+function ejecutarMigracionDiario() {
+  console.log(JSON.stringify(migrateDailyDatabaseSchema_()));
+}
+
+
+var AUTHENTIC_ORIGINAL_ALUMNOS_COLUMNS = [
+  'id', 'nombreCompleto', 'apellidoPaterno', 'apellidoMaterno', 'nombres',
+  'fechaNacimiento', 'edad', 'tutorNombre', 'tutorParentesco', 'tutorTelefono',
+  'tutorUsuario', 'activo', 'creadoEn', 'actualizadoEn', 'curp', 'sexo',
+  'entidadNacimiento', 'estadoInscripcion'
+];
+
+var AUTHENTIC_MIGRATED_ALUMNOS_COLUMNS = [
+  'id', 'nombreCompleto', 'apellidoPaterno', 'apellidoMaterno', 'nombres',
+  'fechaNacimiento', 'edad', 'tutorNombre', 'tutorParentesco', 'tutorTelefono',
+  'tutorUsuario', 'activo', 'creadoEn', 'actualizadoEn', 'curp', 'sexo',
+  'entidadNacimiento', 'estadoInscripcion', 'numeroLista'
+];
+
+/**
+ * Migración puntual, segura e idempotente para el esquema de la hoja Alumnos.
+ * 
+ * Garantías de integridad y seguridad:
+ * 1. Comprueba los encabezados completos y su orden exacto contra el esquema auténtico.
+ * 2. Con las 18 columnas originales exactas: permite añadir 'numeroLista' ÚNICAMENTE como columna 19.
+ * 3. Con las 19 columnas correctas: devuelve que ya está actualizado (migrated: false), sin escribir.
+ * 4. Con columnas reordenadas, duplicadas, vacías, adicionales o numeroLista en una posición
+ *    incorrecta (ej. columna 3): RECHAZA la migración con diagnóstico claro y CERO escrituras.
+ * 5. No inicializa ni reconstruye una hoja vacía o incompatible.
+ * 6. No sobrescribe datos ni elimina columnas para hacer coincidir el esquema.
+ * 
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [ss] Hoja de cálculo opcional para pruebas/inyección.
+ * @return {Object} Resultado con { ok: boolean, migrated?: boolean, message?: string, error?: string }
+ */
+function migrateAlumnosRosterSchema_(ss) {
+  var targetSs = ss || getSpreadsheet_();
+  var sheet = targetSs.getSheetByName('Alumnos');
+  if (!sheet) {
+    return { ok: false, error: 'Hoja "Alumnos" no encontrada en la hoja de cálculo.' };
+  }
+
+  var lastCol = sheet.getLastColumn();
+  if (lastCol === 0) {
+    return {
+      ok: false,
+      error: 'La hoja "Alumnos" está vacía o carece de columnas. Esta migración no inicializa ni reconstruye estructuras vacías; requiere la tabla existente.'
+    };
+  }
+
+  var rawHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var headers = rawHeaders.map(function (h) {
+    return String(h || '').trim();
+  });
+
+  // 1. Validar encabezados vacíos
+  for (var i = 0; i < headers.length; i++) {
+    if (!headers[i]) {
+      return {
+        ok: false,
+        error: 'Esquema incompatible: se detectó un encabezado vacío en la columna ' + (i + 1) + '. Operación cancelada sin escrituras.'
+      };
+    }
+  }
+
+  // 2. Validar encabezados duplicados
+  var seenHeaders = {};
+  for (var d = 0; d < headers.length; d++) {
+    var hName = headers[d];
+    if (seenHeaders[hName]) {
+      return {
+        ok: false,
+        error: 'Esquema incompatible: encabezado duplicado "' + hName + '" en la columna ' + (d + 1) + '. Operación cancelada sin escrituras.'
+      };
+    }
+    seenHeaders[hName] = true;
+  }
+
+  // 3. Evaluar presencia de 'numeroLista' en posición indebida
+  var idxNumeroLista = headers.indexOf('numeroLista');
+  if (idxNumeroLista !== -1 && idxNumeroLista !== 18) {
+    return {
+      ok: false,
+      error: 'Esquema incompatible: la columna "numeroLista" se encuentra en la posición ' + (idxNumeroLista + 1) + ', pero el estándar oficial requiere que sea estrictamente la columna 19. Operación cancelada sin escrituras.'
+    };
+  }
+
+  // Caso A: Ya cuenta con exactamente 19 columnas
+  if (headers.length === 19) {
+    var mismatch19 = [];
+    for (var k = 0; k < 19; k++) {
+      if (headers[k] !== AUTHENTIC_MIGRATED_ALUMNOS_COLUMNS[k]) {
+        mismatch19.push('columna ' + (k + 1) + ': esperada "' + AUTHENTIC_MIGRATED_ALUMNOS_COLUMNS[k] + '", encontrada "' + headers[k] + '"');
+      }
+    }
+    if (mismatch19.length > 0) {
+      return {
+        ok: false,
+        error: 'Esquema incompatible (19 columnas): discrepancias detectadas -> ' + mismatch19.join('; ') + '. Operación cancelada sin escrituras.'
+      };
+    }
+    return {
+      ok: true,
+      migrated: false,
+      message: 'La hoja "Alumnos" ya cuenta con el esquema actualizado de 19 columnas oficiales en el orden exacto. No se realizaron escrituras.'
+    };
+  }
+
+  // Caso B: Cuenta con exactamente 18 columnas originales
+  if (headers.length === 18) {
+    var mismatch18 = [];
+    for (var j = 0; j < 18; j++) {
+      if (headers[j] !== AUTHENTIC_ORIGINAL_ALUMNOS_COLUMNS[j]) {
+        mismatch18.push('columna ' + (j + 1) + ': esperada "' + AUTHENTIC_ORIGINAL_ALUMNOS_COLUMNS[j] + '", encontrada "' + headers[j] + '"');
+      }
+    }
+    if (mismatch18.length > 0) {
+      return {
+        ok: false,
+        error: 'Esquema incompatible (18 columnas): discrepancias detectadas -> ' + mismatch18.join('; ') + '. Operación cancelada sin escrituras.'
+      };
+    }
+
+    // Único caso autorizado para escribir: agregar 'numeroLista' en celda (1, 19)
+    sheet.getRange(1, 19).setValue('numeroLista');
+    return {
+      ok: true,
+      migrated: true,
+      message: 'Columna "numeroLista" agregada exitosamente como columna 19 al final de la hoja "Alumnos".'
+    };
+  }
+
+  // Caso C: Cualquier otra cantidad de columnas (menos de 18 o más de 19)
+  return {
+    ok: false,
+    error: 'Esquema incompatible: la hoja tiene ' + headers.length + ' columnas. Se requieren exactamente 18 columnas originales para migrar a 19, o 19 para considerarse actualizada. Operación cancelada sin escrituras.'
+  };
+}
