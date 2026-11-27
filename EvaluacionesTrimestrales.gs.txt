@@ -58,6 +58,21 @@
  *     * Respeto a límites de Google Sheets: 'snapshotJson' almacena resúmenes compactos (<500 car).
  *     * Blindaje de instalación: Se aisló de 'setupSystem_' y 'ensureInstalled_'. La función de
  *       verificación es estrictamente de solo lectura (0 escrituras).
+ *   - 27/11/2026 (Modificación funcional y de seguridad - Etapa 7A.3 corrección puntual):
+ *     * Fusión de valoraciones anteriores y nuevas del mismo alumno en guardados parciales sin perder indicadores.
+ *     * Validación estricta de revisión: estado 'revisado' únicamente con confirmación expresa y los 23 indicadores completos.
+ *     * Rechazo estricto de indicadores y valoraciones inválidos en lugar de eliminarlos silenciosamente.
+ *     * Generación de authorizedPor y authorizedAt desde el servidor, conservando autoría original en registros inalterados.
+ *     * Validación estricta de alumnoId contra el padrón escolar autorizado (tabla Alumnos).
+ *     * Normalización canónica de grupo y validación estricta de trimestre exclusivamente en [1, 2, 3].
+ *   - 27/11/2026 (Ajuste final del instalador y validación estricta - Etapa 7A.3):
+ *     * Sustitución de parseInt por validación estricta en evalValidateTrimester_ (rechazo de decimales, cadenas malformadas y booleanos).
+ *     * Rechazo por defecto en evalValidateStudentId_ cuando el padrón escolar esté vacío, no disponible o el alumno no pertenezca a él.
+ *     * Exigencia estricta de DB_EVALUACIONES en el instalador (sin aceptar DB como sustituto).
+ *     * Coincidencia exacta de cantidad, nombre y orden de encabezados para hojas existentes.
+ *     * Comprobación preventiva obligatoria de todas las condiciones antes de crear hojas.
+ *     * Supresión de adquisición duplicada de ScriptLock en verificarInstalacionEvaluacionesTrimestrales mediante skipLockCheck.
+ *     * Bloqueo garantizado de retorno exitoso si existen incompatibilidades en la instalación.
  * ============================================================================
  */
 
@@ -195,11 +210,18 @@ function evalNormalizeGroup_(g) {
  *   @throws {Error} Si el trimestre no es 1, 2 o 3.
  */
 function evalValidateTrimester_(trimestre) {
-  var t = parseInt(trimestre, 10);
-  if (![1, 2, 3].includes(t)) {
-    throw new Error('TRIMESTRE_INVALIDO: El trimestre debe ser exclusivamente 1, 2 o 3 (recibido: ' + trimestre + ').');
+  if (trimestre === null || trimestre === undefined || typeof trimestre === 'boolean') {
+    throw new Error('TRIMESTRE_INVALIDO: El trimestre no puede ser nulo, indefinido ni booleano.');
   }
-  return t;
+  var str = String(trimestre).trim();
+  if (!/^[1-3]$/.test(str)) {
+    throw new Error('TRIMESTRE_INVALIDO: El trimestre debe ser estrictamente un entero 1, 2 o 3 (recibido: ' + trimestre + ').');
+  }
+  var num = Number(str);
+  if (!Number.isInteger(num) || num < 1 || num > 3) {
+    throw new Error('TRIMESTRE_INVALIDO: El trimestre debe ser estrictamente 1, 2 o 3.');
+  }
+  return num;
 }
 
 /**
@@ -258,10 +280,11 @@ function evalValidateStudentId_(alumnoId, authorizedMap, normalizedGroup) {
   if (!idStr) {
     throw new Error('ALUMNO_INVALIDO: Falta el identificador de alumno.');
   }
-  if (authorizedMap && Object.keys(authorizedMap).length > 0) {
-    if (!authorizedMap[idStr]) {
-      throw new Error('ALUMNO_NO_AUTORIZADO: El alumno "' + idStr + '" no pertenece al padrón escolar autorizado del grupo ' + normalizedGroup + '.');
-    }
+  if (!authorizedMap || typeof authorizedMap !== 'object' || Object.keys(authorizedMap).length === 0) {
+    throw new Error('PADRON_NO_DISPONIBLE: El padrón escolar del grupo ' + normalizedGroup + ' no está disponible o se encuentra vacío en la tabla Alumnos.');
+  }
+  if (!authorizedMap[idStr]) {
+    throw new Error('ALUMNO_NO_AUTORIZADO: El alumno "' + idStr + '" no pertenece al padrón escolar autorizado del grupo ' + normalizedGroup + '.');
   }
 }
 
@@ -1115,45 +1138,11 @@ function migrateEvaluacionesTrimestralesSchema_(ss) {
   var targetSs = ss || (typeof getSpreadsheet_ === 'function' ? getSpreadsheet_() : SpreadsheetApp.getActiveSpreadsheet());
   if (!targetSs) throw new Error('No se pudo acceder al libro de Google Sheets.');
 
-  var schema = typeof DB_EVALUACIONES !== 'undefined' ? DB_EVALUACIONES : {
-    EvalConfig: [
-      'id', 'cicloEscolar', 'grupo', 'trimestre', 'fechaInicio', 'fechaFin',
-      'estadoPeriodo', 'ponderacionesJson', 'valoresTareasJson', 'valoresConductaJson',
-      'valoresParticipacionJson', 'configAsistenciaJson', 'ajustesAdminJson', 'batchId', 'version',
-      'actualizadoEn', 'actualizadoPor'
-    ],
-    EvalActividades: [
-      'id', 'cicloEscolar', 'grupo', 'trimestre', 'campoFormativo', 'criterio',
-      'actividadId', 'tipoActividad', 'fechaActividad', 'nombreActividad',
-      'seleccionada', 'peso', 'exclusionesAlumnosJson', 'batchId', 'version', 'actualizadoEn', 'actualizadoPor'
-    ],
-    EvalCalificaciones: [
-      'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
-      'campoFormativo', 'modalidad', 'desgloseAutoJson', 'desgloseManualJson', 'examenGrade',
-      'configAplicadaJson', 'actividadesRefJson', 'calcGradeOriginal', 'calcGradePreliminar',
-      'ajusteManual', 'motivoAjuste', 'authorizedGrade', 'status', 'authorizedAt', 'authorizedPor',
-      'batchId', 'estadoConsolidacion', 'version', 'actualizadoEn', 'actualizadoPor'
-    ],
-    EvalDesempeno: [
-      'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
-      'indicadorId', 'valoracion', 'catalogoVersion', 'estadoRevision', 'origen',
-      'trimestreOrigen', 'batchId', 'estadoConsolidacion', 'version', 'actualizadoEn', 'actualizadoPor'
-    ],
-    EvalMensajes: [
-      'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'numeroLista',
-      'mensaje', 'caracteres', 'templateId', 'estadoRevision', 'batchId', 'estadoConsolidacion',
-      'version', 'actualizadoEn', 'actualizadoPor'
-    ],
-    EvalBancoRecomendaciones: [
-      'id', 'categoria', 'campoFormativo', 'nivel', 'texto', 'caracteres',
-      'estadoAprobacion', 'activo', 'creadoEn', 'actualizadoEn', 'actualizadoPor', 'version', 'recomendacionId', 'loteVersionId'
-    ],
-    EvalVersiones: [
-      'id', 'cicloEscolar', 'grupo', 'trimestre', 'alumnoId', 'tipoOperacion',
-      'batchId', 'versionAnterior', 'versionNueva', 'motivoModificacion', 'snapshotJson',
-      'payloadHash', 'creadoEn', 'usuario', 'estadoConsolidacion'
-    ]
-  };
+  // Exigir la existencia estricta de DB_EVALUACIONES, sin aceptar DB como sustituto
+  if (typeof DB_EVALUACIONES === 'undefined' || !DB_EVALUACIONES || typeof DB_EVALUACIONES !== 'object') {
+    throw new Error('INSTALACION_ERROR: El catálogo canónico DB_EVALUACIONES no está definido. No se acepta DB ni esquemas sustitutos.');
+  }
+  var schema = DB_EVALUACIONES;
 
   var created = [];
   var verified = [];
@@ -1176,9 +1165,15 @@ function migrateEvaluacionesTrimestralesSchema_(ss) {
         sheet.setFrozenRows(1);
         created.push(sheetName + ' (encabezados inicializados)');
       } else {
+        // Exigir coincidencia exacta de cantidad de columnas
+        if (lastCol !== expectedHeaders.length) {
+          throw new Error('Esquema incompatible en hoja "' + sheetName + '": cantidad de columnas no coincide (esperado exactamente ' + 
+                          expectedHeaders.length + ', encontrado ' + lastCol + ').');
+        }
         var currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+        // Exigir coincidencia exacta de nombre y orden
         for (var i = 0; i < expectedHeaders.length; i++) {
-          if (i >= currentHeaders.length || String(currentHeaders[i] || '').trim() !== expectedHeaders[i]) {
+          if (String(currentHeaders[i] || '').trim() !== String(expectedHeaders[i]).trim()) {
             throw new Error('Esquema incompatible en hoja "' + sheetName + '" en columna ' + (i + 1) + 
                             ': esperado "' + expectedHeaders[i] + '", encontrado "' + (currentHeaders[i] || '') + '".');
           }
@@ -1207,11 +1202,21 @@ function migrateEvaluacionesTrimestralesSchema_(ss) {
  * RESULTADO:
  *   @return {Object} Reporte JSON con hojasExistentes, hojasPorCrear, escrituras: 0.
  */
-function verificarInstalacionEvaluacionesTrimestrales() {
+function verificarInstalacionEvaluacionesTrimestrales(skipLockCheck) {
   var ss = typeof getSpreadsheet_ === 'function' ? getSpreadsheet_() : SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error('No se pudo acceder al libro de cálculo.');
 
-  var schema = typeof DB_EVALUACIONES !== 'undefined' ? DB_EVALUACIONES : null;
+  // Exigir la existencia estricta de DB_EVALUACIONES, sin aceptar DB como sustituto
+  var dependenciasFaltantes = [];
+  if (typeof DB_EVALUACIONES === 'undefined' || !DB_EVALUACIONES || typeof DB_EVALUACIONES !== 'object') {
+    dependenciasFaltantes.push('DB_EVALUACIONES (catálogo oficial no definido; DB no es sustituto aceptable)');
+  }
+
+  if (typeof SpreadsheetApp === 'undefined') dependenciasFaltantes.push('SpreadsheetApp');
+  if (typeof LockService === 'undefined') dependenciasFaltantes.push('LockService');
+  if (typeof Utilities === 'undefined') dependenciasFaltantes.push('Utilities');
+
+  var schema = (typeof DB_EVALUACIONES !== 'undefined' && DB_EVALUACIONES) ? DB_EVALUACIONES : null;
   var targetSheets = schema ? Object.keys(schema) : [
     'EvalConfig', 'EvalActividades', 'EvalCalificaciones',
     'EvalDesempeno', 'EvalMensajes', 'EvalBancoRecomendaciones', 'EvalVersiones'
@@ -1226,14 +1231,14 @@ function verificarInstalacionEvaluacionesTrimestrales() {
     var sheet = ss.getSheetByName(name);
     if (sheet) {
       existentes.push(name);
-      // Validar encabezados exactos si la hoja ya existe físicamente
+      // Validar coincidencia EXACTA de cantidad, nombre y orden de encabezados
       if (schema && schema[name]) {
         var expectedHeaders = schema[name];
         var lastCol = sheet.getLastColumn();
-        if (lastCol < expectedHeaders.length) {
+        if (lastCol !== expectedHeaders.length) {
           erroresEsquema.push({
             hoja: name,
-            error: 'Columnas insuficientes: esperado ' + expectedHeaders.length + ', encontrado ' + lastCol
+            error: 'Cantidad de columnas incompatible: esperado ' + expectedHeaders.length + ', encontrado ' + lastCol
           });
           encabezadosCompatibles = false;
         } else {
@@ -1256,19 +1261,12 @@ function verificarInstalacionEvaluacionesTrimestrales() {
     }
   });
 
-  // Validar dependencias necesarias del entorno
-  var dependenciasFaltantes = [];
-  if (typeof SpreadsheetApp === 'undefined') dependenciasFaltantes.push('SpreadsheetApp');
-  if (typeof LockService === 'undefined') dependenciasFaltantes.push('LockService');
-  if (typeof Utilities === 'undefined') dependenciasFaltantes.push('Utilities');
-  if (typeof DB_EVALUACIONES === 'undefined' && typeof DB === 'undefined') dependenciasFaltantes.push('DB_EVALUACIONES');
-
   // Validar disponibilidad del validador de sesión auténtico
   var validadorDisponible = (typeof validarSesion_ === 'function');
 
-  // Comprobar si existen bloqueos pendientes
+  // Comprobar si existen bloqueos pendientes (solo si no se indicó skipLockCheck)
   var bloqueoPendiente = false;
-  if (typeof LockService !== 'undefined' && LockService.getScriptLock) {
+  if (!skipLockCheck && typeof LockService !== 'undefined' && LockService.getScriptLock) {
     var testLock = LockService.getScriptLock();
     var acquired = false;
     try {
@@ -1285,12 +1283,13 @@ function verificarInstalacionEvaluacionesTrimestrales() {
     }
   }
 
-  // NO devolver listoParaCrearHojas: true de manera incondicional
+  // Comprobar todas las condiciones antes de autorizar la creación de hojas
   var listoParaCrearHojas = (
     dependenciasFaltantes.length === 0 &&
     validadorDisponible === true &&
     bloqueoPendiente === false &&
-    encabezadosCompatibles === true
+    encabezadosCompatibles === true &&
+    erroresEsquema.length === 0
   );
 
   var r = {
@@ -1325,18 +1324,30 @@ function verificarInstalacionEvaluacionesTrimestrales() {
  *   Inicializa físicamente las tablas requeridas sin alterar ninguna hoja existente.
  */
 function aplicarInstalacionEvaluacionesTrimestrales() {
+  // 1. Comprobar todas las condiciones antes de solicitar el lock y antes de crear hojas
+  var preCheck = verificarInstalacionEvaluacionesTrimestrales(false);
+  if (!preCheck.ok || !preCheck.listoParaCrearHojas) {
+    throw new Error('INSTALACION_CANCELADA: No se cumplen las condiciones previas para crear las hojas: ' +
+                    JSON.stringify({ errores: preCheck.erroresEsquema, faltantes: preCheck.dependenciasFaltantes }));
+  }
+
+  // 2. Ejecutar la creación bajo ScriptLock sin adquirirlo nuevamente en la verificación posterior
   return evalWithScriptLock_(function () {
     var mig = migrateEvaluacionesTrimestralesSchema_();
     SpreadsheetApp.flush();
-    var ver = verificarInstalacionEvaluacionesTrimestrales();
-    if (ver.hojasPorCrear.length > 0) {
-      throw new Error('Verificación posterior fallida: aún quedan hojas por inicializar.');
+
+    // 3. Verificación posterior con skipLockCheck=true para evitar re-adquirir el ScriptLock ya poseído
+    var postVer = verificarInstalacionEvaluacionesTrimestrales(true);
+    if (!postVer.encabezadosCompatibles || postVer.hojasPorCrear.length > 0 || postVer.erroresEsquema.length > 0) {
+      throw new Error('INSTALACION_FALLIDA: Incompatibilidad detectada tras la migración de esquemas.');
     }
+
     var r = {
       ok: true,
       mensaje: 'Instalación de hojas completada con éxito.',
       hojasCreadas: mig.created,
-      hojasVerificadas: mig.verified
+      hojasVerificadas: mig.verified,
+      hojasRestantesPorCrear: postVer.hojasPorCrear.length
     };
     console.log(JSON.stringify(r));
     return r;
