@@ -1,7 +1,27 @@
+# Antigravity y scratch local
 /scratch/
-/ACTUALIZACION_REGISTRO_DIARIO.zip
-/carpeta-academica-4a.zip
-/INSTALABLE_Api.gs.txt
-/INSTALABLE_Database.gs.txt
-/INFORME_REVISION_DIARIO.txt
-/INSTRUCCIONES_ACTUALIZACION.txt
+/.gemini/
+
+# Respaldos comprimidos y volcados de datos
+*.zip
+*.tar.gz
+*.bak
+*.dump
+
+# Archivos de análisis y asignación interna con datos escolares
+*ALUMNOS*.txt
+*NUMERO_LISTA*.txt
+*NUMERO_OFICIAL*.txt
+*REGISTRO_DIARIO*.txt
+*RESUMEN_*.txt
+*INFORME_*.txt
+*INSTRUCCIONES_*.txt
+INSTALABLE_*.txt
+
+# Credenciales, variables de entorno y tokens de seguridad
+.env
+.env.*
+*.token
+*.pem
+*.key
+*.cert

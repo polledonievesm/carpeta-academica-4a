@@ -29,7 +29,8 @@ Antes de responder al usuario que un cambio está listo:
 
 ## 5. REGLAS DE GIT Y SINCRONIZACIÓN LOCAL
 - Mantener siempre sincronizados `C:\Users\Polledo\Documents\GitHub\carpeta-academica-4a` y `C:\Users\Polledo\Downloads\carpeta-academica-4a-main`.
-- JAMÁS ejecutar `git push` a repositorios remotos. Los commits locales son seguros y respetan el control del usuario.
+- JAMÁS ejecutar `git push` a repositorios remotos sin autorización previa y explícita del usuario.
+- En caso de autorizarse una actualización remota de historial, utilizar siempre `--force-with-lease` indicando la referencia remota esperada, y JAMÁS `--force` indiscriminado ni `--all`.
 
 ## 6. ESTÁNDAR OBLIGATORIO DE DOCUMENTACIÓN Y TRAZABILIDAD DEL CÓDIGO
 Esta regla es de cumplimiento obligatorio y permanente para todos los módulos actuales y futuros de Carpeta Académica (Google Apps Script, JavaScript Vanilla, HTML y CSS):
@@ -70,3 +71,27 @@ Cada función nueva o modificada debe incluir inmediatamente antes de su declara
 - No eliminar el historial previo.
 - Diferenciar expresamente entre una «Modificación funcional» y una «Modificación exclusivamente documental».
 - No modificar nombres técnicos, firmas, parámetros ni valores de retorno únicamente por motivos organizativos.
+
+## 7. POLÍTICA ESTRICTA DE PRIVACIDAD, PROTECCIÓN DE DATOS Y SEGURIDAD (PERMANENTE)
+Para garantizar la confidencialidad absoluta de la información de la comunidad escolar y evitar exposiciones en repositorios públicos:
+
+### 7.1. Prohibición de Datos Personales en Archivos Públicos
+- Queda ESTRICTAMENTE PROHIBIDO incrustar, hardcodear o almacenar nombres de alumnos, tutores o docentes, CURPs, matrículas escolares, teléfonos, correos personales o cualquier dato personal en archivos JavaScript, HTML, CSS, JSON, TXT o comentarios de código accesibles públicamente.
+- Todo padrón escolar, lista de alumnos o catálogo debe ser recuperado EXCLUSIVAMENTE en tiempo de ejecución a través de servicios autenticados del backend institucional (Google Apps Script).
+- En caso de requerir valores de demostración, ejemplos sintácticos o pruebas locales, se utilizarán exclusivamente datos FICTICIOS explícitos (ej. "PÉREZ LÓPEZ JUAN CARLOS", CURP "DEMO00000000000000", matrículas genéricas).
+
+### 7.2. Datos en Pruebas Automatizadas
+- Las suites de pruebas en la carpeta `tests/` deben operar con mocks y fixtures 100% ficticios.
+- Ningún archivo de prueba rastreado por Git debe incluir identificadores de personas reales.
+
+### 7.3. Auditoría Preventiva Previa a la Publicación
+- Antes de cualquier commit o despliegue a producción, verificar que `git diff` y `git status` no introduzcan datos personales reales ni patrones oficiales de CURP (`[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d`).
+- Verificar que archivos temporales de texto (*dumps*, reportes locales de depuración o listas de cotejo) no se encuentren en el área de preparación (*staging*).
+
+### 7.4. Protección de Respaldos y Archivos Sensibles en Git
+- El archivo `.gitignore` debe blindar permanentemente cualquier archivo `.zip`, `.tar.gz`, `.bak`, `.dump`, volcados de base de datos, credenciales (`.env`, `*.token`, `*.pem`, `*.key`) y archivos `.txt` de análisis interno con datos escolares.
+- Todo archivo sensible local debe residir fuera de las rutas rastreadas.
+
+### 7.5. Protección Contra Regresiones Históricas en Git
+- Toda integración de ramas de desarrollo (como `desarrollo-7b2` o etapas posteriores) debe basarse ÚNICAMENTE sobre el historial saneado post-hotfix.
+- Queda terminantemente prohibido hacer merge de ramas o commits huérfanos que contengan los commits anteriores al saneamiento para evitar reintroducir objetos purgados al grafo de Git.
