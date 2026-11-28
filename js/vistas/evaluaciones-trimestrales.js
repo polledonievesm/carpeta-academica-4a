@@ -152,11 +152,13 @@
     };
   }
 
-  // Actividades académicas de pruebas (desactivadas) (utilizadas si aún no hay conexión con Sheets)
-  const CANONICAL_ACTIVITIES_4A = [];
+  // =========================================================================
+  // PROTECCIÓN ESTRICTA DE DATOS PERSONALES (HOTFIX URGENTE 7A.3)
+  // Prohibido almacenar padrones de alumnos o actividades ficticias en JS estático.
+  // El padrón y las actividades se obtienen exclusivamente mediante servicios autenticados.
+  // =========================================================================
 
-  // Padrón escolar de pruebas (desactivado) (utilizada cuando aún no hay conexión remota)
-  const CANONICAL_STUDENTS_4A = [];
+  
 
   // Estado local en memoria de la vista
   const evalState = {
@@ -483,7 +485,7 @@
 
     // Si aún no hay clases en memoria desde Sheets, usar catálogo canónico de 4.° A
     if (!Array.isArray(classes) || classes.length === 0) {
-      classes = CANONICAL_ACTIVITIES_4A;
+      classes = [];
     }
 
     // Desduplicar estrictamente por id único
@@ -541,7 +543,7 @@
   function getStudentsList() {
     let raw = (typeof state !== 'undefined' && Array.isArray(state.students) && state.students.length > 0)
       ? state.students
-      : CANONICAL_STUDENTS_4A;
+      : [];
     const active = raw.filter(s => s.baja !== true && s.activo !== false);
 
     return active.slice().sort((a, b) => {
